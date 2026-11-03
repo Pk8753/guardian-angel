@@ -1,0 +1,328 @@
+{% extends "base.html" %}
+
+{% block title %}AI Genetic Risk Intelligence — GuardianAngel{% endblock %}
+
+{% block content %}
+<div class="flex flex-col w-full gap-6">
+
+  <!-- Educational Decision Support Banner -->
+  <div class="w-full bg-white border border-midnight/15 rounded-xl p-3.5 flex items-center justify-between shadow-sm">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-midnight-light flex items-center justify-center text-midnight flex-shrink-0">
+        <span class="material-symbols-outlined text-[20px] material-symbols-filled">info</span>
+      </div>
+      <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+        <span class="text-xs uppercase tracking-wider text-midnight font-bold">Educational Decision Support</span>
+        <span class="hidden sm:inline text-on-surface-variant font-bold">•</span>
+        <span class="text-xs text-on-surface-variant leading-relaxed">
+          Not a standalone clinical diagnosis. Intended to guide proactive discussions with your certified healthcare provider.
+        </span>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 flex-shrink-0">
+      <span class="text-[11px] text-midnight bg-midnight-light px-2.5 py-1 rounded-full font-bold border border-midnight/20">
+        CLIA/CAP Synthesized
+      </span>
+    </div>
+  </div>
+
+  <!-- Page Header & Key Metrics Strip -->
+  <div class="flex flex-col gap-6">
+    <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+      <div class="flex flex-col gap-2 max-w-3xl">
+        <div class="flex items-center gap-3 flex-wrap">
+          <h1 class="text-2xl sm:text-3xl font-bold text-pine tracking-tight">AI Genetic Risk Intelligence</h1>
+          <span class="bg-jungle-light border border-jungle/30 text-pine px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-jungle animate-pulse"></span>
+            ENGINE: V-GENOMICS 4.2 • 88% HIGH RELIABILITY
+          </span>
+        </div>
+        <p class="text-sm text-on-surface-variant">
+          Synthesized from verified pedigree records, maternal lineage history, and curated molecular panels.
+        </p>
+      </div>
+
+      <!-- Quick Sync Status Tag -->
+      <div class="flex items-center gap-2 self-start lg:self-auto bg-white border border-outline-variant/40 px-3 py-2 rounded-lg text-pine shadow-sm">
+        <span class="material-symbols-outlined text-[18px] text-waterhole">sync_saved_locally</span>
+        <span class="text-xs text-on-surface-variant">Last synced: <span class="font-bold text-pine">Today, 08:42 AM (GCP)</span></span>
+      </div>
+    </div>
+
+    <!-- Metric Badges Strip -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="bg-white rounded-xl p-4 flex items-center gap-4 shadow-sm border border-outline-variant/40">
+        <div class="w-12 h-12 rounded-lg bg-surface-container-low flex items-center justify-center text-midnight">
+          <span class="material-symbols-outlined text-[24px]">groups</span>
+        </div>
+        <div class="flex flex-col">
+          <span class="text-2xl font-bold text-pine leading-tight">{{ state.pedigree_size }}</span>
+          <span class="text-xs text-on-surface-variant uppercase tracking-wider font-semibold">Members Analyzed</span>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl p-4 flex items-center gap-4 shadow-sm border border-outline-variant/40">
+        <div class="w-12 h-12 rounded-lg bg-surface-container-low flex items-center justify-center text-midnight">
+          <span class="material-symbols-outlined text-[24px]">family_history</span>
+        </div>
+        <div class="flex flex-col">
+          <span class="text-2xl font-bold text-pine leading-tight">{% if is_admin or state.grandparents %}3{% elif state.father or state.mother %}2{% elif state.is_fresh_user %}0{% else %}1{% endif %}</span>
+          <span class="text-xs text-on-surface-variant uppercase tracking-wider font-semibold">Generations Mapped</span>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-xl p-4 flex items-center gap-4 shadow-sm border border-jungle/30 bg-gradient-to-br from-white to-jungle-light/20">
+        <div class="w-12 h-12 rounded-lg bg-jungle text-white flex items-center justify-center shadow-sm">
+          <span class="material-symbols-outlined text-[24px]">pattern</span>
+        </div>
+        <div class="flex flex-col">
+          <span class="text-2xl font-bold text-pine leading-tight">{{ state.phenotypes_count }}</span>
+          <span class="text-xs text-on-surface-variant uppercase tracking-wider font-semibold">Inherited Patterns Detected</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if state.is_fresh_user and not is_admin %}
+    <!-- FRESH USER: ZERO-DATA ONBOARDING STATE -->
+    <div class="w-full bg-white rounded-2xl p-10 border border-outline-variant/40 shadow-sm flex flex-col items-center text-center max-w-xl mx-auto my-8">
+      <div class="w-16 h-16 rounded-2xl bg-surface-container-high text-outline flex items-center justify-center mb-4 shadow-inner">
+        <span class="material-symbols-outlined text-3xl">genetics</span>
+      </div>
+      <h2 class="text-xl font-bold text-pine">Awaiting Family Lineage Intake</h2>
+      <p class="text-xs text-on-surface-variant mt-2 max-w-md leading-relaxed">
+        AI Genetic Risk Intelligence computes multi-generational Punnett matrices, transmission vectors, and variant concordance. Please add your Father, Mother, or Siblings to activate risk intelligence.
+      </p>
+      <div class="flex items-center gap-3 mt-6">
+        <button type="button" onclick="openAddMemberModalWithGen('gen2', 'Father')" class="px-5 py-2.5 rounded-lg bg-jungle hover:bg-jungle-dark text-white text-xs font-bold transition-all shadow-sm flex items-center gap-2 cursor-pointer">
+          <span class="material-symbols-outlined text-[18px]">person_add</span>
+          <span>+ Add Father to Lineage</span>
+        </button>
+        <a href="{{ url_for('pedigree') }}" class="px-4 py-2.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-pine text-xs font-bold transition-all border border-outline-variant/40">
+          Go to Pedigree Builder →
+        </a>
+      </div>
+    </div>
+  {% else %}
+
+  <!-- Main Asymmetric 60 / 40 Layout -->
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+    
+    <!-- LEFT: Risk Condition Cards -->
+    <div class="lg:col-span-7 flex flex-col gap-6">
+      
+      <!-- CARD 1: Beta-Thalassemia Trait -->
+      <section class="bg-white rounded-2xl p-6 shadow-sm border border-outline-variant/40 flex flex-col gap-6 relative overflow-hidden">
+        <div class="flex items-start justify-between gap-4">
+          <div class="flex items-start gap-3.5">
+            <div class="w-12 h-12 rounded-xl bg-pine text-white flex items-center justify-center shadow-md flex-shrink-0">
+              <span class="material-symbols-outlined text-[26px] text-jungle">water_drop</span>
+            </div>
+            <div class="flex flex-col">
+              <div class="flex items-center gap-2">
+                <span class="text-xs uppercase tracking-wider text-pine font-bold">Autosomal Recessive</span>
+                <span class="w-1 h-1 rounded-full bg-outline-variant"></span>
+                <span class="text-[11px] text-waterhole font-bold bg-waterhole-light px-2 py-0.5 rounded border border-waterhole/20">
+                  Locus: 11p15.4
+                </span>
+              </div>
+              <h2 class="text-lg font-bold text-pine leading-snug mt-1">Beta-Thalassemia Trait</h2>
+              <span class="text-xs text-on-surface-variant">HBB Gene Mutation Variant Detected (c.92+5G>C)</span>
+            </div>
+          </div>
+
+          <div class="flex flex-col items-end flex-shrink-0">
+            <span class="bg-jungle-light border border-jungle/30 text-pine text-base font-bold px-3 py-1 rounded-lg">
+              94%
+            </span>
+            <span class="text-[10px] text-on-surface-variant uppercase tracking-wider font-bold mt-1">Confidence Match</span>
+          </div>
+        </div>
+
+        <!-- Maternal Lineage Telemetry Callout -->
+        <div class="bg-surface-container-low rounded-xl p-4 flex items-center justify-between gap-3 border border-outline-variant/30">
+          <div class="flex items-center gap-3">
+            <span class="material-symbols-outlined text-waterhole text-xl">account_tree</span>
+            <div>
+              <p class="text-xs font-bold text-pine">Maternal Lineage Transmission Detected</p>
+              <p class="text-[11px] text-on-surface-variant">Farooq Al-Mansoor (I-3) → Samira Bint-Omar (II-2) → Tariq (III-1)</p>
+            </div>
+          </div>
+          <span class="px-2.5 py-1 rounded bg-white text-pine font-mono text-[11px] font-bold border border-outline-variant/30">
+            F = 0.0625
+          </span>
+        </div>
+
+        <!-- Punnett Square Probability Distribution -->
+        <div class="space-y-3">
+          <span class="text-xs font-bold text-pine uppercase tracking-wider">Offspring Inheritance Probability Matrix (If Partner is Carrier)</span>
+          <div class="grid grid-cols-3 gap-3">
+            <div class="p-3.5 rounded-xl bg-jungle-light border border-jungle/30 flex flex-col items-center text-center">
+              <span class="text-2xl font-bold text-jungle-dark">25%</span>
+              <span class="text-xs font-bold text-pine mt-1">Unaffected</span>
+              <span class="text-[10px] text-on-surface-variant mt-0.5">Non-carrier child</span>
+            </div>
+            <div class="p-3.5 rounded-xl bg-waterhole-light border border-waterhole/30 flex flex-col items-center text-center">
+              <span class="text-2xl font-bold text-waterhole">50%</span>
+              <span class="text-xs font-bold text-pine mt-1">Carrier Trait</span>
+              <span class="text-[10px] text-on-surface-variant mt-0.5">Asymptomatic trait</span>
+            </div>
+            <div class="p-3.5 rounded-xl bg-error-container border border-error/30 flex flex-col items-center text-center">
+              <span class="text-2xl font-bold text-on-error-container">25%</span>
+              <span class="text-xs font-bold text-pine mt-1">Affected Risk</span>
+              <span class="text-[10px] text-on-error-container mt-0.5">Requires transfusion</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Protocol -->
+        <div class="p-3.5 rounded-xl bg-surface-container-low border border-outline-variant/30 flex items-center justify-between">
+          <div class="flex items-center gap-2 text-xs text-pine font-medium">
+            <span class="material-symbols-outlined text-jungle text-lg">check_circle</span>
+            <span>Recommended: Targeted Sanger sequencing for partner candidate (Fatima Al-Zahra).</span>
+          </div>
+          <a href="{{ url_for('couple_assessment') }}" class="text-xs font-bold text-waterhole hover:underline">
+            View Assessment →
+          </a>
+        </div>
+      </section>
+
+      <!-- CARD 2: G6PD Deficiency Mediterranean Variant -->
+      <section class="bg-white rounded-2xl p-6 shadow-sm border border-outline-variant/40 flex flex-col gap-6 relative overflow-hidden">
+        <div class="flex items-start justify-between gap-4">
+          <div class="flex items-start gap-3.5">
+            <div class="w-12 h-12 rounded-xl bg-midnight text-white flex items-center justify-center shadow-md flex-shrink-0">
+              <span class="material-symbols-outlined text-[26px] text-waterhole">emergency</span>
+            </div>
+            <div class="flex flex-col">
+              <div class="flex items-center gap-2">
+                <span class="text-xs uppercase tracking-wider text-pine font-bold">X-Linked Recessive</span>
+                <span class="w-1 h-1 rounded-full bg-outline-variant"></span>
+                <span class="text-[11px] text-midnight font-bold bg-midnight-light px-2 py-0.5 rounded border border-midnight/20">
+                  Locus: Xq28 (OMIM #305900)
+                </span>
+              </div>
+              <h2 class="text-lg font-bold text-pine leading-snug mt-1">G6PD Deficiency (Mediterranean Variant)</h2>
+              <span class="text-xs text-on-surface-variant">c.563C>T; p.Ser188Phe • Severe Enzymatic Deficit (&lt;10%)</span>
+            </div>
+          </div>
+
+          <div class="flex flex-col items-end flex-shrink-0">
+            <span class="bg-midnight-light border border-midnight/20 text-midnight text-base font-bold px-3 py-1 rounded-lg">
+              82%
+            </span>
+            <span class="text-[10px] text-on-surface-variant uppercase tracking-wider font-bold mt-1">Confidence Match</span>
+          </div>
+        </div>
+
+        <!-- Uncle Kareem Affected Case Callout -->
+        <div class="p-3.5 rounded-xl bg-error-container/40 border border-error/30 flex items-start gap-3">
+          <span class="material-symbols-outlined text-error text-xl shrink-0 mt-0.5">warning</span>
+          <div class="space-y-0.5">
+            <p class="text-xs font-bold text-pine">Index Relative: Maternal Uncle Kareem Al-Mansoor</p>
+            <p class="text-xs text-on-surface-variant leading-relaxed">
+              Documented severe acute hemolytic anemia episodes following ingestion of fava beans (Vicia faba) and oxidizing sulfonamides.
+            </p>
+          </div>
+        </div>
+
+        <!-- Clinical Trigger Precautions -->
+        <div class="space-y-2">
+          <span class="text-xs font-bold text-pine uppercase tracking-wider">Clinical Trigger Avoidance Protocol</span>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div class="p-2.5 rounded-lg bg-surface-container-low border border-outline-variant/30 text-center">
+              <span class="text-xs font-bold text-error block">Fava Beans</span>
+              <span class="text-[10px] text-on-surface-variant">Severe Favism</span>
+            </div>
+            <div class="p-2.5 rounded-lg bg-surface-container-low border border-outline-variant/30 text-center">
+              <span class="text-xs font-bold text-error block">Primaquine</span>
+              <span class="text-[10px] text-on-surface-variant">Anti-malarial</span>
+            </div>
+            <div class="p-2.5 rounded-lg bg-surface-container-low border border-outline-variant/30 text-center">
+              <span class="text-xs font-bold text-error block">Rasburicase</span>
+              <span class="text-[10px] text-on-surface-variant">Uric Acid Reducer</span>
+            </div>
+            <div class="p-2.5 rounded-lg bg-surface-container-low border border-outline-variant/30 text-center">
+              <span class="text-xs font-bold text-error block">Nitrofurantoin</span>
+              <span class="text-[10px] text-on-surface-variant">Antibiotic</span>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+    </div>
+
+    <!-- RIGHT: Clinical Directives & Telehealth Support -->
+    <div class="lg:col-span-5 flex flex-col gap-6">
+      
+      <!-- Action Checklist -->
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-outline-variant/40 flex flex-col gap-4">
+        <div class="flex items-center justify-between pb-2 border-b border-outline-variant/20">
+          <h3 class="text-base font-bold text-pine">Clinical Protocol Checklist</h3>
+          <span class="text-[11px] font-bold text-jungle-dark bg-jungle-light px-2 py-0.5 rounded">Tier 1</span>
+        </div>
+
+        <div class="space-y-3">
+          <label class="flex items-start gap-3 p-3 rounded-xl bg-surface-container-low border border-outline-variant/30 cursor-pointer">
+            <input type="checkbox" checked class="w-4 h-4 rounded text-jungle accent-jungle mt-0.5"/>
+            <div>
+              <span class="text-xs font-bold text-pine block">Ingest 3-Generation Pedigree Data</span>
+              <span class="text-[11px] text-on-surface-variant">Complete. 11 relatives mapped with dual-lineage consanguinity.</span>
+            </div>
+          </label>
+
+          <label class="flex items-start gap-3 p-3 rounded-xl bg-surface-container-low border border-outline-variant/30 cursor-pointer">
+            <input type="checkbox" checked class="w-4 h-4 rounded text-jungle accent-jungle mt-0.5"/>
+            <div>
+              <span class="text-xs font-bold text-pine block">Automated Autosomal Recessive Variant Scan</span>
+              <span class="text-[11px] text-on-surface-variant">Complete. HBB (11p15.4) and G6PD (Xq28) verified.</span>
+            </div>
+          </label>
+
+          <label class="flex items-start gap-3 p-3 rounded-xl bg-white border-2 border-waterhole/40 cursor-pointer">
+            <input type="checkbox" class="w-4 h-4 rounded text-waterhole accent-waterhole mt-0.5"/>
+            <div>
+              <span class="text-xs font-bold text-pine block">Couple Pre-Conception Carrier Sync</span>
+              <span class="text-[11px] text-waterhole font-semibold">Pending Sanger assay results for Fatima Al-Zahra.</span>
+            </div>
+          </label>
+
+          <label class="flex items-start gap-3 p-3 rounded-xl bg-surface-container-low border border-outline-variant/30 cursor-pointer">
+            <input type="checkbox" class="w-4 h-4 rounded text-jungle accent-jungle mt-0.5"/>
+            <div>
+              <span class="text-xs font-bold text-pine block">Certified Genetic Counselor Review</span>
+              <span class="text-[11px] text-on-surface-variant">Scheduled with Dr. Alisha Patel for Thursday at 14:00 GST.</span>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- Genomic Specialist Dossier Card -->
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-outline-variant/40 flex flex-col gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-xl overflow-hidden shrink-0 shadow-sm">
+            <img class="w-full h-full object-cover" alt="Dr. Alisha Patel" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA_-i855rUovsYiTKAA9KsPJl04-PzMPAsfQTUYD8j76KsAElpQdAFVAF-zAcGsKX-Sc4oNEIJPwYSzY3g9jDGxeubHhx5SCgdDcSlQB2CnfhjjTTFTisBewwxgQCix6bUd_L7E47Pu5nHkFDh4GAEkNBx-EJU93oK1cMPxuvnWVetHjSLLPOtl1iRIg7bxaer9UGmYpkGSLEYzlawvTDDDaTupK29CqrVMFKttC2_u"/>
+          </div>
+          <div>
+            <h4 class="text-sm font-bold text-pine leading-tight">Dr. Alisha Patel, MS, CGC</h4>
+            <p class="text-[11px] text-on-surface-variant">Consultant Genetic Counsellor • Board Certified (FACMG)</p>
+          </div>
+        </div>
+        <p class="text-xs text-on-surface-variant leading-relaxed">
+          "Understanding regional variant frequencies in hemoglobinopathies allows our patients to take control of their hereditary legacy with confidence and cultural dignity."
+        </p>
+        <button type="button" onclick="alert('Opening video consultation session with Dr. Alisha Patel.')" class="w-full py-2.5 rounded-xl bg-midnight hover:bg-pine text-white text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer">
+          <span class="material-symbols-outlined text-[18px]">video_camera_front</span>
+          <span>Join Consultation Video Room</span>
+        </button>
+      </div>
+
+    </div>
+
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+

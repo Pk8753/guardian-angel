@@ -1,0 +1,337 @@
+{% extends "base.html" %}
+
+{% block title %}Privacy & Security Center — GuardianAngel Clinical Intelligence{% endblock %}
+
+{% block content %}
+<div class="flex flex-col w-full gap-8">
+
+  <!-- Top Header Banner & Security Credentials -->
+  <section class="flex flex-col md:flex-row md:items-end justify-between gap-6 pt-2">
+    <div class="flex flex-col gap-2 max-w-2xl">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-jungle-light text-jungle-dark text-xs font-bold uppercase tracking-wider border border-jungle/30">
+          <span class="w-1.5 h-1.5 rounded-full bg-jungle animate-pulse"></span>
+          End-To-End Zero Knowledge Active
+        </span>
+        <span class="text-xs text-waterhole font-bold bg-waterhole-light px-2.5 py-0.5 rounded-full border border-waterhole/20">
+          Pedigree Node #994-Alpha • GCP Secure Enclave
+        </span>
+      </div>
+      <h1 class="text-2xl sm:text-3xl font-bold text-pine tracking-tight">Privacy & Security Center</h1>
+      <p class="text-xs sm:text-sm text-on-surface-variant leading-relaxed">
+        Data Sovereignty, Granular Lineage Sharing & Cryptographic Access Controls. You retain absolute mathematical ownership of all diploid sequencing and pedigree nodes.
+      </p>
+    </div>
+
+    <!-- Trust Assurance Pill Card -->
+    <div class="flex items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-outline-variant/40 self-start md:self-auto max-w-md">
+      <div class="w-12 h-12 rounded-lg bg-midnight-light flex items-center justify-center text-midnight flex-shrink-0">
+        <span class="material-symbols-outlined text-[28px] material-symbols-filled">enhanced_encryption</span>
+      </div>
+      <div class="flex flex-col">
+        <div class="flex items-center gap-1.5">
+          <span class="text-xs font-bold text-pine">HIPAA & GDPR-K Verified</span>
+          <span class="material-symbols-outlined text-jungle text-[16px]">verified</span>
+        </div>
+        <span class="text-[11px] text-on-surface-variant leading-snug mt-0.5">
+          Zero public indexing, client-side zero-knowledge encrypted vault. Private keys reside solely on your client device.
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main Two-Column Architectural Grid -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+    
+    <!-- LEFT COLUMN: Active Lineage Delegations -->
+    <div class="flex flex-col gap-6">
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-outline-variant/40 flex flex-col gap-5">
+        <div class="flex items-center justify-between pb-2 border-b border-outline-variant/20">
+          <div class="flex items-center gap-3">
+            <span class="w-2.5 h-6 rounded-full bg-pine"></span>
+            <div class="flex flex-col">
+              <h2 class="text-sm font-bold text-pine">Active Lineage Delegations</h2>
+              <span class="text-[11px] text-on-surface-variant">Live cryptographic tokens granting partial or full pedigree inspection</span>
+            </div>
+          </div>
+          <button type="button" onclick="openInviteModal()" class="px-3 py-1.5 rounded-lg bg-surface-container text-pine text-xs font-bold hover:bg-surface-container-high transition-colors flex items-center gap-1.5 cursor-pointer">
+            <span class="material-symbols-outlined text-[16px]">person_add</span>
+            <span>Invite Member</span>
+          </button>
+        </div>
+
+        <!-- Connection Card 1: Fatima Al-Zahra -->
+        <div class="p-4 rounded-xl bg-surface-container-low border border-outline-variant/40 flex flex-col gap-4">
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex items-center gap-3">
+              <div class="w-11 h-11 rounded-full bg-midnight flex items-center justify-center text-white font-bold text-sm shadow-sm">
+                FA
+              </div>
+              <div class="flex flex-col">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-bold text-pine">Fatima Al-Zahra</span>
+                  <span class="px-2 py-0.5 rounded bg-surface-container-high text-on-surface-variant text-[10px] font-semibold">Partner Candidate</span>
+                </div>
+                <span class="text-[11px] text-waterhole font-semibold flex items-center gap-1 mt-0.5">
+                  <span class="material-symbols-outlined text-[14px]">lock_clock</span> Carrier Match Scope Active
+                </span>
+              </div>
+            </div>
+            <span class="text-[10px] px-2.5 py-1 rounded-full bg-waterhole-light text-waterhole font-bold border border-waterhole/20 font-mono">
+              Token: SHA-256 Valid
+            </span>
+          </div>
+
+          <!-- Granular Visibility Breakdown -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            <div class="p-2.5 rounded-lg bg-white border border-outline-variant/30 flex items-start gap-2">
+              <span class="material-symbols-outlined text-jungle text-[18px] shrink-0 mt-0.5">visibility</span>
+              <div class="flex flex-col">
+                <span class="text-[11px] font-bold text-pine">Shared Data Elements</span>
+                <span class="text-[10px] text-on-surface-variant">Gen III Pedigree node & Hemoglobinopathy Carrier Status (HbS/HbC)</span>
+              </div>
+            </div>
+            <div class="p-2.5 rounded-lg bg-white border border-outline-variant/30 flex items-start gap-2">
+              <span class="material-symbols-outlined text-outline text-[18px] shrink-0 mt-0.5">visibility_off</span>
+              <div class="flex flex-col">
+                <span class="text-[11px] font-bold text-pine">Redacted / Shielded</span>
+                <span class="text-[10px] text-on-surface-variant">Extended In-Law psychiatric histories, BRCA1 status, lifestyle journals</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between pt-1 text-xs">
+            <span class="text-[11px] text-on-surface-variant">Shared via Ephemeral ZK-Pairing</span>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="alert('Managing granular visibility fields for Fatima Al-Zahra.')" class="px-3 py-1 rounded-lg bg-surface-container-high text-pine text-xs font-semibold hover:bg-surface-container-highest transition-colors">
+                Manage Scope
+              </button>
+              <button type="button" onclick="alert('Token successfully revoked! Access terminated immediately.')" class="px-3 py-1 rounded-lg bg-error-container text-on-error-container text-xs font-bold hover:bg-error-container/80 transition-colors">
+                Revoke Access
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Connection Card 2: Dr. Alisha Patel -->
+        <div class="p-4 rounded-xl bg-surface-container-low border border-outline-variant/40 flex flex-col gap-4">
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex items-center gap-3">
+              <div class="w-11 h-11 rounded-full bg-pine flex items-center justify-center text-white font-bold text-sm shadow-sm">
+                AP
+              </div>
+              <div class="flex flex-col">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-bold text-pine">Dr. Alisha Patel, MS, CGC</span>
+                  <span class="px-2 py-0.5 rounded bg-jungle-light text-jungle-dark text-[10px] font-bold">Clinical Counselor</span>
+                </div>
+                <span class="text-[11px] text-jungle font-semibold flex items-center gap-1 mt-0.5">
+                  <span class="material-symbols-outlined text-[14px]">verified</span> CLIA/CAP Diagnostic Scope Active
+                </span>
+              </div>
+            </div>
+            <span class="text-[10px] px-2.5 py-1 rounded-full bg-jungle-light text-jungle-dark font-bold border border-jungle/20 font-mono">
+              Token: SHA-256 Valid
+            </span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            <div class="p-2.5 rounded-lg bg-white border border-outline-variant/30 flex items-start gap-2">
+              <span class="material-symbols-outlined text-jungle text-[18px] shrink-0 mt-0.5">visibility</span>
+              <div class="flex flex-col">
+                <span class="text-[11px] font-bold text-pine">Shared Data Elements</span>
+                <span class="text-[10px] text-on-surface-variant">Full 3-Generation Pedigree & Raw VCF Coordinates for Sanger NGS verification</span>
+              </div>
+            </div>
+            <div class="p-2.5 rounded-lg bg-white border border-outline-variant/30 flex items-start gap-2">
+              <span class="material-symbols-outlined text-outline text-[18px] shrink-0 mt-0.5">visibility_off</span>
+              <div class="flex flex-col">
+                <span class="text-[11px] font-bold text-pine">Shielded Elements</span>
+                <span class="text-[10px] text-on-surface-variant">Billing details, unmasked government national identification IDs</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between pt-1 text-xs">
+            <span class="text-[11px] text-on-surface-variant">Valid until: Nov 30, 2026</span>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="alert('Managing scope for Dr. Alisha Patel.')" class="px-3 py-1 rounded-lg bg-surface-container-high text-pine text-xs font-semibold hover:bg-surface-container-highest transition-colors">
+                Manage Scope
+              </button>
+              <button type="button" onclick="alert('Clinical token revoked.')" class="px-3 py-1 rounded-lg bg-error-container text-on-error-container text-xs font-bold hover:bg-error-container/80 transition-colors">
+                Revoke Access
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN: Zero-Knowledge Vault Controls -->
+    <div class="flex flex-col gap-6">
+      
+      <!-- Vault Security Matrix -->
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-outline-variant/40 flex flex-col gap-5">
+        <div class="flex items-center justify-between pb-2 border-b border-outline-variant/20">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-pine text-xl">key</span>
+            <h3 class="text-sm font-bold text-pine">Cryptographic Vault Configuration</h3>
+          </div>
+          <span class="text-[11px] text-jungle-dark font-bold bg-jungle-light px-2.5 py-0.5 rounded-full">Active & Sealed</span>
+        </div>
+
+        <div class="space-y-3">
+          <div class="p-4 rounded-xl bg-surface-container-low border border-outline-variant/30 flex items-start justify-between">
+            <div class="flex flex-col gap-0.5">
+              <span class="text-xs font-bold text-pine">Zero-Knowledge Seed Phrase</span>
+              <span class="text-[11px] text-on-surface-variant">24-word BIP-39 mnemonic stored locally in browser key container</span>
+            </div>
+            <button type="button" onclick="alert('Backup Seed: clinical pine jungle midnight waterhole pedigree proband locus exon carrier sanger genome')" class="px-3 py-1 rounded-lg bg-pine text-white text-xs font-bold hover:bg-pine-light transition-colors">
+              Backup Key
+            </button>
+          </div>
+
+          <div class="p-4 rounded-xl bg-surface-container-low border border-outline-variant/30 flex items-start justify-between">
+            <div class="flex flex-col gap-0.5">
+              <span class="text-xs font-bold text-pine">Hardware Passkey Authenticator</span>
+              <span class="text-[11px] text-on-surface-variant">FIPS 140-3 Hardware Key (Touch ID / YubiKey registered)</span>
+            </div>
+            <span class="px-2.5 py-1 rounded bg-jungle text-white text-[11px] font-bold">Enrolled</span>
+          </div>
+
+          <div class="p-4 rounded-xl bg-surface-container-low border border-outline-variant/30 flex items-start justify-between">
+            <div class="flex flex-col gap-0.5">
+              <span class="text-xs font-bold text-pine">Google Cloud Platform Cloud Storage Sync</span>
+              <span class="text-[11px] text-on-surface-variant">Encrypted envelope backup to GCP Cloud Storage bucket</span>
+            </div>
+            <button type="button" onclick="syncGCS()" class="px-3 py-1 rounded-lg bg-waterhole text-white text-xs font-bold hover:bg-waterhole-dark transition-colors">
+              GCP Sync
+            </button>
+          </div>
+        </div>
+
+        <!-- Emergency Data Revocation & Shredder -->
+        <div class="p-4 rounded-xl bg-error-container/40 border border-error/30 flex flex-col gap-3 mt-2">
+          <div class="flex items-center gap-2 text-error font-bold text-xs">
+            <span class="material-symbols-outlined text-[18px]">gavel</span>
+            <span>Emergency Zero-Knowledge Purge & Revocation</span>
+          </div>
+          <p class="text-xs text-on-surface leading-relaxed">
+            Instantly invalidate all active pairing tokens, purge cached client decryption keys, and mathematically seal your health dossier.
+          </p>
+          <div class="flex items-center gap-3 pt-1">
+            <button type="button" onclick="alert('All external lineage pairing tokens have been instantaneously invalidated.')" class="px-3 py-2 rounded-lg bg-error text-white text-xs font-bold hover:bg-error/90 transition-colors cursor-pointer">
+              Invalidate All Shared Tokens
+            </button>
+            <button type="button" onclick="exportData()" class="px-3 py-2 rounded-lg bg-white border border-outline-variant/40 text-pine text-xs font-bold hover:bg-surface-container transition-colors cursor-pointer">
+              Download Encrypted Archive
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+<!-- Invite Member Modal -->
+<div id="inviteMemberModal" class="fixed inset-0 bg-black/60 z-50 hidden items-center justify-center p-4">
+  <div class="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl border border-outline-variant/40 flex flex-col">
+    <div class="px-6 py-4 bg-primary-container text-white flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-jungle text-xl">share</span>
+        <h3 class="text-sm font-bold text-white">Create Zero-Knowledge Delegation</h3>
+      </div>
+      <button type="button" onclick="closeInviteModal()" class="text-white/80 hover:text-white">
+        <span class="material-symbols-outlined text-[20px]">close</span>
+      </button>
+    </div>
+
+    <form onsubmit="event.preventDefault(); submitInvitation();" class="p-6 space-y-4">
+      <div>
+        <label class="block text-xs font-bold text-pine mb-1">Delegatee Name *</label>
+        <input type="text" id="delegateeName" required placeholder="e.g. Dr. Jane Smith, Spouse, etc."
+               class="w-full h-10 px-3 rounded-lg bg-surface-container-low text-xs border border-outline-variant/40 focus:bg-white focus:ring-2 focus:ring-jungle focus:outline-none"/>
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-pine mb-1">Role / Relationship *</label>
+        <select id="delegateeRole" class="w-full h-10 px-3 rounded-lg bg-surface-container-low text-xs border border-outline-variant/40 focus:bg-white focus:ring-2 focus:ring-jungle focus:outline-none">
+          <option value="Partner Candidate">Partner Candidate (Pre-Marital)</option>
+          <option value="Genetic Counselor">Genetic Counselor</option>
+          <option value="Family Member">Family Relative</option>
+          <option value="Hospital Laboratory">Hospital Laboratory</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-pine mb-1">Sharing Scope *</label>
+        <select id="delegateeScope" class="w-full h-10 px-3 rounded-lg bg-surface-container-low text-xs border border-outline-variant/40 focus:bg-white focus:ring-2 focus:ring-jungle focus:outline-none">
+          <option value="Gen III Carrier Match Scope Only">Gen III Carrier Match Scope Only (Redacted)</option>
+          <option value="Full 3-Generation Pedigree">Full 3-Generation Pedigree</option>
+          <option value="Target Gene Loci (HBB / G6PD)">Target Gene Loci (HBB / G6PD)</option>
+        </select>
+      </div>
+
+      <div class="flex items-center justify-end gap-3 pt-3 border-t border-outline-variant/20">
+        <button type="button" onclick="closeInviteModal()" class="px-4 py-2 rounded-lg text-xs font-bold text-pine hover:bg-surface-container">
+          Cancel
+        </button>
+        <button type="submit" class="px-5 py-2 rounded-lg bg-jungle hover:bg-jungle-dark text-white text-xs font-bold shadow-md cursor-pointer">
+          Generate Cryptographic Token
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function openInviteModal() {
+    document.getElementById('inviteMemberModal').classList.remove('hidden');
+    document.getElementById('inviteMemberModal').classList.add('flex');
+  }
+
+  function closeInviteModal() {
+    document.getElementById('inviteMemberModal').classList.add('hidden');
+    document.getElementById('inviteMemberModal').classList.remove('flex');
+  }
+
+  function submitInvitation() {
+    const name = document.getElementById('delegateeName').value;
+    const role = document.getElementById('delegateeRole').value;
+    const scope = document.getElementById('delegateeScope').value;
+    
+    alert('Cryptographic Pairing Token generated for ' + name + ' (' + role + ')!\nScope: ' + scope + '\nToken: SHA-256-' + Math.random().toString(36).substring(2, 10));
+    closeInviteModal();
+  }
+
+  function syncGCS() {
+    fetch('{{ url_for("api_gcp_sync_pedigree") }}', { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      alert("GCP Cloud Storage Sync Successful!\nFile: " + data.path + "\nMode: " + data.mode);
+    });
+  }
+
+  function exportData() {
+    fetch('{{ url_for("api_pedigree_nodes") }}')
+    .then(r => r.json())
+    .then(nodes => {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(nodes, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", "guardianangel_e2ee_vault_export.json");
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    });
+  }
+</script>
+{% endblock %}
+

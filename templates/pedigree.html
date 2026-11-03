@@ -1,0 +1,1067 @@
+{% extends "base.html" %}
+
+{% block title %}Family Pedigree Tree Builder — GuardianAngel Clinical Intelligence{% endblock %}
+
+{% block content %}
+{% set user_alias = current_user.alias_name if current_user and current_user.alias_name else 'Silent-Falcon-9214' %}
+{% set display_patient_name = user_alias if mask_identity else (current_user.full_name if current_user and current_user.full_name else 'Tariq Al-Mansoor') %}
+
+<div class="flex flex-col w-full gap-5">
+
+  <!-- Top Clinical Lineage Advisory Banner -->
+  <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl bg-white border border-outline-variant/60 shadow-sm">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-lg bg-pine flex items-center justify-center text-white shadow-sm flex-shrink-0">
+        <span class="material-symbols-outlined text-[22px]">family_history</span>
+      </div>
+      <div class="flex flex-col">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-xs font-bold text-pine uppercase tracking-wider">Clinical Lineage Advisory</span>
+          {% if not is_fresh_user %}
+            <span class="px-2 py-0.5 rounded-full bg-waterhole/10 text-waterhole text-[11px] font-bold">F = 0.0625</span>
+          {% endif %}
+          <span class="px-2 py-0.5 rounded-full bg-jungle/10 text-jungle-dark text-[11px] font-bold">NSGC Compliant</span>
+          {% if mask_identity %}
+            <span class="px-2 py-0.5 rounded-full bg-midnight text-white text-[10px] font-mono font-bold flex items-center gap-1">
+              <span class="material-symbols-outlined text-[12px]">visibility_off</span>
+              <span>Anonymized Sudo Name View Active</span>
+            </span>
+          {% endif %}
+        </div>
+        <p class="text-xs text-on-surface-variant mt-0.5 leading-relaxed">
+          {% if is_fresh_user %}
+            Individual proband node initialized. Add your parents, grandparents, and siblings below to map your hereditary lineage under zero-knowledge encryption.
+          {% else %}
+            Documented Consanguineous Lineage: Double-line notation designates first-cousin marriage in parental lineage. Autonomous AI carrier estimation active across all 3 pedigree generations.
+          {% endif %}
+        </p>
+      </div>
+    </div>
+    
+    <div class="flex items-center gap-2 flex-shrink-0 self-end sm:self-auto">
+      <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-container text-waterhole text-xs font-bold shadow-sm border border-waterhole/20">
+        <span class="w-2 h-2 rounded-full bg-waterhole animate-pulse"></span>
+        OMIM Locus Sync: 100%
+      </span>
+      <button type="button" onclick="alert('NSGC Standard Pedigree Nomenclature: Squares=Males, Circles=Females, Double Lines=Consanguineous Union, Half Fill=Heterozygous Carrier, Solid=Affected.')" class="px-3 py-1 rounded-lg bg-surface-container hover:bg-surface-container-high text-pine text-xs font-semibold transition-colors flex items-center gap-1.5">
+        <span class="material-symbols-outlined text-[16px]">info</span>
+        <span>Specs</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Primary Toolbar Panel -->
+  <div class="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 p-3.5 rounded-xl bg-white border border-outline-variant/60 shadow-sm">
+    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1 min-w-0">
+      <!-- Search -->
+      <div class="relative flex-1 max-w-sm">
+        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[18px]">search</span>
+        <input class="w-full pl-9 pr-3 py-2 rounded-lg bg-surface-container-low text-pine placeholder:text-outline text-xs focus:outline-none focus:bg-white focus:ring-2 focus:ring-waterhole shadow-inner border border-outline-variant/30"
+               id="pedigreeSearch" placeholder="Search by relative name, sudo alias, or condition..." type="text"/>
+      </div>
+
+      <!-- Generation Tier Filters -->
+      <div class="flex items-center gap-1 bg-surface-container p-1 rounded-lg overflow-x-auto">
+        <button class="tier-filter-btn px-3 py-1 rounded text-white bg-pine text-xs font-bold shadow-sm transition-all" data-filter="all" type="button">All Tiers</button>
+        <button class="tier-filter-btn px-3 py-1 rounded text-on-surface-variant hover:text-pine hover:bg-surface-container-high text-xs font-semibold transition-all" data-filter="gen1" type="button">Gen I (Grandparents)</button>
+        <button class="tier-filter-btn px-3 py-1 rounded text-on-surface-variant hover:text-pine hover:bg-surface-container-high text-xs font-semibold transition-all" data-filter="gen2" type="button">Gen II (Parents)</button>
+        <button class="tier-filter-btn px-3 py-1 rounded text-on-surface-variant hover:text-pine hover:bg-surface-container-high text-xs font-semibold transition-all" data-filter="gen3" type="button">Gen III (Proband / Siblings)</button>
+      </div>
+    </div>
+
+    <!-- Zoom & Actions Toolbar -->
+    <div class="flex items-center justify-between sm:justify-end gap-2 pt-2 sm:pt-0">
+      <!-- Zoom controls -->
+      <div class="flex items-center bg-surface-container rounded-lg p-0.5 text-pine">
+        <button class="p-1.5 hover:bg-surface-container-highest rounded text-on-surface-variant hover:text-waterhole transition-colors" id="zoomOutBtn" title="Zoom Out" type="button">
+          <span class="material-symbols-outlined text-[18px]">zoom_out</span>
+        </button>
+        <span class="px-2 text-xs font-bold select-none text-pine" id="zoomLevelDisplay">100%</span>
+        <button class="p-1.5 hover:bg-surface-container-highest rounded text-on-surface-variant hover:text-waterhole transition-colors" id="zoomInBtn" title="Zoom In" type="button">
+          <span class="material-symbols-outlined text-[18px]">zoom_in</span>
+        </button>
+        <div class="w-px h-4 bg-outline-variant mx-1"></div>
+        <button class="px-2 py-1 hover:bg-surface-container-highest rounded text-on-surface-variant hover:text-waterhole text-xs font-semibold flex items-center gap-1 transition-colors" id="fitScreenBtn" title="Fit to Screen" type="button">
+          <span class="material-symbols-outlined text-[16px]">aspect_ratio</span>
+          <span>Fit</span>
+        </button>
+      </div>
+
+      <!-- Export Button -->
+      <div class="relative group">
+        <button class="px-3 py-2 rounded-lg bg-surface-container hover:bg-surface-container-high text-waterhole text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors" type="button">
+          <span class="material-symbols-outlined text-[18px]">download</span>
+          <span>Export</span>
+          <span class="material-symbols-outlined text-[14px]">expand_more</span>
+        </button>
+        <div class="absolute right-0 top-full mt-1 hidden group-hover:flex flex-col bg-white rounded-xl p-1.5 shadow-xl border border-outline-variant/40 w-48 z-40">
+          <button onclick="exportPedigree('pdf')" class="text-left px-3 py-2 text-pine hover:bg-surface-container text-xs font-semibold rounded flex items-center gap-2">
+            <span class="material-symbols-outlined text-sm text-error">picture_as_pdf</span>
+            <span>Clinical PDF Summary</span>
+          </button>
+          <button onclick="exportPedigree('json')" class="text-left px-3 py-2 text-pine hover:bg-surface-container text-xs font-semibold rounded flex items-center gap-2">
+            <span class="material-symbols-outlined text-sm text-jungle">data_object</span>
+            <span>Pedigree JSON (GCP Ready)</span>
+          </button>
+          <button onclick="exportPedigree('gcs')" class="text-left px-3 py-2 text-pine hover:bg-surface-container text-xs font-semibold rounded flex items-center gap-2">
+            <span class="material-symbols-outlined text-sm text-waterhole">cloud_upload</span>
+            <span>Sync to Google Cloud (GCS)</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Primary Action: + Add Family Member -->
+      <button class="px-4 py-2 rounded-lg bg-jungle hover:bg-jungle-dark text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-jungle/25 transition-all hover:-translate-y-0.5 cursor-pointer" onclick="openAddMemberModal()" type="button">
+        <span class="material-symbols-outlined text-[18px]">person_add</span>
+        <span>+ Add Family Member</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Pedigree Workspace: 68% Visualizer / 32% Diagnostic Inspector -->
+  <div class="grid grid-cols-12 gap-5 items-start">
+    
+    <!-- LEFT: Wide Pedigree Canvas (Col 1-8 on desktop) -->
+    <div class="col-span-12 xl:col-span-8 flex flex-col gap-4">
+      <div class="relative bg-white rounded-2xl shadow-sm border border-outline-variant/60 overflow-hidden flex flex-col min-h-[720px]">
+        
+        <!-- Canvas Header / Subtitle Info -->
+        <div class="px-6 py-4 flex items-center justify-between bg-surface-container-low border-b border-outline-variant/40">
+          <div class="flex items-center gap-3">
+            <span class="material-symbols-outlined text-pine text-[22px]">device_hub</span>
+            <div>
+              <h2 class="text-sm font-bold text-pine leading-tight">
+                {% if mask_identity %}{{ user_alias }}'s Lineage Tree{% else %}{{ current_user.full_name if current_user else 'Patient' }} Pedigree Tree{% endif %}
+              </h2>
+              <p class="text-[11px] text-on-surface-variant">Standardized NSGC Clinical Diagram • Zero-Knowledge Enclave Active</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="px-2.5 py-1 rounded bg-surface-container-highest text-pine text-[11px] font-mono font-bold">
+              NODE: {{ current_user.id if current_user else '1' }}-GA
+            </span>
+          </div>
+        </div>
+
+        <!-- Interactive Diagram Surface -->
+        <div class="relative w-full flex-1 p-6 overflow-x-auto select-none bg-white bg-[radial-gradient(#c1c8c5_1.2px,transparent_1.2px)] [background-size:24px_24px]" id="canvasViewport">
+          <div class="relative min-w-[780px] h-full flex flex-col justify-between py-4 transition-transform duration-200 origin-top-left" id="treeContainer" style="transform: scale(1);">
+            
+            {% if not is_admin %}
+              <!-- DYNAMIC USER LINEAGE TREE (Father, Mother, Siblings, Grandparents) -->
+              <div class="flex flex-col justify-between h-full py-4 space-y-10">
+                
+                <!-- Gen I Row: Grandparents -->
+                <div class="flex items-center justify-between w-full pt-2" id="tier-gen1">
+                  <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 rounded bg-surface-container flex items-center justify-center text-xs font-bold text-pine shadow-sm">I</span>
+                    <span class="text-[11px] text-on-surface-variant font-semibold">Grandparents Tier</span>
+                  </div>
+                  <div class="flex items-center gap-6 mr-12 flex-wrap">
+                    {% for gp in nodes if gp.generation == 'gen1' %}
+                      <div class="pedigree-node group flex flex-col items-center cursor-pointer transition-all hover:scale-105"
+                           data-node="custom_{{ gp.id }}"
+                           data-custom-name="{% if mask_identity %}{{ gp.alias_name }}{% else %}{{ gp.name }}{% endif %}"
+                           data-custom-kin="{{ gp.relationship }} • Gen I"
+                           data-custom-status="{{ gp.condition_locus or gp.carrier_status|capitalize }}"
+                           data-custom-notes="{{ gp.notes or 'Documented relative' }}"
+                           data-custom-alias="{{ gp.alias_name }}">
+                        <div class="w-11 h-11 {% if gp.sex == 'female' %}rounded-full{% else %}rounded-sm{% endif %} bg-white shadow-sm border border-outline-variant/60 flex items-center justify-center relative overflow-hidden">
+                          {% if gp.carrier_status == 'carrier' %}
+                            <div class="absolute left-0 top-0 bottom-0 w-1/2 bg-pine"></div>
+                          {% elif gp.carrier_status == 'affected' %}
+                            <div class="absolute inset-0 bg-pine"></div>
+                          {% endif %}
+                          <span class="relative z-10 text-[11px] font-bold text-pine">I</span>
+                        </div>
+                        <span class="text-[11px] font-bold text-pine mt-1">{% if mask_identity %}{{ gp.alias_name }}{% else %}{{ gp.name }}{% endif %}</span>
+                        <span class="text-[10px] text-on-surface-variant">{{ gp.relationship }}</span>
+                      </div>
+                    {% endfor %}
+                    <button type="button" onclick="openAddMemberModalWithGen('gen1', 'Grandparent')"
+                            class="p-2.5 rounded-xl border border-dashed border-outline-variant hover:border-jungle hover:bg-jungle-light/20 transition-all flex items-center gap-1.5 cursor-pointer group">
+                      <span class="material-symbols-outlined text-outline group-hover:text-jungle text-base">person_add</span>
+                      <span class="text-[11px] font-bold text-pine group-hover:text-jungle">+ Add Grandparent</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Gen II Row: Parents & Aunts/Uncles -->
+                <div class="flex items-center justify-between w-full py-6 border-y border-outline-variant/20" id="tier-gen2">
+                  <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 rounded bg-surface-container flex items-center justify-center text-xs font-bold text-pine shadow-sm">II</span>
+                    <span class="text-[11px] text-on-surface-variant font-semibold">Parents Tier</span>
+                  </div>
+                  <div class="flex items-center gap-8 mr-16 flex-wrap">
+                    <!-- Father -->
+                    {% if state.father %}
+                      <div class="pedigree-node group flex flex-col items-center cursor-pointer transition-all hover:scale-105"
+                           data-node="custom_{{ state.father.id }}"
+                           data-custom-name="{% if mask_identity %}{{ state.father.alias_name }}{% else %}{{ state.father.name }}{% endif %}"
+                           data-custom-kin="{{ state.father.relationship }} • Gen II"
+                           data-custom-status="{{ state.father.condition_locus or state.father.carrier_status|capitalize }}"
+                           data-custom-notes="{{ state.father.notes or 'Documented relative' }}"
+                           data-custom-alias="{{ state.father.alias_name }}">
+                        <div class="w-13 h-13 rounded-sm bg-white shadow-md border-2 {% if state.father.carrier_status in ('carrier', 'affected') %}border-waterhole ring-2 ring-waterhole/20{% else %}border-outline-variant{% endif %} flex items-center justify-center relative overflow-hidden">
+                          {% if state.father.carrier_status == 'carrier' %}
+                            <div class="absolute left-0 top-0 bottom-0 w-1/2 bg-pine"></div>
+                          {% elif state.father.carrier_status == 'affected' %}
+                            <div class="absolute inset-0 bg-pine"></div>
+                          {% endif %}
+                          <span class="relative z-10 text-xs font-bold {% if state.father.carrier_status == 'affected' %}text-white{% else %}text-pine{% endif %}">II-1</span>
+                        </div>
+                        <span class="text-xs font-bold text-pine mt-1.5">{% if mask_identity %}{{ state.father.alias_name }}{% else %}{{ state.father.name }}{% endif %}</span>
+                        <span class="text-[10px] {% if state.father.carrier_status in ('carrier', 'affected') %}text-waterhole font-bold{% else %}text-on-surface-variant{% endif %}">
+                          {{ state.father.condition_locus or state.father.carrier_status|capitalize }}
+                        </span>
+                      </div>
+                    {% else %}
+                      <button type="button" onclick="openAddMemberModalWithGen('gen2', 'Father')"
+                              class="p-4 rounded-xl border-2 border-dashed border-outline-variant hover:border-jungle hover:bg-jungle-light/20 transition-all flex flex-col items-center gap-1.5 cursor-pointer group">
+                        <span class="material-symbols-outlined text-outline group-hover:text-jungle text-2xl">male</span>
+                        <span class="text-xs font-bold text-pine group-hover:text-jungle">+ Add Father</span>
+                      </button>
+                    {% endif %}
+
+                    <!-- Union Bar -->
+                    <div class="flex flex-col items-center">
+                      <div class="w-14 h-0.5 bg-pine"></div>
+                      <span class="text-[9px] text-on-surface-variant font-bold uppercase mt-1">Union</span>
+                    </div>
+
+                    <!-- Mother -->
+                    {% if state.mother %}
+                      <div class="pedigree-node group flex flex-col items-center cursor-pointer transition-all hover:scale-105"
+                           data-node="custom_{{ state.mother.id }}"
+                           data-custom-name="{% if mask_identity %}{{ state.mother.alias_name }}{% else %}{{ state.mother.name }}{% endif %}"
+                           data-custom-kin="{{ state.mother.relationship }} • Gen II"
+                           data-custom-status="{{ state.mother.condition_locus or state.mother.carrier_status|capitalize }}"
+                           data-custom-notes="{{ state.mother.notes or 'Documented relative' }}"
+                           data-custom-alias="{{ state.mother.alias_name }}">
+                        <div class="w-13 h-13 rounded-full bg-white shadow-md border-2 {% if state.mother.carrier_status in ('carrier', 'affected') %}border-jungle ring-2 ring-jungle/20{% else %}border-outline-variant{% endif %} flex items-center justify-center relative overflow-hidden">
+                          {% if state.mother.carrier_status == 'carrier' %}
+                            <div class="absolute right-0 top-0 bottom-0 w-1/2 bg-jungle"></div>
+                          {% elif state.mother.carrier_status == 'affected' %}
+                            <div class="absolute inset-0 bg-jungle"></div>
+                          {% endif %}
+                          <span class="relative z-10 text-xs font-bold {% if state.mother.carrier_status == 'affected' %}text-white{% else %}text-pine{% endif %}">II-2</span>
+                        </div>
+                        <span class="text-xs font-bold text-pine mt-1.5">{% if mask_identity %}{{ state.mother.alias_name }}{% else %}{{ state.mother.name }}{% endif %}</span>
+                        <span class="text-[10px] {% if state.mother.carrier_status in ('carrier', 'affected') %}text-jungle-dark font-bold{% else %}text-on-surface-variant{% endif %}">
+                          {{ state.mother.condition_locus or state.mother.carrier_status|capitalize }}
+                        </span>
+                      </div>
+                    {% else %}
+                      <button type="button" onclick="openAddMemberModalWithGen('gen2', 'Mother')"
+                              class="p-4 rounded-xl border-2 border-dashed border-outline-variant hover:border-jungle hover:bg-jungle-light/20 transition-all flex flex-col items-center gap-1.5 cursor-pointer group">
+                        <span class="material-symbols-outlined text-outline group-hover:text-jungle text-2xl">female</span>
+                        <span class="text-xs font-bold text-pine group-hover:text-jungle">+ Add Mother</span>
+                      </button>
+                    {% endif %}
+
+                    <!-- Additional Gen II (Uncles/Aunts) -->
+                    {% for rel in nodes if rel.generation == 'gen2' and rel != state.father and rel != state.mother %}
+                      <div class="pedigree-node group flex flex-col items-center cursor-pointer transition-all hover:scale-105"
+                           data-node="custom_{{ rel.id }}"
+                           data-custom-name="{% if mask_identity %}{{ rel.alias_name }}{% else %}{{ rel.name }}{% endif %}"
+                           data-custom-kin="{{ rel.relationship }} • Gen II"
+                           data-custom-status="{{ rel.condition_locus or rel.carrier_status|capitalize }}"
+                           data-custom-notes="{{ rel.notes or 'Documented relative' }}"
+                           data-custom-alias="{{ rel.alias_name }}">
+                        <div class="w-11 h-11 {% if rel.sex == 'female' %}rounded-full{% else %}rounded-sm{% endif %} bg-white shadow-sm border border-outline-variant flex items-center justify-center relative overflow-hidden">
+                          {% if rel.carrier_status == 'carrier' %}
+                            <div class="absolute left-0 top-0 bottom-0 w-1/2 bg-pine"></div>
+                          {% elif rel.carrier_status == 'affected' %}
+                            <div class="absolute inset-0 bg-pine"></div>
+                          {% endif %}
+                          <span class="relative z-10 text-[11px] font-bold text-pine">II</span>
+                        </div>
+                        <span class="text-[11px] font-bold text-pine mt-1">{% if mask_identity %}{{ rel.alias_name }}{% else %}{{ rel.name }}{% endif %}</span>
+                        <span class="text-[10px] text-on-surface-variant">{{ rel.relationship }}</span>
+                      </div>
+                    {% endfor %}
+
+                    <button type="button" onclick="openAddMemberModalWithGen('gen2', 'Relative')"
+                            class="p-2.5 rounded-xl border border-dashed border-outline-variant hover:border-jungle hover:bg-jungle-light/20 transition-all flex items-center gap-1 cursor-pointer group">
+                      <span class="material-symbols-outlined text-outline group-hover:text-jungle text-base">add</span>
+                      <span class="text-[11px] font-bold text-pine group-hover:text-jungle">+ Add Relative</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Gen III Row: Proband & Siblings -->
+                <div class="flex items-center justify-between w-full pt-4" id="tier-gen3">
+                  <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 rounded bg-surface-container flex items-center justify-center text-xs font-bold text-pine shadow-sm">III</span>
+                    <span class="text-[11px] text-on-surface-variant font-semibold">Proband & Siblings</span>
+                  </div>
+                  <div class="flex items-center gap-8 mr-16 flex-wrap">
+                    <!-- Siblings -->
+                    {% for sib in state.siblings %}
+                      <div class="pedigree-node group flex flex-col items-center cursor-pointer transition-all hover:scale-105"
+                           data-node="custom_{{ sib.id }}"
+                           data-custom-name="{% if mask_identity %}{{ sib.alias_name }}{% else %}{{ sib.name }}{% endif %}"
+                           data-custom-kin="{{ sib.relationship }} • Gen III"
+                           data-custom-status="{{ sib.condition_locus or sib.carrier_status|capitalize }}"
+                           data-custom-notes="{{ sib.notes or 'Documented relative' }}"
+                           data-custom-alias="{{ sib.alias_name }}">
+                        <div class="w-12 h-12 {% if sib.sex == 'female' %}rounded-full{% else %}rounded-sm{% endif %} bg-white shadow-sm border border-outline-variant flex items-center justify-center relative overflow-hidden">
+                          {% if sib.carrier_status == 'carrier' %}
+                            <div class="absolute left-0 top-0 bottom-0 w-1/2 bg-pine"></div>
+                          {% elif sib.carrier_status == 'affected' %}
+                            <div class="absolute inset-0 bg-pine"></div>
+                          {% endif %}
+                          <span class="relative z-10 text-xs font-bold text-pine">III</span>
+                        </div>
+                        <span class="text-xs font-bold text-pine mt-1">{% if mask_identity %}{{ sib.alias_name }}{% else %}{{ sib.name }}{% endif %}</span>
+                        <span class="text-[10px] text-on-surface-variant">{{ sib.relationship }}</span>
+                      </div>
+                    {% endfor %}
+
+                    <!-- Proband (Current User) -->
+                    <div class="pedigree-node group flex flex-col items-center cursor-pointer transition-all hover:scale-105 ring-2 ring-jungle ring-offset-2 rounded-xl p-2 bg-white shadow-md"
+                         data-node="custom_proband"
+                         data-custom-name="{{ display_patient_name }}"
+                         data-custom-kin="Proband (You) • Index Patient"
+                         data-custom-status="{% if mask_identity %}🎭 Sudo: {{ user_alias }}{% else %}Awaiting Genetic Intake{% endif %}"
+                         data-custom-notes="Index patient account with zero-knowledge vault protection."
+                         data-custom-alias="{{ user_alias }}">
+                      <div class="w-14 h-14 bg-white rounded-none flex items-center justify-center shadow-lg relative border-2 border-pine overflow-hidden">
+                        <span class="material-symbols-outlined text-[28px] text-pine">person</span>
+                        <span class="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-jungle"></span>
+                      </div>
+                      <div class="flex items-center gap-1 mt-2">
+                        <span class="text-xs font-bold text-pine">{{ display_patient_name }}</span>
+                        <span class="px-1.5 py-0.2 rounded bg-pine text-white text-[9px] font-bold uppercase">Proband</span>
+                      </div>
+                      <span class="text-[10px] text-waterhole font-mono font-bold mt-0.5">
+                        {% if mask_identity %}🎭 {{ user_alias }}{% else %}Index Patient{% endif %}
+                      </span>
+                    </div>
+
+                    <!-- Add Sibling Button -->
+                    <button type="button" onclick="openAddMemberModalWithGen('gen3', 'Sibling')"
+                            class="p-3.5 rounded-xl border-2 border-dashed border-outline-variant hover:border-jungle hover:bg-jungle-light/20 transition-all flex flex-col items-center gap-1 cursor-pointer group">
+                      <span class="material-symbols-outlined text-outline group-hover:text-jungle text-xl">person_add</span>
+                      <span class="text-[11px] font-bold text-pine group-hover:text-jungle">+ Add Sibling</span>
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+
+            {% else %}
+              <!-- EXISTING 3-GENERATION MAPPED PEDIGREE TREE -->
+              <!-- SVG Connectors Layer -->
+              <svg class="absolute inset-0 w-full h-full pointer-events-none z-10" xmlns="http://www.w3.org/2000/svg">
+                <!-- GEN I Paternal to Father -->
+                <line stroke="#0c322c" stroke-width="2" x1="160" x2="250" y1="64" y2="64"></line>
+                <line stroke="#0c322c" stroke-width="2" x1="205" x2="205" y1="64" y2="120"></line>
+                <line stroke="#0c322c" stroke-width="2" x1="205" x2="205" y1="120" y2="250"></line>
+
+                <!-- GEN I Maternal to Mother & Siblings -->
+                <line stroke="#0c322c" stroke-width="2" x1="530" x2="620" y1="64" y2="64"></line>
+                <line stroke="#0c322c" stroke-width="2" x1="575" x2="575" y1="64" y2="120"></line>
+                
+                <!-- Sibship Bar Gen II Maternal -->
+                <line stroke="#0c322c" stroke-width="2" x1="390" x2="690" y1="120" y2="120"></line>
+                <line stroke="#0c322c" stroke-width="2" x1="390" x2="390" y1="120" y2="250"></line>
+                <line stroke="#0c322c" stroke-width="2" x1="540" x2="540" y1="120" y2="250"></line>
+                <line stroke="#0c322c" stroke-width="2" x1="690" x2="690" y1="120" y2="250"></line>
+
+                <!-- Consanguineous Marriage Double Line -->
+                <line stroke="#2453ff" stroke-width="2.5" x1="230" x2="365" y1="284" y2="284"></line>
+                <line stroke="#2453ff" stroke-width="2.5" x1="230" x2="365" y1="290" y2="290"></line>
+
+                <!-- Dropdown stem to Gen III -->
+                <line stroke="#0c322c" stroke-width="2" x1="297" x2="297" y1="290" y2="380"></line>
+                <line stroke="#0c322c" stroke-width="2" x1="180" x2="420" y1="380" y2="380"></line>
+                <line stroke="#0c322c" stroke-width="2" x1="180" x2="180" y1="380" y2="460"></line>
+                <line stroke="#0c322c" stroke-width="2" x1="300" x2="300" y1="380" y2="460"></line>
+                <line stroke="#0c322c" stroke-width="2" x1="420" x2="420" y1="380" y2="460"></line>
+
+                <rect fill="#dde5ff" height="18" rx="4" stroke="#2453ff" stroke-width="1" width="84" x="255" y="246"></rect>
+                <text fill="#2453ff" font-family="Plus Jakarta Sans" font-size="9" font-weight="700" text-anchor="middle" x="297" y="259">1ST COUSINS</text>
+              </svg>
+
+              <!-- GENERATION I ROW -->
+              <div class="relative z-20 flex items-center justify-between w-full pt-2" id="tier-gen1">
+                <div class="flex items-center gap-2">
+                  <span class="w-8 h-8 rounded bg-surface-container flex items-center justify-center text-xs font-bold text-pine shadow-sm">I</span>
+                  <span class="text-[11px] text-on-surface-variant font-semibold">1938 – 1965</span>
+                </div>
+
+                <!-- Paternal Grandparents -->
+                <div class="flex items-center gap-14 mr-12">
+                  <div class="pedigree-node group flex flex-col items-center cursor-pointer transition-all hover:scale-105" data-node="grandpa_p">
+                    <div class="w-14 h-14 bg-surface-container-highest rounded-none flex items-center justify-center shadow-md relative border border-outline-variant/40 group-hover:border-pine overflow-hidden">
+                      <div class="absolute left-0 top-0 bottom-0 w-1/2 bg-pine"></div>
+                      <span class="material-symbols-outlined text-[20px] text-pine relative z-10 ml-5">person</span>
+                      <span class="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-jungle"></span>
+                    </div>
+                    <span class="text-xs font-bold text-pine mt-2">
+                      {% if mask_identity %}Elder-Oak-101{% else %}Hamad Al-Mansoor{% endif %}
+                    </span>
+                    <span class="text-[10px] text-on-surface-variant font-medium">Pat. Grandfather</span>
+                    <span class="text-[10px] text-waterhole font-bold">Carrier (HBB)</span>
+                  </div>
+
+                  <div class="pedigree-node group flex flex-col items-center cursor-pointer transition-all hover:scale-105" data-node="grandma_p">
+                    <div class="w-14 h-14 bg-surface-container-highest rounded-full flex items-center justify-center shadow-md relative border border-outline-variant/40 group-hover:border-pine">
+                      <span class="material-symbols-outlined text-[20px] text-pine">person</span>
+                    </div>
+                    <span class="text-xs font-bold text-pine mt-2">
+                      {% if mask_identity %}Silver-Willow-102{% else %}Noura Al-Mansoor{% endif %}
+                    </span>
+                    <span class="text-[10px] text-on-surface-variant font-medium">Pat. Grandmother</span>
+                    <span class="text-[10px] text-on-surface-variant">Non-carrier</span>
+                  </div>
+                </div>
+
+                <!-- Maternal Grandparents -->
+                <div class="flex items-center gap-14">
+                  <div class="pedigree-node group flex flex-col items-center cursor-pointer transition-all hover:scale-105" data-node="farooq">
+                    <div class="w-14 h-14 bg-surface-container-highest rounded-none flex items-center justify-center shadow-md relative border border-outline-variant/40 group-hover:border-pine">
+                      <span class="material-symbols-outlined text-[20px] text-pine">person</span>
+                    </div>
+                    <span class="text-xs font-bold text-pine mt-2">
+                      {% if mask_identity %}Clan-Hawk-103{% else %}Farooq Al-Mansoor{% endif %}
+                    </span>
+                    <span class="text-[10px] text-on-surface-variant font-medium">Mat. Grandfather</span>
+                    <span class="text-[10px] text-on-surface-variant">Non-carrier</span>
+                  </div>
+
+                  <div class="pedigree-node group flex flex-col items-center cursor-pointer transition-all hover:scale-105" data-node="grandma_m">
+                    <div class="w-14 h-14 bg-surface-container-highest rounded-full flex items-center justify-center shadow-md relative border border-outline-variant/40 group-hover:border-pine overflow-hidden">
+                      <div class="absolute right-0 top-0 bottom-0 w-1/2 bg-jungle"></div>
+                      <span class="material-symbols-outlined text-[20px] text-pine relative z-10 mr-5">person</span>
+                      <span class="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-jungle"></span>
+                    </div>
+                    <span class="text-xs font-bold text-pine mt-2">
+                      {% if mask_identity %}Gentle-Orchid-104{% else %}Aisha Al-Mansoor{% endif %}
+                    </span>
+                    <span class="text-[10px] text-on-surface-variant font-medium">Mat. Grandmother</span>
+                    <span class="text-[10px] text-jungle font-bold">Carrier (G6PD)</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- GENERATION II ROW -->
+              <div class="relative z-20 flex items-center justify-between w-full py-8" id="tier-gen2">
+                <div class="flex items-center gap-2">
+                  <span class="w-8 h-8 rounded bg-surface-container flex items-center justify-center text-xs font-bold text-pine shadow-sm">II</span>
+                  <span class="text-[11px] text-on-surface-variant font-semibold">1960 – 1978</span>
+                </div>
+
+                <div class="flex items-center gap-8 mr-16">
+                  <div class="pedigree-node group flex flex-col items-center cursor-pointer transition-all hover:scale-105" data-node="walid">
+                    <div class="w-14 h-14 bg-white rounded-none flex items-center justify-center shadow-md relative border-2 border-pine overflow-hidden">
+                      <div class="absolute left-0 top-0 bottom-0 w-1/2 bg-pine"></div>
+                      <span class="material-symbols-outlined text-[20px] text-pine relative z-10 ml-5">male</span>
+                    </div>
+                    <span class="text-xs font-bold text-pine mt-2">
+                      {% if mask_identity %}Stalwart-Pine-201{% else %}Walid Al-Mansoor{% endif %}
+                    </span>
+                    <span class="text-[10px] text-on-surface-variant font-medium">Father (Age 61)</span>
+                    <span class="text-[10px] text-waterhole font-bold">β-Thalassemia Trait</span>
+                  </div>
+
+                  <div class="pedigree-node group flex flex-col items-center cursor-pointer transition-all hover:scale-105" data-node="samira">
+                    <div class="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-md relative border-2 border-pine overflow-hidden">
+                      <div class="absolute right-0 top-0 bottom-0 w-1/2 bg-jungle"></div>
+                      <span class="material-symbols-outlined text-[20px] text-pine relative z-10 mr-5">female</span>
+                    </div>
+                    <span class="text-xs font-bold text-pine mt-2">
+                      {% if mask_identity %}Serene-Breeze-202{% else %}Samira Bint-Omar{% endif %}
+                    </span>
+                    <span class="text-[10px] text-on-surface-variant font-medium">Mother (Age 55)</span>
+                    <span class="text-[10px] text-jungle font-bold">G6PD Carrier</span>
+                  </div>
+
+                  <div class="pedigree-node group flex flex-col items-center cursor-pointer transition-all scale-110 ring-2 ring-jungle rounded-lg p-1 bg-jungle/5" data-node="kareem">
+                    <div class="w-14 h-14 bg-pine rounded-none flex items-center justify-center shadow-lg relative border-2 border-jungle">
+                      <span class="material-symbols-outlined text-[20px] text-white">warning</span>
+                      <span class="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-jungle border-2 border-white"></span>
+                    </div>
+                    <span class="text-xs font-bold text-pine mt-2">
+                      {% if mask_identity %}Brave-Cheetah-203{% else %}Kareem Al-Mansoor{% endif %}
+                    </span>
+                    <span class="text-[10px] text-on-surface-variant font-medium">Maternal Uncle</span>
+                    <span class="text-[10px] text-error font-bold">G6PD Affected</span>
+                  </div>
+
+                  <div class="pedigree-node group flex flex-col items-center cursor-pointer transition-all hover:scale-105" data-node="fatima_aunt">
+                    <div class="w-14 h-14 bg-surface-container-highest rounded-full flex items-center justify-center shadow-md relative border border-outline-variant/40 overflow-hidden">
+                      <div class="absolute right-0 top-0 bottom-0 w-1/2 bg-jungle"></div>
+                      <span class="material-symbols-outlined text-[20px] text-pine relative z-10 mr-5">female</span>
+                    </div>
+                    <span class="text-xs font-bold text-pine mt-2">
+                      {% if mask_identity %}Amber-Gazelle-204{% else %}Fatima Al-Mansoor{% endif %}
+                    </span>
+                    <span class="text-[10px] text-on-surface-variant font-medium">Maternal Aunt</span>
+                    <span class="text-[10px] text-jungle font-bold">Carrier</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- GENERATION III ROW -->
+              <div class="relative z-20 flex items-center justify-between w-full pt-4" id="tier-gen3">
+                <div class="flex items-center gap-2">
+                  <span class="w-8 h-8 rounded bg-surface-container flex items-center justify-center text-xs font-bold text-pine shadow-sm">III</span>
+                  <span class="text-[11px] text-on-surface-variant font-semibold">1995 – 2005</span>
+                </div>
+
+                <div class="flex items-center gap-12 mr-28">
+                  <div class="pedigree-node group flex flex-col items-center cursor-pointer transition-all hover:scale-105" data-node="laila">
+                    <div class="w-14 h-14 bg-surface-container-highest rounded-full flex items-center justify-center shadow-md relative border border-outline-variant/40">
+                      <span class="material-symbols-outlined text-[20px] text-pine">female</span>
+                    </div>
+                    <span class="text-xs font-bold text-pine mt-2">
+                      {% if mask_identity %}Swift-Otter-301{% else %}Laila Al-Mansoor{% endif %}
+                    </span>
+                    <span class="text-[10px] text-on-surface-variant font-medium">Sister (Age 29)</span>
+                    <span class="text-[10px] text-outline font-medium">Assay Pending</span>
+                  </div>
+
+                  <!-- Proband Node -->
+                  <div class="pedigree-node group flex flex-col items-center cursor-pointer transition-all hover:scale-105 ring-2 ring-jungle ring-offset-2 rounded-lg p-1" data-node="tariq">
+                    <div class="w-16 h-16 bg-white rounded-none flex items-center justify-center shadow-xl relative border-2 border-pine overflow-hidden">
+                      <div class="absolute left-0 top-0 bottom-0 w-1/2 bg-pine"></div>
+                      <div class="absolute right-0 top-0 bottom-0 w-1/2 bg-jungle"></div>
+                      <span class="material-symbols-outlined text-[24px] text-white relative z-10">person</span>
+                    </div>
+                    <div class="flex items-center gap-1 mt-2">
+                      <span class="text-xs font-bold text-pine">{{ display_patient_name }}</span>
+                      <span class="px-1 py-0.2 rounded bg-pine text-white text-[9px] font-bold uppercase">Proband</span>
+                    </div>
+                    <span class="text-[10px] text-waterhole font-bold">Dual Carrier (HBB/G6PD)</span>
+                  </div>
+
+                  <div class="pedigree-node group flex flex-col items-center cursor-pointer transition-all hover:scale-105" data-node="zayd">
+                    <div class="w-14 h-14 bg-surface-container-highest rounded-none flex items-center justify-center shadow-md relative border border-outline-variant/40">
+                      <span class="material-symbols-outlined text-[20px] text-pine">male</span>
+                    </div>
+                    <span class="text-xs font-bold text-pine mt-2">
+                      {% if mask_identity %}Alert-Dolphin-302{% else %}Zayd Al-Mansoor{% endif %}
+                    </span>
+                    <span class="text-[10px] text-on-surface-variant font-medium">Brother (Age 24)</span>
+                    <span class="text-[10px] text-outline font-medium">Unassessed</span>
+                  </div>
+                </div>
+              </div>
+            {% endif %}
+
+            <!-- Dynamically Added Relatives Container -->
+            {% if custom_nodes %}
+            <div class="relative z-20 flex flex-col gap-2 pt-6 border-t border-dashed border-outline-variant/40">
+              <span class="text-[11px] font-bold text-pine uppercase tracking-wider">Additional Mapped Relatives:</span>
+              <div class="flex flex-wrap items-center gap-6">
+                {% for cnode in custom_nodes %}
+                  {% set cnode_display = cnode.alias_name if mask_identity else cnode.name %}
+                  <div class="pedigree-node group flex flex-col items-center cursor-pointer p-2 rounded-xl bg-white border border-outline-variant/40 shadow-sm hover:scale-105 transition-all"
+                       data-node="custom_{{ cnode.id }}"
+                       data-custom-name="{{ cnode_display }}"
+                       data-custom-alias="{{ cnode.alias_name }}"
+                       data-custom-kin="{{ cnode.relationship }} • {{ cnode.generation.upper() }} • Born {{ cnode.birth_year or 'N/A' }}"
+                       data-custom-status="{{ cnode.carrier_status.title() }} • {{ cnode.condition_locus }}"
+                       data-custom-notes="{{ cnode.notes }}">
+                    <div class="w-12 h-12 flex items-center justify-center shadow relative
+                                {% if cnode.sex == 'female' %}rounded-full{% else %}rounded-none{% endif %}
+                                {% if cnode.carrier_status == 'affected' %}bg-pine text-white
+                                {% elif cnode.carrier_status == 'carrier' %}bg-jungle/20 border-2 border-jungle text-pine
+                                {% else %}bg-surface-container-high border border-outline text-pine{% endif %}">
+                      <span class="material-symbols-outlined text-lg">
+                        {% if cnode.sex == 'female' %}female{% else %}male{% endif %}
+                      </span>
+                    </div>
+                    <span class="text-xs font-bold text-pine mt-1.5">{{ cnode_display }}</span>
+                    <span class="text-[10px] text-on-surface-variant">{{ cnode.relationship }}</span>
+                    <span class="text-[10px] text-jungle-dark font-bold">{{ cnode.carrier_status.title() }}</span>
+                  </div>
+                {% endfor %}
+              </div>
+            </div>
+            {% endif %}
+
+          </div>
+        </div>
+
+        <!-- Pedigree Bottom Legend Strip -->
+        <div class="px-6 py-3.5 bg-surface-container-low border-t border-outline-variant/40 flex flex-wrap items-center justify-between gap-4">
+          <div class="flex flex-wrap items-center gap-4 text-xs text-on-surface-variant">
+            <div class="flex items-center gap-1.5">
+              <span class="w-3.5 h-3.5 bg-surface-container-highest inline-block shadow-sm border border-outline-variant"></span>
+              <span>Male</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="w-3.5 h-3.5 bg-surface-container-highest rounded-full inline-block shadow-sm border border-outline-variant"></span>
+              <span>Female</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <div class="w-4 h-2 flex flex-col justify-between">
+                <span class="w-full h-0.5 bg-waterhole"></span>
+                <span class="w-full h-0.5 bg-waterhole"></span>
+              </div>
+              <span class="font-bold text-waterhole">Consanguineous Union</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full bg-jungle inline-block"></span>
+              <span>Carrier Confirmed</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full bg-pine inline-block"></span>
+              <span>Affected Variant</span>
+            </div>
+          </div>
+          <button class="text-waterhole hover:text-midnight text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer" id="resetViewBtn" type="button">
+            <span class="material-symbols-outlined text-[16px]">restart_alt</span>
+            <span>Reset Canvas</span>
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Quick Pedigree Analytics Card Strip -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="p-4 rounded-xl bg-white border border-outline-variant/60 shadow-sm flex items-center gap-3.5">
+          <div class="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center text-pine flex-shrink-0">
+            <span class="material-symbols-outlined text-[22px]">calculate</span>
+          </div>
+          <div>
+            <div class="text-[10px] text-on-surface-variant uppercase tracking-wider font-bold">Kinship Coefficient</div>
+            <div class="text-lg font-bold text-pine">{% if is_fresh_user %}Uncalculated{% else %}1/16 (0.0625){% endif %}</div>
+            <span class="text-xs text-waterhole font-bold">{% if is_fresh_user %}Intake Pending{% else %}Autosomal Recessive Alert{% endif %}</span>
+          </div>
+        </div>
+
+        <div class="p-4 rounded-xl bg-white border border-outline-variant/60 shadow-sm flex items-center gap-3.5">
+          <div class="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center text-pine flex-shrink-0">
+            <span class="material-symbols-outlined text-[22px]">biotech</span>
+          </div>
+          <div>
+            <div class="text-[10px] text-on-surface-variant uppercase tracking-wider font-bold">Assayed Variants</div>
+            <div class="text-lg font-bold text-pine">{% if is_fresh_user %}0 Assayed{% else %}4 Verified{% endif %}</div>
+            <span class="text-xs text-on-surface-variant">{% if is_fresh_user %}Awaiting Intake{% else %}HBB, G6PD, CFTR, MEFV{% endif %}</span>
+          </div>
+        </div>
+
+        <div class="p-4 rounded-xl bg-white border border-outline-variant/60 shadow-sm flex items-center gap-3.5">
+          <div class="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center text-pine flex-shrink-0">
+            <span class="material-symbols-outlined text-[22px]">health_and_safety</span>
+          </div>
+          <div>
+            <div class="text-[10px] text-on-surface-variant uppercase tracking-wider font-bold">Lineage Integrity</div>
+            <div class="text-lg font-bold text-pine">{% if is_fresh_user %}0.0%{% else %}96.8% Complete{% endif %}</div>
+            <span class="text-xs text-jungle-dark font-bold">{% if is_fresh_user %}New Vault{% else %}1 Clinical Gap{% endif %}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Relative Inspector / Diagnostic Dossier Panel (Col 9-12) -->
+    <div class="col-span-12 xl:col-span-4 flex flex-col gap-4">
+      <div class="p-6 rounded-2xl bg-white border border-outline-variant/60 shadow-sm flex flex-col gap-5">
+        
+        <!-- Inspector Top Status -->
+        <div class="flex items-center justify-between">
+          <span class="px-2.5 py-1 rounded-full bg-midnight text-white text-[10px] font-bold uppercase tracking-wider">
+            Active Pedigree Selection
+          </span>
+          <span class="text-on-surface-variant text-xs flex items-center gap-1 font-mono">
+            <span class="w-2 h-2 rounded-full bg-jungle"></span>
+            <span id="inspectorId">ID: PED-PROBAND</span>
+          </span>
+        </div>
+
+        <!-- Relative Profile Header -->
+        <div class="flex items-start gap-4">
+          <div class="relative shrink-0">
+            <div id="inspectorAvatarPlaceholder" class="w-16 h-16 rounded-xl bg-pine flex items-center justify-center text-white text-xl font-bold shadow-sm border border-outline-variant/40">
+              <span class="material-symbols-outlined text-2xl">person</span>
+            </div>
+            <span id="inspectorSexBadge" class="absolute -bottom-1 -right-1 w-5 h-5 rounded-md bg-pine text-white flex items-center justify-center shadow text-xs">
+              <span class="material-symbols-outlined text-[13px]">person</span>
+            </span>
+          </div>
+
+          <div class="flex flex-col flex-1 min-w-0">
+            <h3 class="text-base font-bold text-pine leading-tight truncate" id="inspectorRelativeName">
+              {{ display_patient_name }}
+            </h3>
+            <p class="text-xs text-on-surface-variant mt-0.5" id="inspectorKinship">
+              Proband (You) • Index Patient
+            </p>
+            <div class="mt-2 inline-flex items-center gap-1 px-2.5 py-0.5 rounded bg-waterhole/10 text-waterhole text-[11px] font-bold w-fit border border-waterhole/20" id="inspectorLocus">
+              <span class="material-symbols-outlined text-[14px]">genetics</span>
+              <span>Sudo: {{ user_alias }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Diagnostic Alert Chip / Status Banner -->
+        <div class="p-3.5 rounded-xl bg-surface-container-low border border-outline-variant/40 flex flex-col gap-1.5 shadow-sm">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-pine flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-waterhole text-[18px]">emergency</span>
+              <span id="inspectorVariantTitle">Diagnostic State</span>
+            </span>
+            <span class="text-[10px] text-midnight font-bold bg-white px-1.5 py-0.5 rounded border border-outline-variant/20" id="inspectorClassTag">
+              Node Verified
+            </span>
+          </div>
+          <p class="text-xs text-on-surface leading-relaxed" id="inspectorVariantDetail">
+            {% if is_fresh_user %}
+              No clinical alleles recorded yet. Click "+ Add Family Member" to begin constructing your pedigree tree.
+            {% else %}
+              Heterozygous carrier status documented in clinical baseline.
+            {% endif %}
+          </p>
+        </div>
+
+        <!-- Clinical Phenotype Attributes Grid -->
+        <div class="flex flex-col gap-3">
+          <span class="text-xs font-bold text-pine uppercase tracking-wider">Reported Phenotype</span>
+          <div class="flex flex-col gap-2">
+            <div class="p-3 rounded-lg bg-surface-container-low border border-outline-variant/40 flex items-center justify-between">
+              <div class="flex items-center gap-2.5">
+                <span class="material-symbols-outlined text-pine text-[20px]">medication</span>
+                <div class="flex flex-col">
+                  <span class="text-xs font-bold text-pine" id="inspectorConditionTitle">
+                    {% if is_fresh_user %}Baseline Intake Pending{% else %}Favism / Drug Sensitivity{% endif %}
+                  </span>
+                  <span class="text-[11px] text-on-surface-variant" id="inspectorConditionSub">
+                    {% if is_fresh_user %}Record clinical observations{% else %}Documented in clinical chart{% endif %}
+                  </span>
+                </div>
+              </div>
+              <span class="px-2 py-0.5 rounded bg-surface-container-highest text-pine text-[10px] font-bold">Active</span>
+            </div>
+
+            <div class="p-3 rounded-lg bg-surface-container-low border border-outline-variant/40 flex items-center justify-between">
+              <div class="flex items-center gap-2.5">
+                <span class="material-symbols-outlined text-jungle text-[20px]">verified</span>
+                <div class="flex flex-col">
+                  <span class="text-xs font-bold text-pine">Zero-Knowledge Enclave</span>
+                  <span class="text-[11px] text-on-surface-variant">Client-side masked telemetry</span>
+                </div>
+              </div>
+              <span class="material-symbols-outlined text-jungle text-[18px]">check_circle</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Clinical Action Buttons -->
+        <div class="flex flex-col gap-2.5 pt-2 border-t border-outline-variant/20">
+          <button class="w-full py-2.5 px-4 rounded-xl bg-jungle hover:bg-jungle-dark text-white text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer" onclick="openAddMemberModal()" type="button">
+            <span class="material-symbols-outlined text-[18px]">person_add</span>
+            <span>+ Add Family Member</span>
+          </button>
+          <div class="grid grid-cols-2 gap-2">
+            <button class="py-2 px-3 rounded-xl bg-surface-container hover:bg-surface-container-high text-midnight text-xs font-bold flex items-center justify-center gap-1.5 transition-colors border border-outline-variant/40" onclick="alert('Upload NGS VCF or Sanger sequencing trace file.')" type="button">
+              <span class="material-symbols-outlined text-[16px]">upload_file</span>
+              <span>Upload Lab</span>
+            </button>
+            <button class="py-2 px-3 rounded-xl bg-surface-container hover:bg-surface-container-high text-waterhole text-xs font-bold flex items-center justify-center gap-1.5 transition-colors border border-outline-variant/40" onclick="toggleDataHiding()" type="button">
+              <span class="material-symbols-outlined text-[16px]">visibility</span>
+              <span>Toggle Sudo</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- ADD FAMILY MEMBER MODAL -->
+<div id="addMemberModal" class="fixed inset-0 bg-black/60 z-50 hidden items-center justify-center p-4">
+  <div class="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl border border-outline-variant/40 flex flex-col">
+    <!-- Modal Header -->
+    <div class="px-6 py-4 bg-primary-container text-white flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <span class="material-symbols-outlined text-jungle text-[22px]">group_add</span>
+        <h3 class="text-base font-bold text-white">Add Family Member to Pedigree</h3>
+      </div>
+      <button type="button" onclick="closeAddMemberModal()" class="text-white/80 hover:text-white cursor-pointer">
+        <span class="material-symbols-outlined text-[20px]">close</span>
+      </button>
+    </div>
+
+    <!-- Modal Form -->
+    <form id="addMemberForm" onsubmit="event.preventDefault(); submitNewMember();" class="p-6 space-y-4">
+      
+      <!-- Auto Sudo Name Indicator -->
+      <div class="p-3 rounded-xl bg-surface-container-low border border-outline-variant/40 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-waterhole text-lg">shield</span>
+          <span class="text-xs text-pine font-medium">Automatic Reddit-style Sudo Name assigned for data hiding.</span>
+        </div>
+        <span class="px-2 py-0.5 rounded bg-waterhole-light text-waterhole font-mono text-[11px] font-bold">
+          Auto-Deidentified
+        </span>
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-pine mb-1" for="new_name">Full Legal Name *</label>
+        <input type="text" id="new_name" name="name" required placeholder="e.g. Walid, Samira, Uncle Hassan, etc."
+               class="w-full h-10 px-3 rounded-lg bg-surface-container-low text-xs border border-outline-variant/40 focus:bg-white focus:ring-2 focus:ring-jungle focus:outline-none"/>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-bold text-pine mb-1" for="new_gen">Generation Tier *</label>
+          <select id="new_gen" name="generation" class="w-full h-10 px-3 rounded-lg bg-surface-container-low text-xs border border-outline-variant/40 focus:bg-white focus:ring-2 focus:ring-jungle focus:outline-none">
+            <option value="gen1">Gen I (Grandparents)</option>
+            <option value="gen2" selected>Gen II (Parents / Uncles / Aunts)</option>
+            <option value="gen3">Gen III (Children / Siblings / Cousins)</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-pine mb-1" for="new_sex">Biological Sex *</label>
+          <select id="new_sex" name="sex" class="w-full h-10 px-3 rounded-lg bg-surface-container-low text-xs border border-outline-variant/40 focus:bg-white focus:ring-2 focus:ring-jungle focus:outline-none">
+            <option value="male">Male (Square Node)</option>
+            <option value="female">Female (Circle Node)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-bold text-pine mb-1" for="new_rel">Relationship to You *</label>
+          <select id="new_rel" name="relationship" class="w-full h-10 px-3 rounded-lg bg-surface-container-low text-xs border border-outline-variant/40 focus:bg-white focus:ring-2 focus:ring-jungle focus:outline-none">
+            <option value="Father">Father</option>
+            <option value="Mother">Mother</option>
+            <option value="Paternal Grandfather">Paternal Grandfather</option>
+            <option value="Paternal Grandmother">Paternal Grandmother</option>
+            <option value="Maternal Grandfather">Maternal Grandfather</option>
+            <option value="Maternal Grandmother">Maternal Grandmother</option>
+            <option value="Paternal Uncle">Paternal Uncle</option>
+            <option value="Paternal Aunt">Paternal Aunt</option>
+            <option value="Maternal Uncle">Maternal Uncle</option>
+            <option value="Maternal Aunt">Maternal Aunt</option>
+            <option value="Sibling">Sibling (Brother / Sister)</option>
+            <option value="Child / Offspring">Child / Offspring</option>
+            <option value="First Cousin">First Cousin</option>
+            <option value="Spouse / Partner">Spouse / Partner</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-pine mb-1" for="new_year">Birth Year</label>
+          <input type="text" id="new_year" name="birth_year" placeholder="e.g. 1968"
+                 class="w-full h-10 px-3 rounded-lg bg-surface-container-low text-xs border border-outline-variant/40 focus:bg-white focus:ring-2 focus:ring-jungle focus:outline-none"/>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-pine mb-1">Carrier Status *</label>
+        <div class="grid grid-cols-4 gap-2">
+          <label class="flex items-center gap-1.5 p-2 rounded-lg bg-surface-container-low text-xs font-semibold cursor-pointer border border-outline-variant/30 hover:bg-surface-container">
+            <input type="radio" name="carrier_status" value="clear" checked class="accent-jungle"/>
+            <span>Clear</span>
+          </label>
+          <label class="flex items-center gap-1.5 p-2 rounded-lg bg-surface-container-low text-xs font-semibold cursor-pointer border border-outline-variant/30 hover:bg-surface-container">
+            <input type="radio" name="carrier_status" value="carrier" class="accent-jungle"/>
+            <span>Carrier</span>
+          </label>
+          <label class="flex items-center gap-1.5 p-2 rounded-lg bg-surface-container-low text-xs font-semibold cursor-pointer border border-outline-variant/30 hover:bg-surface-container">
+            <input type="radio" name="carrier_status" value="affected" class="accent-jungle"/>
+            <span>Affected</span>
+          </label>
+          <label class="flex items-center gap-1.5 p-2 rounded-lg bg-surface-container-low text-xs font-semibold cursor-pointer border border-outline-variant/30 hover:bg-surface-container">
+            <input type="radio" name="carrier_status" value="unassessed" class="accent-jungle"/>
+            <span>Pending</span>
+          </label>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-pine mb-1" for="new_condition">Genetic Locus / Condition</label>
+        <input type="text" id="new_condition" name="condition_locus" placeholder="e.g. Beta-Thalassemia (11p15.4), G6PD, CFTR, MEFV"
+               class="w-full h-10 px-3 rounded-lg bg-surface-container-low text-xs border border-outline-variant/40 focus:bg-white focus:ring-2 focus:ring-jungle focus:outline-none"/>
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-pine mb-1" for="new_notes">Clinical Observations / Notes</label>
+        <textarea id="new_notes" name="notes" rows="2" placeholder="e.g. Verified by hospital lab, reported drug sensitivity..."
+                  class="w-full p-2.5 rounded-lg bg-surface-container-low text-xs border border-outline-variant/40 focus:bg-white focus:ring-2 focus:ring-jungle focus:outline-none"></textarea>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex items-center justify-end gap-3 pt-3 border-t border-outline-variant/20">
+        <button type="button" onclick="closeAddMemberModal()" class="px-4 py-2 rounded-lg text-xs font-bold text-pine hover:bg-surface-container transition-colors cursor-pointer">
+          Cancel
+        </button>
+        <button type="submit" id="saveMemberSubmitBtn" class="px-5 py-2 rounded-lg bg-jungle hover:bg-jungle-dark text-white text-xs font-bold shadow-md transition-all flex items-center gap-1.5 cursor-pointer">
+          <span class="material-symbols-outlined text-[18px]">check</span>
+          <span>Record to Pedigree</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  let currentZoom = 1.0;
+  const treeContainer = document.getElementById('treeContainer');
+  const zoomLevelDisplay = document.getElementById('zoomLevelDisplay');
+  const addMemberModal = document.getElementById('addMemberModal');
+
+  // Zoom Controls
+  function updateZoom(newZoom) {
+    currentZoom = Math.min(Math.max(newZoom, 0.6), 1.6);
+    if (treeContainer) treeContainer.style.transform = 'scale(' + currentZoom + ')';
+    if (zoomLevelDisplay) zoomLevelDisplay.textContent = Math.round(currentZoom * 100) + '%';
+  }
+
+  document.getElementById('zoomInBtn').addEventListener('click', () => updateZoom(currentZoom + 0.1));
+  document.getElementById('zoomOutBtn').addEventListener('click', () => updateZoom(currentZoom - 0.1));
+  document.getElementById('fitScreenBtn').addEventListener('click', () => updateZoom(0.85));
+  document.getElementById('resetViewBtn').addEventListener('click', () => {
+    updateZoom(1.0);
+    document.querySelectorAll('.pedigree-node').forEach(n => n.classList.remove('scale-110', 'ring-2', 'ring-jungle'));
+  });
+
+  // Node Selection Handlers
+  document.querySelectorAll('.pedigree-node').forEach(node => {
+    node.addEventListener('click', function() {
+      document.querySelectorAll('.pedigree-node').forEach(n => n.classList.remove('scale-110', 'ring-2', 'ring-jungle'));
+      this.classList.add('scale-110', 'ring-2', 'ring-jungle');
+
+      const nodeId = this.getAttribute('data-node');
+      
+      // Check if custom node
+      if (nodeId.startsWith('custom_')) {
+        document.getElementById('inspectorRelativeName').textContent = this.getAttribute('data-custom-name');
+        document.getElementById('inspectorKinship').textContent = this.getAttribute('data-custom-kin');
+        document.getElementById('inspectorVariantDetail').textContent = this.getAttribute('data-custom-status');
+        document.getElementById('inspectorConditionTitle').textContent = this.getAttribute('data-custom-notes') || 'Recorded relative';
+        document.getElementById('inspectorLocus').innerHTML = '<span class="material-symbols-outlined text-[14px]">shield</span><span>Sudo: ' + (this.getAttribute('data-custom-alias') || 'Assigned') + '</span>';
+        document.getElementById('inspectorId').textContent = 'ID: ' + nodeId.toUpperCase();
+        return;
+      }
+
+      // Default relative inspection data
+      document.getElementById('inspectorId').textContent = 'ID: PED-' + nodeId.toUpperCase();
+    });
+  });
+
+  // Tier Filters
+  document.querySelectorAll('.tier-filter-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.tier-filter-btn').forEach(b => {
+        b.className = 'tier-filter-btn px-3 py-1 rounded text-on-surface-variant hover:text-pine hover:bg-surface-container-high text-xs font-semibold transition-all';
+      });
+      this.className = 'tier-filter-btn px-3 py-1 rounded text-white bg-pine text-xs font-bold shadow-sm transition-all';
+
+      const filter = this.getAttribute('data-filter');
+      ['tier-gen1', 'tier-gen2', 'tier-gen3'].forEach(tierId => {
+        const el = document.getElementById(tierId);
+        if (!el) return;
+        if (filter === 'all' || filter === tierId.replace('tier-', '')) {
+          el.style.opacity = '1';
+          el.style.filter = 'none';
+        } else {
+          el.style.opacity = '0.3';
+          el.style.filter = 'grayscale(80%)';
+        }
+      });
+    });
+  });
+
+  // Search filter
+  document.getElementById('pedigreeSearch').addEventListener('input', function(e) {
+    const val = e.target.value.toLowerCase().trim();
+    document.querySelectorAll('.pedigree-node').forEach(node => {
+      const text = node.textContent.toLowerCase();
+      node.style.opacity = (!val || text.includes(val)) ? '1' : '0.2';
+    });
+  });
+
+  // Modal Open / Close
+  function openAddMemberModal() {
+    addMemberModal.classList.remove('hidden');
+    addMemberModal.classList.add('flex');
+  }
+
+  function openAddMemberModalWithGen(gen, rel) {
+    openAddMemberModal();
+    if (document.getElementById('new_gen')) document.getElementById('new_gen').value = gen;
+    if (document.getElementById('new_rel')) document.getElementById('new_rel').value = rel;
+  }
+
+  function closeAddMemberModal() {
+    addMemberModal.classList.add('hidden');
+    addMemberModal.classList.remove('flex');
+  }
+
+  // Submit New Member to Backend API
+  function submitNewMember() {
+    const btn = document.getElementById('saveMemberSubmitBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="material-symbols-outlined animate-spin text-sm">progress_activity</span><span>Saving...</span>';
+
+    const payload = {
+      name: document.getElementById('new_name').value,
+      generation: document.getElementById('new_gen').value,
+      sex: document.getElementById('new_sex').value,
+      relationship: document.getElementById('new_rel').value,
+      birth_year: document.getElementById('new_year').value,
+      carrier_status: document.querySelector('input[name="carrier_status"]:checked').value,
+      condition_locus: document.getElementById('new_condition').value || 'Unassessed',
+      notes: document.getElementById('new_notes').value
+    };
+
+    fetch('{{ url_for("api_add_pedigree_member") }}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'success') {
+        alert('Family relative "' + payload.name + '" recorded to pedigree tree with automatic Reddit-style Sudo alias!');
+        location.reload();
+      } else {
+        alert('Error: ' + (data.message || 'Could not save member.'));
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-symbols-outlined text-[18px]">check</span><span>Record to Pedigree</span>';
+      }
+    })
+    .catch(err => {
+      alert('Error connecting to backend.');
+      btn.disabled = false;
+    });
+  }
+
+  // Export functions
+  function exportPedigree(type) {
+    if (type === 'pdf') {
+      window.print();
+    } else if (type === 'json') {
+      fetch('{{ url_for("api_pedigree_nodes") }}')
+      .then(r => r.json())
+      .then(nodes => {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(nodes, null, 2));
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.setAttribute("href", dataStr);
+        downloadAnchor.setAttribute("download", "guardianangel_pedigree_" + Date.now() + ".json");
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        downloadAnchor.remove();
+      });
+    } else if (type === 'gcs') {
+      fetch('{{ url_for("api_gcp_sync_pedigree") }}', { method: 'POST' })
+      .then(r => r.json())
+      .then(data => {
+        alert("Google Cloud Platform Sync:\n" + JSON.stringify(data, null, 2));
+      });
+    }
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block title %}Patient Details & Clinical Profile — GuardianAngel{% endblock %}
+
+{% block content %}
+<div class="flex flex-col w-full max-w-4xl mx-auto gap-8">
+
+  <!-- Header Banner -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-2xl bg-white border border-outline-variant/40 shadow-sm">
+    <div class="flex items-center gap-4">
+      <div class="w-14 h-14 rounded-2xl bg-pine flex items-center justify-center text-white text-xl font-bold shadow-md">
+        {{ (profile.full_name[0] if profile and profile.full_name else 'T') }}
+      </div>
+      <div>
+        <h1 class="text-xl sm:text-2xl font-bold text-pine">{{ profile.full_name if profile else 'Tariq Al-Mansoor' }}</h1>
+        <p class="text-xs text-on-surface-variant">{{ profile.email if profile else 'admin@guardianangel.bio' }} • Proband (Index Patient)</p>
+      </div>
+    </div>
+    <span class="px-3 py-1 rounded-full bg-jungle-light text-jungle-dark text-xs font-bold border border-jungle/30 self-start sm:self-auto">
+      Verified Clinical Dossier
+    </span>
+  </div>
+
+  <!-- Form: Add/Edit Patient Clinical Details -->
+  <div class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-outline-variant/40">
+    <div class="pb-4 mb-6 border-b border-outline-variant/20 flex items-center justify-between">
+      <div>
+        <h2 class="text-base font-bold text-pine">Patient Demographic & Genomic Details</h2>
+        <p class="text-xs text-on-surface-variant mt-0.5">Keep your clinical records current to optimize autosomal recessive calculations.</p>
+      </div>
+      <span class="text-xs text-waterhole font-bold flex items-center gap-1">
+        <span class="material-symbols-outlined text-[16px]">lock</span>
+        <span>E2EE Encrypted</span>
+      </span>
+    </div>
+
+    <form action="{{ url_for('profile_view') }}" method="POST" class="space-y-6">
+      
+      <!-- Row 1: Legal Name, Sudo Alias, and Email -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+        <div>
+          <label class="block text-xs font-bold text-pine mb-1.5" for="full_name">Full Legal Name *</label>
+          <div class="relative flex items-center">
+            <span class="material-symbols-outlined absolute left-3.5 text-outline text-lg">badge</span>
+            <input type="text" id="full_name" name="full_name" required value="{{ profile.full_name if profile else 'Tariq Al-Mansoor' }}"
+                   class="w-full h-11 pl-11 pr-4 bg-surface-container-low text-xs rounded-xl border border-outline-variant/40 focus:bg-white focus:ring-2 focus:ring-jungle focus:outline-none"/>
+          </div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="block text-xs font-bold text-pine" for="alias_name">Anonymous Sudo Name</label>
+            <button type="button" onclick="regenerateSudoAlias()" class="text-[10px] font-bold text-secondary hover:underline flex items-center gap-0.5">
+              <span class="material-symbols-outlined text-[12px]">casino</span>
+              <span>New Alias</span>
+            </button>
+          </div>
+          <div class="relative flex items-center">
+            <span class="material-symbols-outlined absolute left-3.5 text-waterhole text-lg">shield</span>
+            <input type="text" id="alias_name" name="alias_name" value="{{ profile.alias_name if profile and profile.alias_name else 'Silent-Falcon-9214' }}"
+                   class="w-full h-11 pl-11 pr-4 bg-surface-container-low font-mono font-bold text-waterhole text-xs rounded-xl border border-outline-variant/40 focus:bg-white focus:ring-2 focus:ring-waterhole focus:outline-none"/>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-pine mb-1.5" for="email">Clinical / Account Email</label>
+          <div class="relative flex items-center">
+            <span class="material-symbols-outlined absolute left-3.5 text-outline text-lg">mail</span>
+            <input type="email" id="email" name="email" readonly value="{{ profile.email if profile else 'admin@guardianangel.bio' }}"
+                   class="w-full h-11 pl-11 pr-4 bg-surface-container-high text-on-surface-variant text-xs rounded-xl border border-outline-variant/40 cursor-not-allowed"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 2: DOB and Blood Type -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <div>
+          <label class="block text-xs font-bold text-pine mb-1.5" for="dob">Date of Birth</label>
+          <div class="relative flex items-center">
+            <span class="material-symbols-outlined absolute left-3.5 text-outline text-lg">calendar_today</span>
+            <input type="date" id="dob" name="dob" value="{{ profile.dob if profile and profile.dob else '1995-04-12' }}"
+                   class="w-full h-11 pl-11 pr-4 bg-surface-container-low text-xs rounded-xl border border-outline-variant/40 focus:bg-white focus:ring-2 focus:ring-jungle focus:outline-none"/>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-pine mb-1.5" for="blood_type">ABO / Rh Blood Group</label>
+          <select id="blood_type" name="blood_type" class="w-full h-11 px-4 bg-surface-container-low text-xs rounded-xl border border-outline-variant/40 focus:bg-white focus:ring-2 focus:ring-jungle focus:outline-none">
+            {% set bt = profile.blood_type if profile and profile.blood_type else 'O+' %}
+            <option value="O+" {% if bt == 'O+' %}selected{% endif %}>O+ (Positive)</option>
+            <option value="A+" {% if bt == 'A+' %}selected{% endif %}>A+ (Positive)</option>
+            <option value="B+" {% if bt == 'B+' %}selected{% endif %}>B+ (Positive)</option>
+            <option value="AB+" {% if bt == 'AB+' %}selected{% endif %}>AB+ (Positive)</option>
+            <option value="O-" {% if bt == 'O-' %}selected{% endif %}>O- (Negative)</option>
+            <option value="A-" {% if bt == 'A-' %}selected{% endif %}>A- (Negative)</option>
+            <option value="B-" {% if bt == 'B-' %}selected{% endif %}>B- (Negative)</option>
+            <option value="AB-" {% if bt == 'AB-' %}selected{% endif %}>AB- (Negative)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Row 3: Phone and Location -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+        <div>
+          <label class="block text-xs font-bold text-pine mb-1.5" for="phone">Contact Phone</label>
+          <input type="text" id="phone" name="phone" value="{{ profile.phone if profile and profile.phone else '+966 50 123 4567' }}"
+                 class="w-full h-11 px-4 bg-surface-container-low text-xs rounded-xl border border-outline-variant/40 focus:bg-white focus:ring-2 focus:ring-jungle focus:outline-none"/>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-pine mb-1.5" for="city">City</label>
+          <input type="text" id="city" name="city" value="{{ profile.city if profile and profile.city else 'Jeddah' }}"
+                 class="w-full h-11 px-4 bg-surface-container-low text-xs rounded-xl border border-outline-variant/40 focus:bg-white focus:ring-2 focus:ring-jungle focus:outline-none"/>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-pine mb-1.5" for="country">Country</label>
+          <input type="text" id="country" name="country" value="{{ profile.country if profile and profile.country else 'Saudi Arabia' }}"
+                 class="w-full h-11 px-4 bg-surface-container-low text-xs rounded-xl border border-outline-variant/40 focus:bg-white focus:ring-2 focus:ring-jungle focus:outline-none"/>
+        </div>
+      </div>
+
+      <!-- Row 4: Consanguinity Lineage Tier -->
+      <div>
+        <label class="block text-xs font-bold text-pine mb-1.5" for="kinship_degree">Documented Consanguineous Lineage Degree</label>
+        <input type="text" id="kinship_degree" name="kinship_degree" value="{{ profile.kinship_degree if profile and profile.kinship_degree else '3rd Degree Consanguinity (F=0.0625)' }}"
+               placeholder="e.g. 3rd Degree (F=0.0625), First Cousins, Unrelated"
+               class="w-full h-11 px-4 bg-surface-container-low text-xs rounded-xl border border-outline-variant/40 focus:bg-white focus:ring-2 focus:ring-jungle focus:outline-none"/>
+      </div>
+
+      <!-- Row 5: Phenotypic / Carrier Notes -->
+      <div>
+        <label class="block text-xs font-bold text-pine mb-1.5" for="phenotypic_notes">Carrier & Phenotypic Medical Notes</label>
+        <textarea id="phenotypic_notes" name="phenotypic_notes" rows="3"
+                  class="w-full p-4 bg-surface-container-low text-xs rounded-xl border border-outline-variant/40 focus:bg-white focus:ring-2 focus:ring-jungle focus:outline-none leading-relaxed">{{ profile.phenotypic_notes if profile and profile.phenotypic_notes else 'Heterozygous carrier for Beta-Thalassemia (11p15.4) and G6PD Mediterranean (Xq28).' }}</textarea>
+      </div>
+
+      <!-- Row 6: Emergency Contact -->
+      <div>
+        <label class="block text-xs font-bold text-pine mb-1.5" for="emergency_contact">Emergency Contact & Designated Surrogate</label>
+        <input type="text" id="emergency_contact" name="emergency_contact" value="{{ profile.emergency_contact if profile and profile.emergency_contact else 'Fatima Al-Zahra (+966 50 987 6543)' }}"
+               class="w-full h-11 px-4 bg-surface-container-low text-xs rounded-xl border border-outline-variant/40 focus:bg-white focus:ring-2 focus:ring-jungle focus:outline-none"/>
+      </div>
+
+      <!-- Submit Button -->
+      <div class="pt-4 flex items-center justify-end gap-3 border-t border-outline-variant/20">
+        <a href="{{ url_for('dashboard') }}" class="px-5 py-2.5 rounded-xl text-xs font-bold text-pine hover:bg-surface-container transition-colors">
+          Cancel
+        </a>
+        <button type="submit" class="px-6 py-2.5 rounded-xl bg-jungle hover:bg-jungle-dark text-white text-xs font-bold shadow-md transition-all flex items-center gap-2 cursor-pointer">
+          <span class="material-symbols-outlined text-[18px]">save</span>
+          <span>Save Details</span>
+        </button>
+      </div>
+
+    </form>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function regenerateSudoAlias() {
+    fetch('{{ url_for("regenerate_alias") }}', { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      if (data.status === 'success') {
+        document.getElementById('alias_name').value = data.new_alias;
+        alert('New Reddit-style Sudo Name assigned: ' + data.new_alias);
+      }
+    })
+    .catch(err => alert('Could not regenerate alias.'));
+  }
+</script>
+{% endblock %}
+

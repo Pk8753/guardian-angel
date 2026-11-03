@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+
+{% block title %}Couple Hereditary Assessment — GuardianAngel{% endblock %}
+
+{% block content %}
+<div class="flex flex-col w-full gap-8">
+
+  <!-- Page Header & Action Controls -->
+  <div class="flex flex-col gap-4">
+    <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+      <div class="flex flex-col gap-1.5">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="px-2.5 py-0.5 rounded-full bg-waterhole-light text-waterhole text-[11px] font-bold tracking-wider uppercase">
+            Pre-Conception Genomic Node
+          </span>
+          <span class="text-on-surface-variant text-xs">•</span>
+          <span class="text-on-surface-variant text-xs font-mono">CRYPT-ID: #CP-8492</span>
+        </div>
+        <h1 class="text-2xl sm:text-3xl font-bold text-pine tracking-tight">
+          Couple Hereditary Assessment — Tariq Al-Mansoor & Fatima Al-Zahra
+        </h1>
+        <p class="text-xs sm:text-sm text-on-surface-variant">
+          Pre-conception dual-lineage genomic synthesis • Synchronized pedigree cross-analysis against 3,240 autosomal variant pathways.
+        </p>
+      </div>
+
+      <div class="flex items-center gap-3 shrink-0">
+        <button type="button" onclick="window.print()" class="px-4 py-2 rounded-lg bg-white text-pine border border-outline-variant/60 hover:bg-surface-container transition-colors text-xs font-bold flex items-center gap-2 shadow-sm">
+          <span class="material-symbols-outlined text-[18px]">download_for_offline</span>
+          <span>Export Clinical Brief</span>
+        </button>
+        <button type="button" onclick="alert('Session scheduled with Medical Genetics Board.')" class="px-5 py-2 rounded-lg bg-midnight text-white hover:bg-pine transition-all shadow-sm text-xs font-bold flex items-center gap-2 cursor-pointer">
+          <span class="material-symbols-outlined text-[18px]">medical_services</span>
+          <span>Review with Geneticist</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Clinical Protocol Recommendation Banner -->
+    <div class="p-4 rounded-xl bg-jungle-light border border-jungle/30 flex items-start gap-4 shadow-sm">
+      <div class="w-10 h-10 rounded-lg bg-jungle flex items-center justify-center text-white shrink-0 shadow-sm">
+        <span class="material-symbols-outlined text-[24px]">verified</span>
+      </div>
+      <div class="flex flex-col flex-1 gap-1">
+        <div class="flex items-center justify-between flex-wrap gap-2">
+          <span class="text-xs font-bold text-pine uppercase tracking-wider">Clinical Recommendation • Guideline Tier 2</span>
+          <span class="text-xs text-jungle-dark font-bold">Standard Protocol (ACMG / SHG)</span>
+        </div>
+        <p class="text-xs text-on-surface leading-relaxed">
+          Target Carrier Sanger Sequencing Advised for Partner A. No clinical incompatibility verdict assigned. Identified compound variant pathway supports non-invasive counseling and routine carrier screening.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  {% if not is_admin and not state.has_partner %}
+  <!-- NO PARTNER LINKED ONBOARDING STATE -->
+  <div class="w-full bg-white rounded-2xl p-10 border border-outline-variant/40 shadow-sm flex flex-col items-center text-center max-w-xl mx-auto my-8">
+    <div class="w-16 h-16 rounded-2xl bg-surface-container-high text-outline flex items-center justify-center mb-4 shadow-inner">
+      <span class="material-symbols-outlined text-3xl">diversity_1</span>
+    </div>
+    <h2 class="text-xl font-bold text-pine">Couple Hereditary Assessment</h2>
+    <p class="text-xs text-on-surface-variant mt-2 max-w-md leading-relaxed">
+      Pre-conception dual-lineage genomic synthesis cross-analyzes two family pedigrees against 3,240 autosomal variant pathways. Link your partner's zero-knowledge vault or add a candidate partner node to compute concordance and carrier match metrics.
+    </p>
+    <div class="flex items-center gap-3 mt-6">
+      <button type="button" onclick="openAddMemberModalWithGen('gen3', 'Spouse / Partner')" class="px-5 py-2.5 rounded-lg bg-jungle hover:bg-jungle-dark text-white text-xs font-bold transition-all shadow-sm flex items-center gap-2 cursor-pointer">
+        <span class="material-symbols-outlined text-[18px]">favorite</span>
+        <span>+ Add Partner to Lineage</span>
+      </button>
+      <a href="{{ url_for('pedigree') }}" class="px-4 py-2.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-pine text-xs font-bold transition-all border border-outline-variant/40">
+        View Family Pedigree →
+      </a>
+    </div>
+  </div>
+  {% else %}
+
+  <!-- 3-Column Comparative Genetic Synthesis Grid -->
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+    
+    <!-- Partner A: Tariq Al-Mansoor (Col 1-4) -->
+    <div class="lg:col-span-4 rounded-2xl bg-white border border-outline-variant/40 p-6 flex flex-col justify-between shadow-sm relative overflow-hidden">
+      <div class="flex flex-col gap-5">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-xl bg-surface-container-high flex items-center justify-center text-pine text-base font-bold">
+              TA
+            </div>
+            <div class="flex flex-col">
+              <span class="text-sm font-bold text-pine">{{ current_user.full_name if current_user else 'Tariq Al-Mansoor' }}</span>
+              <span class="text-[11px] text-on-surface-variant">Age 31 • Index Proband (Partner A)</span>
+            </div>
+          </div>
+          <span class="px-2 py-1 rounded bg-surface-container-high text-on-surface-variant text-[11px] font-mono">Pedigree: #T-102</span>
+        </div>
+
+        <div class="h-44 w-full rounded-xl overflow-hidden relative">
+          <img class="w-full h-full object-cover" alt="Tariq Al-Mansoor" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBxvd5SWn8Qzj7LL98LUygKiBaXTguBUkTRSpoNRIhgyNdIrdK-Br1mjdllp3u7-Ld7_FZZxwcFXxnb9PA0xu4DrTGwPFZIHsjGtmzsP2MINhHva5iIoSsQbLXfd9sjJE7dEjJKi4EaurV3w4tl5CRDZiGA27glcQSCSnL--zJs2ddh8D0gFLHu0roudDu8HmNJuKmmNsvZltkKAXDPdBuZYzBOrelWtn-LY6Ly2a8f"/>
+          <div class="absolute inset-0 bg-gradient-to-t from-pine/80 via-transparent to-transparent"></div>
+          <div class="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-white text-xs">
+            <span class="font-medium">Primary Biomarkers</span>
+            <span class="font-mono text-[11px] opacity-90">HBB Genotype: Confirmed</span>
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-2.5">
+          <span class="text-xs font-bold text-pine uppercase tracking-wider">Identified Pedigree Lineages</span>
+          <div class="p-3 rounded-lg bg-surface-container-low flex flex-col gap-1 border border-outline-variant/30">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-on-surface">Maternal Line: β-Thal Carrier</span>
+              <span class="px-2 py-0.5 rounded bg-jungle-light text-jungle-dark text-[10px] font-bold border border-jungle/20">Identified</span>
+            </div>
+            <p class="text-[11px] text-on-surface-variant leading-relaxed">Documented in maternal grandmother & mother (c.92+5G>C heterozygous mutation).</p>
+          </div>
+
+          <div class="p-3 rounded-lg bg-surface-container-low flex flex-col gap-1 border border-outline-variant/30">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-on-surface">Maternal Uncle: G6PD Deficiency</span>
+              <span class="px-2 py-0.5 rounded bg-midnight-light text-midnight text-[10px] font-bold">X-Linked Recessive</span>
+            </div>
+            <p class="text-[11px] text-on-surface-variant leading-relaxed">Mediterranean variant (c.563C>T). Tariq is asymptomatic; low transmission risk to offspring.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-4 pt-3 flex items-center justify-between border-t border-outline-variant/30 text-xs">
+        <span class="text-on-surface-variant">Confirmatory Test: Sanger Sequencing</span>
+        <span class="text-jungle-dark font-bold flex items-center gap-1">
+          <span class="material-symbols-outlined text-[16px]">check_circle</span>
+          <span>Verified Valid</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- Center: Cross-Lineage Synthesis & Overlap Matrix (Col 5-8) -->
+    <div class="lg:col-span-4 rounded-2xl bg-white border border-outline-variant/40 p-6 flex flex-col justify-between shadow-sm relative overflow-hidden">
+      <div>
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-midnight text-[20px]">hub</span>
+            <span class="text-xs font-bold text-pine uppercase tracking-wider">Cross-Lineage Synthesis</span>
+          </div>
+          <span class="text-xs px-2.5 py-0.5 rounded-full bg-waterhole-light text-waterhole font-mono font-bold">Locus: 11p15.4</span>
+        </div>
+
+        <!-- Overlap Schematic Diagram -->
+        <div class="flex flex-col items-center justify-center my-3 py-4 relative bg-surface-container-low rounded-xl border border-outline-variant/30">
+          <div class="flex items-center justify-center gap-6">
+            <div class="flex flex-col items-center">
+              <div class="w-12 h-12 rounded-xl bg-pine text-white flex items-center justify-center font-bold text-xs shadow">
+                TA
+              </div>
+              <span class="text-[10px] font-bold text-pine mt-1">Carrier (β-Thal)</span>
+            </div>
+
+            <div class="flex flex-col items-center">
+              <span class="material-symbols-outlined text-waterhole text-2xl animate-pulse">sync_alt</span>
+              <span class="text-[9px] font-bold text-waterhole uppercase">Intersection</span>
+            </div>
+
+            <div class="flex flex-col items-center">
+              <div class="w-12 h-12 rounded-xl bg-midnight text-white flex items-center justify-center font-bold text-xs shadow">
+                FA
+              </div>
+              <span class="text-[10px] font-bold text-pine mt-1">Screening Node</span>
+            </div>
+          </div>
+          <p class="text-[11px] text-on-surface-variant text-center mt-3 px-4">
+            No overlapping homozygous mutations identified in preliminary algorithmic screening.
+          </p>
+        </div>
+
+        <!-- Risk Metric Breakdown -->
+        <div class="space-y-3 pt-2">
+          <div class="flex items-center justify-between p-3 rounded-lg bg-surface-container-low border border-outline-variant/30">
+            <div class="flex flex-col">
+              <span class="text-xs font-bold text-pine">Autosomal Recessive Concordance</span>
+              <span class="text-[10px] text-on-surface-variant">Beta-Thalassemia & Hemoglobinopathies</span>
+            </div>
+            <span class="text-xs font-bold text-jungle-dark bg-jungle-light px-2 py-0.5 rounded">Low Baseline Risk</span>
+          </div>
+
+          <div class="flex items-center justify-between p-3 rounded-lg bg-surface-container-low border border-outline-variant/30">
+            <div class="flex flex-col">
+              <span class="text-xs font-bold text-pine">Consanguinity Amplification Factor</span>
+              <span class="text-[10px] text-on-surface-variant">Dual-family kinship verification</span>
+            </div>
+            <span class="text-xs font-bold text-waterhole bg-waterhole-light px-2 py-0.5 rounded">F = 0.000 (Non-consanguineous)</span>
+          </div>
+
+          <div class="flex items-center justify-between p-3 rounded-lg bg-surface-container-low border border-outline-variant/30">
+            <div class="flex flex-col">
+              <span class="text-xs font-bold text-pine">Carrier Match Scope</span>
+              <span class="text-[10px] text-on-surface-variant">Granular privacy pairing token active</span>
+            </div>
+            <span class="text-xs font-bold text-pine bg-white px-2 py-0.5 rounded border border-outline-variant/30 font-mono">SHA-256 Valid</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-4 pt-3 flex items-center justify-between border-t border-outline-variant/30 text-xs">
+        <span class="text-on-surface-variant">Synthetic Confidence Index</span>
+        <span class="text-jungle-dark font-bold">98.4% Precision</span>
+      </div>
+    </div>
+
+    <!-- Partner B: Fatima Al-Zahra (Col 9-12) -->
+    <div class="lg:col-span-4 rounded-2xl bg-white border border-outline-variant/40 p-6 flex flex-col justify-between shadow-sm relative overflow-hidden">
+      <div class="flex flex-col gap-5">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-xl bg-midnight-light flex items-center justify-center text-midnight text-base font-bold">
+              FA
+            </div>
+            <div class="flex flex-col">
+              <span class="text-sm font-bold text-pine">Fatima Al-Zahra</span>
+              <span class="text-[11px] text-on-surface-variant">Age 28 • Partner Candidate (Partner B)</span>
+            </div>
+          </div>
+          <span class="px-2 py-1 rounded bg-surface-container-high text-on-surface-variant text-[11px] font-mono">Pedigree: #F-309</span>
+        </div>
+
+        <div class="h-44 w-full rounded-xl overflow-hidden relative">
+          <img class="w-full h-full object-cover" alt="Fatima Al-Zahra" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA_-i855rUovsYiTKAA9KsPJl04-PzMPAsfQTUYD8j76KsAElpQdAFVAF-zAcGsKX-Sc4oNEIJPwYSzY3g9jDGxeubHhx5SCgdDcSlQB2CnfhjjTTFTisBewwxgQCix6bUd_L7E47Pu5nHkFDh4GAEkNBx-EJU93oK1cMPxuvnWVetHjSLLPOtl1iRIg7bxaer9UGmYpkGSLEYzlawvTDDDaTupK29CqrVMFKttC2_u"/>
+          <div class="absolute inset-0 bg-gradient-to-t from-midnight/80 via-transparent to-transparent"></div>
+          <div class="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-white text-xs">
+            <span class="font-medium">Specimen Status</span>
+            <span class="font-mono text-[11px] opacity-90">Riyadh Central Lab</span>
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-2.5">
+          <span class="text-xs font-bold text-pine uppercase tracking-wider">Lineage Profile</span>
+          <div class="p-3 rounded-lg bg-surface-container-low flex flex-col gap-1 border border-outline-variant/30">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-on-surface">Pedigree Tree Integration</span>
+              <span class="px-2 py-0.5 rounded bg-jungle-light text-jungle-dark text-[10px] font-bold border border-jungle/20">Synchronized</span>
+            </div>
+            <p class="text-[11px] text-on-surface-variant leading-relaxed">2 generations documented with zero reported congenital hemoglobinopathy history.</p>
+          </div>
+
+          <div class="p-3 rounded-lg bg-surface-container-low flex flex-col gap-1 border border-outline-variant/30">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-on-surface">Target Sanger Assay</span>
+              <span class="px-2 py-0.5 rounded bg-waterhole-light text-waterhole text-[10px] font-bold">In Laboratory</span>
+            </div>
+            <p class="text-[11px] text-on-surface-variant leading-relaxed">Testing specifically for HBB exon 1 & 2 variant concordance to exclude compound heterozygosity.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-4 pt-3 flex items-center justify-between border-t border-outline-variant/30 text-xs">
+        <span class="text-on-surface-variant">Confirmatory Test: Sanger Sequencing</span>
+        <span class="text-waterhole font-bold flex items-center gap-1">
+          <span class="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+          <span>In Laboratory Queue</span>
+        </span>
+      </div>
+    </div>
+
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+

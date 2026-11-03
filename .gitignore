@@ -1,0 +1,12 @@
+.DS_Store
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+data/*.db
+data/gcs_local_storage/
+venv/
+.env
+ui-screen
+

@@ -1,0 +1,985 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — GuardianAngel Clinical Intelligence{% endblock %}
+
+{% block content %}
+{% set user_alias = current_user.alias_name if current_user and current_user.alias_name else 'Silent-Falcon-9214' %}
+{% set display_patient_name = user_alias if mask_identity else (current_user.full_name if current_user and current_user.full_name else 'Tariq Al-Mansoor') %}
+{% set first_name = user_alias if mask_identity else (display_patient_name.split(' ')[0] if display_patient_name else 'User') %}
+
+<div class="flex flex-col w-full gap-8">
+
+  <!-- Welcome & Completeness Index Hero Banner -->
+  <div class="w-full bg-white rounded-2xl p-6 sm:p-7 shadow-sm border border-outline-variant/40 relative overflow-hidden flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+    <div class="absolute -right-16 -top-16 w-80 h-80 rounded-full bg-jungle/10 blur-3xl pointer-events-none"></div>
+    <div class="flex flex-col max-w-xl z-10">
+      <div class="flex items-center gap-2 mb-2 flex-wrap">
+        {% if state.is_fresh_user %}
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-container-high text-on-surface-variant text-[11px] font-bold uppercase tracking-wider">
+            <span class="w-2 h-2 rounded-full bg-outline"></span>
+            {{ state.completeness_status }}
+          </span>
+          <span class="text-[11px] text-on-surface-variant font-medium">{{ state.completeness_subtitle }}</span>
+        {% else %}
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-jungle-container text-jungle-on-container text-[11px] font-bold uppercase tracking-wider">
+            <span class="w-2 h-2 rounded-full bg-jungle"></span>
+            {{ state.completeness_status }}
+          </span>
+          <span class="text-[11px] text-on-surface-variant font-medium">{{ state.completeness_subtitle }}</span>
+        {% endif %}
+      </div>
+      
+      <h1 class="text-2xl sm:text-3xl font-bold text-pine tracking-tight">
+        Good Morning, <span class="text-pine">{{ first_name }}</span>
+      </h1>
+      
+      <p class="text-sm text-on-surface-variant mt-1.5 leading-relaxed">
+        {{ state.completeness_desc | safe }}
+      </p>
+    </div>
+
+    <!-- Completeness Metric & Priority Diagnostic -->
+    <div class="flex items-center gap-5 z-10 bg-surface-container-low p-4 rounded-xl border border-outline-variant/30 w-full lg:w-auto">
+      {% if state.is_fresh_user or state.completeness_index == 0 %}
+        <!-- Fresh User: 0% Completeness Gauge -->
+        <div class="relative w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center shrink-0">
+          <svg class="w-full h-full -rotate-90 transform" viewBox="0 0 100 100">
+            <circle class="text-surface-container-high fill-transparent" cx="50" cy="50" r="40" stroke="currentColor" stroke-width="8"></circle>
+            <circle class="text-outline-variant fill-transparent" cx="50" cy="50" r="40" stroke="currentColor" stroke-dasharray="251.2" stroke-dashoffset="251.2" stroke-linecap="round" stroke-width="8"></circle>
+          </svg>
+          <div class="absolute flex flex-col items-center">
+            <span class="text-xl sm:text-2xl font-bold text-outline leading-none">0%</span>
+            <span class="text-[10px] text-on-surface-variant font-bold leading-none mt-1">INDEX</span>
+          </div>
+        </div>
+        
+        <!-- Fresh User: Priority Diagnostic is BLANK / Empty as requested -->
+        <div class="flex flex-col justify-center max-w-xs">
+          <span class="text-[10px] uppercase tracking-widest text-outline font-bold">Priority Diagnostic</span>
+          <h4 class="text-xs font-semibold text-on-surface-variant mt-1 italic">
+            (Blank — No clinical diagnostic data recorded)
+          </h4>
+          <p class="text-[11px] text-on-surface-variant mt-1 leading-snug">
+            Add your family members to calculate autosomal recessive carrier recommendations.
+          </p>
+          <button type="button" onclick="openAddMemberModalWithGen('gen2', 'Father')" class="inline-flex items-center gap-1 text-xs text-waterhole font-bold mt-2 hover:underline cursor-pointer">
+            + Begin Pedigree Intake →
+          </button>
+        </div>
+      {% else %}
+        <!-- Dynamic Generated Completeness Index Gauge -->
+        <div class="relative w-20 h-20 sm:w-24 sm:h-24 flex items-center justify-center shrink-0">
+          <svg class="w-full h-full -rotate-90 transform" viewBox="0 0 100 100">
+            <circle class="text-surface-container-high fill-transparent" cx="50" cy="50" r="40" stroke="currentColor" stroke-width="8"></circle>
+            <circle class="text-jungle fill-transparent transition-all duration-1000 ease-out" cx="50" cy="50" r="40" stroke="currentColor" stroke-dasharray="251.2" stroke-dashoffset="{{ 251.2 - (251.2 * state.completeness_index / 100) }}" stroke-linecap="round" stroke-width="8"></circle>
+          </svg>
+          <div class="absolute flex flex-col items-center">
+            <span class="text-xl sm:text-2xl font-bold text-pine leading-none">{{ state.completeness_index }}%</span>
+            <span class="text-[10px] text-on-surface-variant font-bold leading-none mt-1">INDEX</span>
+          </div>
+        </div>
+        <div class="flex flex-col justify-center max-w-xs">
+          <span class="text-[10px] uppercase tracking-widest text-waterhole font-bold">Priority Diagnostic</span>
+          <h4 class="text-sm font-bold text-pine mt-0.5">{{ state.diagnostic_title }}</h4>
+          <div class="flex flex-wrap items-center gap-2 mt-2">
+            <span class="px-2 py-0.5 rounded bg-waterhole-container text-midnight text-[11px] font-bold">{{ state.diagnostic_locus }}</span>
+            <span class="px-2 py-0.5 rounded bg-jungle-light text-jungle-dark text-[11px] font-bold">{{ state.diagnostic_badge }}</span>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- GUIDED FAMILY PEDIGREE INTAKE NAVIGATOR (Visible for new signups or incomplete intake) -->
+  {% if not is_admin %}
+  <div class="w-full bg-white rounded-2xl p-5 border border-outline-variant/40 shadow-sm flex flex-col gap-4">
+    <div class="flex items-center justify-between flex-wrap gap-2">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-lg bg-jungle-light text-pine flex items-center justify-center font-bold">
+          <span class="material-symbols-outlined text-[20px]">assignment_add</span>
+        </div>
+        <div>
+          <h3 class="text-sm font-bold text-pine">Family Pedigree Lineage Intake</h3>
+          <p class="text-xs text-on-surface-variant">Fill in Father, Mother, and Sibling details to generate autonomous dashboard metrics</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-xs font-semibold px-3 py-1 rounded-full {% if state.intake_complete %}bg-jungle-light text-jungle-dark{% else %}bg-surface-container-high text-on-surface-variant{% endif %}">
+          {% if state.intake_complete %}✓ Core Lineage Documented{% else %}{{ 3 - state.steps_remaining }}/3 Core Relatives Added{% endif %}
+        </span>
+      </div>
+    </div>
+
+    <!-- Stepper Cards Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <!-- Step 1: Father -->
+      <div class="p-4 rounded-xl border {% if state.father %}border-jungle/40 bg-jungle-light/10{% else %}border-dashed border-outline-variant bg-surface-container-low/60 hover:bg-surface-container-low{% endif %} transition-all flex flex-col justify-between">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-6 h-6 rounded-full {% if state.father %}bg-jungle text-white{% else %}bg-surface-container-high text-outline{% endif %} flex items-center justify-center text-xs font-bold">
+              {% if state.father %}✓{% else %}1{% endif %}
+            </span>
+            <span class="text-xs font-bold text-pine">Father Details</span>
+          </div>
+          <span class="material-symbols-outlined text-sm text-on-surface-variant">male</span>
+        </div>
+        <div class="mt-3">
+          {% if state.father %}
+            <p class="text-xs font-bold text-pine">{% if mask_identity %}{{ state.father.alias_name }}{% else %}{{ state.father.name }}{% endif %}</p>
+            <span class="text-[11px] {% if state.father.carrier_status in ('carrier', 'affected') %}text-waterhole font-bold{% else %}text-on-surface-variant{% endif %} block mt-0.5">
+              Status: {{ state.father.condition_locus or state.father.carrier_status|capitalize }}
+            </span>
+          {% else %}
+            <p class="text-[11px] text-on-surface-variant mb-2.5">Paternal lineage & carrier traits unrecorded.</p>
+            <button type="button" onclick="openAddMemberModalWithGen('gen2', 'Father')"
+                    class="w-full py-2 px-3 rounded-lg bg-pine hover:bg-jungle text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-sm cursor-pointer">
+              <span class="material-symbols-outlined text-[16px]">add</span>
+              <span>+ Add Father</span>
+            </button>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Step 2: Mother -->
+      <div class="p-4 rounded-xl border {% if state.mother %}border-jungle/40 bg-jungle-light/10{% else %}border-dashed border-outline-variant bg-surface-container-low/60 hover:bg-surface-container-low{% endif %} transition-all flex flex-col justify-between">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-6 h-6 rounded-full {% if state.mother %}bg-jungle text-white{% else %}bg-surface-container-high text-outline{% endif %} flex items-center justify-center text-xs font-bold">
+              {% if state.mother %}✓{% else %}2{% endif %}
+            </span>
+            <span class="text-xs font-bold text-pine">Mother Details</span>
+          </div>
+          <span class="material-symbols-outlined text-sm text-on-surface-variant">female</span>
+        </div>
+        <div class="mt-3">
+          {% if state.mother %}
+            <p class="text-xs font-bold text-pine">{% if mask_identity %}{{ state.mother.alias_name }}{% else %}{{ state.mother.name }}{% endif %}</p>
+            <span class="text-[11px] {% if state.mother.carrier_status in ('carrier', 'affected') %}text-jungle-dark font-bold{% else %}text-on-surface-variant{% endif %} block mt-0.5">
+              Status: {{ state.mother.condition_locus or state.mother.carrier_status|capitalize }}
+            </span>
+          {% else %}
+            <p class="text-[11px] text-on-surface-variant mb-2.5">Maternal lineage & X-linked markers unrecorded.</p>
+            <button type="button" onclick="openAddMemberModalWithGen('gen2', 'Mother')"
+                    class="w-full py-2 px-3 rounded-lg bg-pine hover:bg-jungle text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-sm cursor-pointer">
+              <span class="material-symbols-outlined text-[16px]">add</span>
+              <span>+ Add Mother</span>
+            </button>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Step 3: Siblings -->
+      <div class="p-4 rounded-xl border {% if state.siblings %}border-jungle/40 bg-jungle-light/10{% else %}border-dashed border-outline-variant bg-surface-container-low/60 hover:bg-surface-container-low{% endif %} transition-all flex flex-col justify-between">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-6 h-6 rounded-full {% if state.siblings %}bg-jungle text-white{% else %}bg-surface-container-high text-outline{% endif %} flex items-center justify-center text-xs font-bold">
+              {% if state.siblings %}✓{% else %}3{% endif %}
+            </span>
+            <span class="text-xs font-bold text-pine">Siblings (Brothers/Sisters)</span>
+          </div>
+          <span class="material-symbols-outlined text-sm text-on-surface-variant">family_restroom</span>
+        </div>
+        <div class="mt-3">
+          {% if state.siblings %}
+            <div class="flex items-center justify-between mb-1">
+              <p class="text-xs font-bold text-pine">{{ state.siblings|length }} Sibling(s) Documented</p>
+              <button type="button" onclick="openAddMemberModalWithGen('gen3', 'Sibling')" class="text-[11px] text-waterhole font-bold hover:underline cursor-pointer">+ Add Another</button>
+            </div>
+            <span class="text-[11px] text-on-surface-variant block">Filial generation indexed for recurrence</span>
+          {% else %}
+            <p class="text-[11px] text-on-surface-variant mb-2.5">Filial tier recurrence risk unrecorded.</p>
+            <button type="button" onclick="openAddMemberModalWithGen('gen3', 'Sibling')"
+                    class="w-full py-2 px-3 rounded-lg bg-pine hover:bg-jungle text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors shadow-sm cursor-pointer">
+              <span class="material-symbols-outlined text-[16px]">add</span>
+              <span>+ Add Sibling</span>
+            </button>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Key Clinical Metric Cards Strip -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+    
+    <!-- Pedigree Size Card -->
+    <div class="bg-white rounded-xl p-5 shadow-sm border border-outline-variant/40 hover:shadow-md transition-shadow flex flex-col justify-between">
+      <div>
+        <div class="flex items-center justify-between">
+          <span class="text-xs uppercase tracking-wider text-on-surface-variant font-bold">Pedigree Size</span>
+          <div class="w-8 h-8 rounded-lg bg-surface-container-low flex items-center justify-center text-pine">
+            <span class="material-symbols-outlined text-[20px]">account_tree</span>
+          </div>
+        </div>
+        
+        {% if state.is_fresh_user %}
+          <!-- Fresh user state: No data prompt -->
+          <div class="mt-4 flex items-baseline gap-2">
+            <span class="text-3xl font-bold text-outline">0</span>
+            <span class="text-xs text-on-surface-variant">Relatives Mapped</span>
+          </div>
+          <p class="text-xs text-on-surface-variant mt-1.5 leading-relaxed">
+            Your pedigree is empty. You haven't added any family members yet.
+          </p>
+        {% else %}
+          <div class="mt-4 flex items-baseline gap-2">
+            <span class="text-3xl font-bold text-pine">{{ state.pedigree_size }}</span>
+            <span class="text-xs text-on-surface-variant">Members Documented</span>
+          </div>
+          <p class="text-xs text-on-surface-variant mt-1.5 leading-relaxed">{{ state.pedigree_subtitle }}</p>
+        {% endif %}
+      </div>
+
+      <a class="inline-flex items-center gap-1.5 text-xs text-waterhole font-bold mt-5 hover:translate-x-0.5 transition-transform" href="{{ url_for('pedigree') }}">
+        {% if state.is_fresh_user %}
+          + Click to Add Family Details <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+        {% else %}
+          View Pedigree Canvas <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+        {% endif %}
+      </a>
+    </div>
+
+    <!-- Reported Phenotypes Card -->
+    <div class="bg-white rounded-xl p-5 shadow-sm border border-outline-variant/40 hover:shadow-md transition-shadow flex flex-col justify-between">
+      <div>
+        <div class="flex items-center justify-between">
+          <span class="text-xs uppercase tracking-wider text-on-surface-variant font-bold">Phenotypes</span>
+          <div class="w-8 h-8 rounded-lg bg-surface-container-low flex items-center justify-center text-pine">
+            <span class="material-symbols-outlined text-[20px]">medication</span>
+          </div>
+        </div>
+        
+        {% if state.is_fresh_user %}
+          <div class="mt-4 flex items-baseline gap-2">
+            <span class="text-3xl font-bold text-outline">0</span>
+            <span class="text-xs text-on-surface-variant">Reported</span>
+          </div>
+          <p class="text-xs text-on-surface-variant mt-1.5 leading-relaxed">
+            No phenotypic conditions or molecular biomarkers on record.
+          </p>
+        {% else %}
+          <div class="mt-4 flex items-baseline gap-2">
+            <span class="text-3xl font-bold text-pine">{{ state.phenotypes_count }}</span>
+            <span class="text-xs text-on-surface-variant">Reported In Lineage</span>
+          </div>
+          <div class="flex flex-wrap gap-1.5 mt-2">
+            {% if state.phenotypes_list %}
+              {% for cond in state.phenotypes_list[:3] %}
+                <span class="px-2 py-0.5 rounded-full bg-waterhole-light text-waterhole text-[11px] font-bold">{{ cond }}</span>
+              {% endfor %}
+            {% else %}
+              <span class="px-2 py-0.5 rounded-full bg-jungle-light text-jungle-dark text-[11px] font-bold">Non-carrier Verified</span>
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+
+      <a class="inline-flex items-center gap-1.5 text-xs text-waterhole font-bold mt-5 hover:translate-x-0.5 transition-transform" href="{{ url_for('profile_view') }}">
+        {% if state.is_fresh_user %}
+          + Click to Add Details <span class="material-symbols-outlined text-[16px]">edit_note</span>
+        {% else %}
+          Update Patient History <span class="material-symbols-outlined text-[16px]">edit_note</span>
+        {% endif %}
+      </a>
+    </div>
+
+    <!-- AI Surveillance Card -->
+    <div class="bg-white rounded-xl p-5 shadow-sm border border-outline-variant/40 hover:shadow-md transition-shadow flex flex-col justify-between">
+      <div>
+        <div class="flex items-center justify-between">
+          <span class="text-xs uppercase tracking-wider text-on-surface-variant font-bold">AI Surveillance</span>
+          <div class="w-8 h-8 rounded-lg bg-surface-container-low text-on-surface-variant flex items-center justify-center">
+            <span class="material-symbols-outlined text-[20px]">auto_awesome</span>
+          </div>
+        </div>
+        
+        {% if state.is_fresh_user %}
+          <div class="mt-4 flex items-baseline gap-2">
+            <span class="text-3xl font-bold text-outline">0</span>
+            <span class="text-xs text-on-surface-variant font-medium">Active Alerts</span>
+          </div>
+          <p class="text-xs text-on-surface-variant mt-1.5 leading-relaxed">
+            AI surveillance idle. Requires pedigree nodes or molecular intake.
+          </p>
+        {% else %}
+          <div class="mt-4 flex items-baseline gap-2">
+            <span class="text-3xl font-bold text-waterhole">{{ state.ai_alerts_count }}</span>
+            <span class="text-xs text-on-surface-variant font-medium">High-Priority Alerts</span>
+          </div>
+          <p class="text-xs text-on-surface-variant mt-1.5 leading-relaxed">{{ state.ai_alerts_subtitle }}</p>
+        {% endif %}
+      </div>
+
+      <a class="inline-flex items-center gap-1.5 text-xs text-waterhole font-bold mt-5 hover:translate-x-0.5 transition-transform" href="{{ url_for('risk_analysis') }}">
+        {% if state.is_fresh_user %}
+          + Click to Add Details <span class="material-symbols-outlined text-[16px]">insights</span>
+        {% else %}
+          Review Intelligence <span class="material-symbols-outlined text-[16px]">insights</span>
+        {% endif %}
+      </a>
+    </div>
+
+    <!-- Spousal Harmony Card -->
+    <div class="bg-white rounded-xl p-5 shadow-sm border border-outline-variant/40 hover:shadow-md transition-shadow flex flex-col justify-between">
+      <div>
+        <div class="flex items-center justify-between">
+          <span class="text-xs uppercase tracking-wider text-on-surface-variant font-bold">Spousal Harmony</span>
+          <div class="w-8 h-8 rounded-lg bg-surface-container-low flex items-center justify-center text-pine">
+            <span class="material-symbols-outlined text-[20px]">diversity_1</span>
+          </div>
+        </div>
+        
+        {% if not state.has_partner and not is_admin %}
+          <div class="mt-4 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center text-outline font-bold text-xs">
+              --
+            </div>
+            <div>
+              <span class="text-sm font-bold text-outline block leading-tight">No Partner Linked</span>
+              <span class="text-[11px] text-on-surface-variant">Pre-marital harmony unassessed</span>
+            </div>
+          </div>
+        {% else %}
+          <div class="mt-4 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-midnight-light flex items-center justify-center text-midnight font-bold text-xs shadow-sm">
+              {{ state.spousal_harmony_code }}
+            </div>
+            <div>
+              <span class="text-sm font-bold text-pine block leading-tight">
+                {% if mask_identity %}Gentle-Orchid-904{% else %}{{ state.spousal_harmony }}{% endif %}
+              </span>
+              <span class="text-[11px] text-on-surface-variant">{{ state.spousal_harmony_subtitle }}</span>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+
+      <a class="inline-flex items-center gap-1.5 text-xs text-waterhole font-bold mt-5 hover:translate-x-0.5 transition-transform" href="{{ url_for('couple_assessment') }}">
+        {% if not state.has_partner and not is_admin %}
+          + Click to Add Details <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+        {% else %}
+          Review Couple Assessment <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+        {% endif %}
+      </a>
+    </div>
+  </div>
+
+  <!-- Main Asymmetric Grid: 7 Cols Left / 5 Cols Right -->
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+    
+    <!-- LEFT COLUMN: Lineage Model & Genomic Literacy -->
+    <div class="lg:col-span-7 flex flex-col gap-8 w-full min-w-0">
+      
+      <!-- Lineage Pedigree Model Canvas Card -->
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-outline-variant/40 flex flex-col">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-4 gap-4 border-b border-outline-variant/30">
+          <div>
+            <div class="flex items-center gap-2">
+              <h2 class="text-base font-bold text-pine">Lineage Pedigree Model</h2>
+              <span class="px-2 py-0.5 rounded-full bg-surface-container-low text-on-surface-variant text-[11px] font-bold border border-outline-variant/30">
+                {% if is_admin %}3 Generations (Historical Benchmark){% else %}{{ state.pedigree_size }} Member(s) Indexed{% endif %}
+              </span>
+            </div>
+            <p class="text-xs text-on-surface-variant mt-0.5">
+              {% if is_admin %}
+                Dual-parental consanguinity pathway with proband indexing
+              {% elif state.is_fresh_user %}
+                Individual index proband node. Add your relatives to reconstruct multi-generational lineage.
+              {% else %}
+                Live pedigree lineage rendered from documented family records
+              {% endif %}
+            </p>
+          </div>
+          <button type="button" onclick="openAddMemberModal()" class="px-3.5 py-1.5 rounded-lg bg-jungle text-white text-xs font-bold hover:bg-jungle-dark transition-all flex items-center gap-1.5 shadow-sm cursor-pointer">
+            <span class="material-symbols-outlined text-[16px]">person_add</span>
+            <span>+ Add Family Members</span>
+          </button>
+        </div>
+
+        <!-- Pedigree Diagram Canvas Preview -->
+        <div class="w-full bg-surface-container-low rounded-xl p-6 my-4 relative overflow-x-auto min-h-[380px] flex flex-col justify-between border border-outline-variant/30">
+          
+          {% if is_admin %}
+            <!-- ADMIN HISTORICAL BENCHMARK: FULL 3-GENERATION LINEAGE -->
+            <!-- Generation I (Grandparents) -->
+            <div class="flex justify-between items-center px-6 sm:px-12">
+              <div class="flex flex-col items-center group cursor-pointer" onclick="location.href='{{ url_for('pedigree') }}'">
+                <div class="w-9 h-9 rounded-sm bg-white shadow-sm border border-outline-variant/50 flex items-center justify-center text-pine font-bold text-xs">
+                  I-1
+                </div>
+                <span class="text-[11px] text-on-surface-variant font-medium mt-1.5">
+                  {% if mask_identity %}Elder-Oak-101{% else %}Hamad (P-GF){% endif %}
+                </span>
+                <span class="text-[10px] text-waterhole font-semibold">Carrier (HBB)</span>
+              </div>
+
+              <div class="h-0.5 w-12 sm:w-16 bg-outline-variant -mt-5"></div>
+
+              <div class="flex flex-col items-center group cursor-pointer" onclick="location.href='{{ url_for('pedigree') }}'">
+                <div class="w-9 h-9 rounded-full bg-white shadow-sm border border-outline-variant/50 flex items-center justify-center text-pine font-bold text-xs">
+                  I-2
+                </div>
+                <span class="text-[11px] text-on-surface-variant font-medium mt-1.5">
+                  {% if mask_identity %}Silver-Willow-102{% else %}Noura (P-GM){% endif %}
+                </span>
+                <span class="text-[10px] text-on-surface-variant font-medium">Non-carrier</span>
+              </div>
+
+              <div class="w-8 sm:w-12"></div>
+
+              <div class="flex flex-col items-center group cursor-pointer" onclick="location.href='{{ url_for('pedigree') }}'">
+                <div class="w-9 h-9 rounded-sm bg-white shadow-sm border border-outline-variant/50 flex items-center justify-center text-pine font-bold text-xs">
+                  I-3
+                </div>
+                <span class="text-[11px] text-on-surface-variant font-medium mt-1.5">
+                  {% if mask_identity %}Clan-Hawk-103{% else %}Farooq (M-GF){% endif %}
+                </span>
+                <span class="text-[10px] text-on-surface-variant font-medium">Non-carrier</span>
+              </div>
+
+              <div class="h-0.5 w-12 sm:w-16 bg-outline-variant -mt-5"></div>
+
+              <div class="flex flex-col items-center group cursor-pointer" onclick="location.href='{{ url_for('pedigree') }}'">
+                <div class="w-9 h-9 rounded-full bg-white shadow-sm border border-outline-variant/50 flex items-center justify-center text-pine font-bold text-xs">
+                  I-4
+                </div>
+                <span class="text-[11px] text-on-surface-variant font-medium mt-1.5">
+                  {% if mask_identity %}Gentle-Orchid-104{% else %}Aisha (M-GM){% endif %}
+                </span>
+                <span class="text-[10px] text-jungle font-bold">Carrier (G6PD)</span>
+              </div>
+            </div>
+
+            <!-- Generation II (Parents with Consanguinity Double Line) -->
+            <div class="flex justify-center items-center my-4 relative">
+              <div class="flex items-center gap-12 sm:gap-16 relative">
+                <div class="flex flex-col items-center">
+                  <div class="w-10 h-10 rounded-sm bg-white shadow-sm border border-outline-variant/50 flex items-center justify-center relative overflow-hidden">
+                    <div class="absolute left-0 top-0 bottom-0 w-1/2 bg-pine"></div>
+                    <span class="relative z-10 text-xs text-pine font-bold ml-3">II-1</span>
+                  </div>
+                  <span class="text-xs text-pine font-bold mt-1">
+                    {% if mask_identity %}Stalwart-Pine-201{% else %}Walid (Father){% endif %}
+                  </span>
+                  <span class="text-[11px] text-waterhole font-semibold">β-Thalassemia Trait</span>
+                </div>
+
+                <div class="flex flex-col items-center justify-center px-2 sm:px-4">
+                  <div class="w-16 sm:w-20 flex flex-col gap-1 items-center">
+                    <div class="w-full h-0.5 bg-pine"></div>
+                    <div class="w-full h-0.5 bg-pine"></div>
+                  </div>
+                  <span class="text-[10px] text-pine font-bold tracking-tight mt-1 bg-white px-2 py-0.5 rounded shadow-sm border border-outline-variant/30">
+                    3° Consanguinity
+                  </span>
+                </div>
+
+                <div class="flex flex-col items-center">
+                  <div class="w-10 h-10 rounded-full bg-white shadow-sm border border-outline-variant/50 flex items-center justify-center relative overflow-hidden">
+                    <div class="absolute right-0 top-0 bottom-0 w-1/2 bg-jungle"></div>
+                    <span class="relative z-10 text-xs text-pine font-bold mr-3">II-2</span>
+                  </div>
+                  <span class="text-xs text-pine font-bold mt-1">
+                    {% if mask_identity %}Serene-Breeze-202{% else %}Samira (Mother){% endif %}
+                  </span>
+                  <span class="text-[11px] text-jungle font-bold">G6PD Carrier</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Generation III (Proband) -->
+            <div class="flex justify-center items-center pt-2">
+              <div class="flex flex-col items-center relative">
+                <div class="w-0.5 h-6 bg-outline-variant -top-6 absolute"></div>
+                <div class="w-12 h-12 rounded-sm bg-white shadow-md flex items-center justify-center relative overflow-hidden ring-2 ring-jungle ring-offset-2 ring-offset-surface-container-low border border-outline-variant/50">
+                  <div class="absolute left-0 top-0 bottom-0 w-1/2 bg-pine"></div>
+                  <span class="relative z-10 text-xs text-pine font-bold ml-4">III-1</span>
+                </div>
+                <div class="flex items-center gap-1.5 mt-2">
+                  <span class="text-xs font-bold text-pine">{{ display_patient_name }}</span>
+                  <span class="px-1.5 py-0.5 rounded bg-pine text-white text-[10px] font-bold uppercase tracking-wider">Proband</span>
+                </div>
+                <span class="text-[11px] text-waterhole font-semibold">Carrier (HBB & G6PD heterozygous)</span>
+              </div>
+            </div>
+
+          {% elif state.is_fresh_user %}
+            <!-- FRESH USER INITIAL ZERO-DATA STATE -->
+            <div class="flex flex-col items-center justify-center flex-1 py-8 space-y-6">
+              
+              <!-- Generation Placeholders Header -->
+              <div class="flex items-center gap-8 opacity-40">
+                <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-dashed border-outline text-xs text-on-surface-variant">
+                  <span class="material-symbols-outlined text-sm">add_circle</span>
+                  <span>Gen I (Grandparents)</span>
+                </div>
+                <div class="w-8 h-px bg-outline"></div>
+                <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-dashed border-outline text-xs text-on-surface-variant">
+                  <span class="material-symbols-outlined text-sm">add_circle</span>
+                  <span>Gen II (Parents)</span>
+                </div>
+              </div>
+
+              <!-- Connecting Line Down to Proband -->
+              <div class="w-px h-8 bg-dashed border-l border-dashed border-outline"></div>
+
+              <!-- Proband Node (Current User) -->
+              <div class="flex flex-col items-center">
+                <div class="w-14 h-14 rounded-none bg-white shadow-lg flex items-center justify-center relative border-2 border-pine ring-2 ring-jungle ring-offset-2">
+                  <span class="material-symbols-outlined text-[24px] text-pine">person</span>
+                </div>
+                <div class="flex items-center gap-1.5 mt-2.5">
+                  <span class="text-xs font-bold text-pine">{{ display_patient_name }}</span>
+                  <span class="px-1.5 py-0.5 rounded bg-pine text-white text-[10px] font-bold uppercase">Proband</span>
+                </div>
+                <span class="text-[11px] font-mono text-waterhole mt-0.5">
+                  {% if mask_identity %}🎭 Sudo: {{ user_alias }}{% else %}Awaiting Genetic Intake{% endif %}
+                </span>
+              </div>
+
+              <!-- Empty Pedigree Action Banner -->
+              <div class="max-w-md text-center bg-white p-4 rounded-xl border border-outline-variant/40 shadow-sm mt-4">
+                <p class="text-xs text-on-surface-variant leading-relaxed">
+                  Only your individual proband node is indexed. Click below to add your father, mother, or siblings to construct your family tree.
+                </p>
+                <div class="flex items-center justify-center gap-3 mt-3">
+                  <button type="button" onclick="openAddMemberModalWithGen('gen2', 'Father')"
+                          class="px-4 py-2 bg-jungle hover:bg-jungle-dark text-white rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer">
+                    <span class="material-symbols-outlined text-sm">person_add</span>
+                    <span>+ Add Father</span>
+                  </button>
+                  <button type="button" onclick="openAddMemberModalWithGen('gen2', 'Mother')"
+                          class="px-4 py-2 bg-pine hover:bg-jungle text-white rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer">
+                    <span class="material-symbols-outlined text-sm">person_add</span>
+                    <span>+ Add Mother</span>
+                  </button>
+                </div>
+              </div>
+
+            </div>
+
+          {% else %}
+            <!-- DYNAMIC RECALCULATED FAMILY LINEAGE TREE -->
+            <div class="flex flex-col justify-between h-full py-4 space-y-8">
+              
+              <!-- Generation II: Parents Row -->
+              <div class="flex justify-center items-center gap-12 sm:gap-20">
+                
+                <!-- Father Node / Slot -->
+                {% if state.father %}
+                  <div class="flex flex-col items-center group cursor-pointer" onclick="location.href='{{ url_for('pedigree') }}'">
+                    <div class="w-12 h-12 rounded-sm bg-white shadow-md border-2 {% if state.father.carrier_status in ('carrier', 'affected') %}border-waterhole ring-2 ring-waterhole/20{% else %}border-outline-variant{% endif %} flex items-center justify-center relative overflow-hidden">
+                      {% if state.father.carrier_status == 'carrier' %}
+                        <div class="absolute left-0 top-0 bottom-0 w-1/2 bg-pine"></div>
+                      {% elif state.father.carrier_status == 'affected' %}
+                        <div class="absolute inset-0 bg-pine"></div>
+                      {% endif %}
+                      <span class="relative z-10 text-xs font-bold {% if state.father.carrier_status == 'affected' %}text-white{% else %}text-pine{% endif %}">II-1</span>
+                    </div>
+                    <span class="text-xs font-bold text-pine mt-1.5">
+                      {% if mask_identity %}{{ state.father.alias_name }}{% else %}{{ state.father.name }}{% endif %}
+                    </span>
+                    <span class="text-[10px] {% if state.father.carrier_status in ('carrier', 'affected') %}text-waterhole font-bold{% else %}text-on-surface-variant{% endif %}">
+                      {{ state.father.condition_locus or state.father.carrier_status|capitalize }}
+                    </span>
+                  </div>
+                {% else %}
+                  <button type="button" onclick="openAddMemberModalWithGen('gen2', 'Father')"
+                          class="p-3.5 rounded-xl border-2 border-dashed border-outline-variant hover:border-jungle hover:bg-jungle-light/20 transition-all flex flex-col items-center gap-1 cursor-pointer group">
+                    <span class="material-symbols-outlined text-outline group-hover:text-jungle text-xl">add_circle</span>
+                    <span class="text-xs font-bold text-pine group-hover:text-jungle">+ Add Father</span>
+                  </button>
+                {% endif %}
+
+                <!-- Connection Marriage Bar -->
+                <div class="flex flex-col items-center justify-center">
+                  <div class="w-14 sm:w-20 h-0.5 bg-pine"></div>
+                  <span class="text-[9px] text-on-surface-variant uppercase font-bold tracking-wider mt-1">Parents</span>
+                </div>
+
+                <!-- Mother Node / Slot -->
+                {% if state.mother %}
+                  <div class="flex flex-col items-center group cursor-pointer" onclick="location.href='{{ url_for('pedigree') }}'">
+                    <div class="w-12 h-12 rounded-full bg-white shadow-md border-2 {% if state.mother.carrier_status in ('carrier', 'affected') %}border-jungle ring-2 ring-jungle/20{% else %}border-outline-variant{% endif %} flex items-center justify-center relative overflow-hidden">
+                      {% if state.mother.carrier_status == 'carrier' %}
+                        <div class="absolute right-0 top-0 bottom-0 w-1/2 bg-jungle"></div>
+                      {% elif state.mother.carrier_status == 'affected' %}
+                        <div class="absolute inset-0 bg-jungle"></div>
+                      {% endif %}
+                      <span class="relative z-10 text-xs font-bold {% if state.mother.carrier_status == 'affected' %}text-white{% else %}text-pine{% endif %}">II-2</span>
+                    </div>
+                    <span class="text-xs font-bold text-pine mt-1.5">
+                      {% if mask_identity %}{{ state.mother.alias_name }}{% else %}{{ state.mother.name }}{% endif %}
+                    </span>
+                    <span class="text-[10px] {% if state.mother.carrier_status in ('carrier', 'affected') %}text-jungle-dark font-bold{% else %}text-on-surface-variant{% endif %}">
+                      {{ state.mother.condition_locus or state.mother.carrier_status|capitalize }}
+                    </span>
+                  </div>
+                {% else %}
+                  <button type="button" onclick="openAddMemberModalWithGen('gen2', 'Mother')"
+                          class="p-3.5 rounded-xl border-2 border-dashed border-outline-variant hover:border-jungle hover:bg-jungle-light/20 transition-all flex flex-col items-center gap-1 cursor-pointer group">
+                    <span class="material-symbols-outlined text-outline group-hover:text-jungle text-xl">add_circle</span>
+                    <span class="text-xs font-bold text-pine group-hover:text-jungle">+ Add Mother</span>
+                  </button>
+                {% endif %}
+
+              </div>
+
+              <!-- Connecting Line Down to Generation III -->
+              <div class="flex justify-center">
+                <div class="w-px h-8 bg-pine"></div>
+              </div>
+
+              <!-- Generation III: Proband & Siblings Row -->
+              <div class="flex justify-center items-center gap-8 sm:gap-14 flex-wrap">
+                
+                <!-- Siblings (if any) -->
+                {% for sib in state.siblings %}
+                  <div class="flex flex-col items-center group cursor-pointer" onclick="location.href='{{ url_for('pedigree') }}'">
+                    <div class="w-11 h-11 {% if sib.sex == 'female' %}rounded-full{% else %}rounded-sm{% endif %} bg-white shadow-sm border border-outline-variant flex items-center justify-center relative overflow-hidden">
+                      {% if sib.carrier_status == 'carrier' %}
+                        <div class="absolute left-0 top-0 bottom-0 w-1/2 bg-pine"></div>
+                      {% elif sib.carrier_status == 'affected' %}
+                        <div class="absolute inset-0 bg-pine"></div>
+                      {% endif %}
+                      <span class="relative z-10 text-[11px] font-bold text-pine">III</span>
+                    </div>
+                    <span class="text-[11px] font-bold text-pine mt-1">
+                      {% if mask_identity %}{{ sib.alias_name }}{% else %}{{ sib.name }}{% endif %}
+                    </span>
+                    <span class="text-[10px] text-on-surface-variant">{{ sib.relationship }}</span>
+                  </div>
+                {% endfor %}
+
+                <!-- Current User Proband Node -->
+                <div class="flex flex-col items-center relative">
+                  <div class="w-13 h-13 rounded-sm bg-white shadow-lg flex items-center justify-center relative overflow-hidden ring-2 ring-jungle ring-offset-2 ring-offset-surface-container-low border-2 border-pine p-3">
+                    <span class="material-symbols-outlined text-[26px] text-pine">person</span>
+                  </div>
+                  <div class="flex items-center gap-1.5 mt-2">
+                    <span class="text-xs font-bold text-pine">{{ display_patient_name }}</span>
+                    <span class="px-1.5 py-0.5 rounded bg-pine text-white text-[9px] font-bold uppercase tracking-wider">Proband</span>
+                  </div>
+                  <span class="text-[10px] text-waterhole font-mono mt-0.5">
+                    {% if mask_identity %}🎭 {{ user_alias }}{% else %}Index Patient{% endif %}
+                  </span>
+                </div>
+
+                <!-- Add Sibling Button -->
+                <button type="button" onclick="openAddMemberModalWithGen('gen3', 'Sibling')"
+                        class="p-3 rounded-xl border-2 border-dashed border-outline-variant hover:border-jungle hover:bg-jungle-light/20 transition-all flex flex-col items-center gap-1 cursor-pointer group">
+                  <span class="material-symbols-outlined text-outline group-hover:text-jungle text-lg">person_add</span>
+                  <span class="text-[11px] font-bold text-pine group-hover:text-jungle">+ Add Sibling</span>
+                </button>
+
+              </div>
+
+            </div>
+          {% endif %}
+
+        </div>
+
+        <!-- Legend Bar -->
+        <div class="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-outline-variant/20">
+          <div class="flex flex-wrap items-center gap-4 sm:gap-5 text-xs text-on-surface-variant font-medium">
+            <div class="flex items-center gap-1.5">
+              <div class="w-3.5 h-3.5 rounded-sm bg-white border border-outline-variant shadow-sm"></div>
+              <span>Clear</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <div class="w-3.5 h-3.5 rounded-sm bg-white border border-outline-variant shadow-sm relative overflow-hidden">
+                <div class="w-1/2 h-full bg-pine"></div>
+              </div>
+              <span>Heterozygous Carrier</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <div class="w-3.5 h-3.5 rounded-sm bg-pine"></div>
+              <span>Affected</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <div class="w-3.5 h-3.5 rounded-full bg-surface-container-high border border-outline-variant/40"></div>
+              <span>Female</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <div class="w-3.5 h-3.5 rounded-sm bg-surface-container-high border border-outline-variant/40"></div>
+              <span>Male</span>
+            </div>
+          </div>
+          <a href="{{ url_for('pedigree') }}" class="text-waterhole text-xs font-bold hover:underline">
+            Manage Complete Pedigree Canvas →
+          </a>
+        </div>
+      </div>
+
+      <!-- Understanding Consanguinity Guidance Card -->
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-outline-variant/40 flex flex-col md:flex-row gap-6 items-center">
+        <div class="w-full md:w-48 h-40 shrink-0 rounded-xl overflow-hidden shadow-sm relative">
+          <img class="w-full h-full object-cover" alt="Family Wisdom and Heritage" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDkPXWwsVRnoBY9VhM9jSyNE01M3ge6xVU5k80adC4pO5uLeR02zyRzx1U-pDohCC5ipS4iEmjEh5RCtBGMOiXUYOtoOJOinoBGgXkFDw9Fk6ii18CXYkfGeuNT9K3sYTxao67kSou5e3u6AgzercSpoZx5rDBzNHqLmT5_3BlDCXeo_2tCSmXQkDZnHgrVlMYU78-R4KXROUsWs3qR1rAr3_2-W6_N1lP3Q-nkoAQx"/>
+          <div class="absolute inset-0 bg-pine/10 mix-blend-multiply"></div>
+        </div>
+        <div class="flex flex-col justify-between h-full">
+          <div>
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="material-symbols-outlined text-jungle text-[18px]">verified</span>
+              <span class="text-[11px] uppercase tracking-wider text-pine font-bold">Genomic Literacy</span>
+            </div>
+            <h3 class="text-base font-bold text-pine leading-tight">
+              Understanding Consanguinity & Hereditary Lineages
+            </h3>
+            <p class="text-xs text-on-surface-variant mt-2 leading-relaxed">
+              Consanguineous unions are a deeply valued socio-cultural tradition across the region. Modern genomics empowers couples through precision knowledge—identifying recessive variants early so future generations thrive without unexpected challenges.
+            </p>
+          </div>
+          <div class="flex items-center gap-4 mt-4">
+            <a href="{{ url_for('risk_analysis') }}" class="text-xs font-bold text-waterhole hover:underline inline-flex items-center gap-1">
+              Read 5-min Clinical Summary <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+            </a>
+            <span class="text-[11px] text-on-surface-variant">• Reviewed by Medical Genetics Board</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT COLUMN: Action Directives & Ask GenWell AI Assistant -->
+    <div class="lg:col-span-5 flex flex-col gap-6 w-full min-w-0">
+      
+      <!-- Action Directives Card -->
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-outline-variant/40 flex flex-col gap-5">
+        <div class="flex items-center justify-between pb-2 border-b border-outline-variant/20">
+          <div class="flex items-center gap-2">
+            <div class="w-2.5 h-2.5 rounded-full bg-jungle animate-pulse"></div>
+            <h3 class="text-base font-bold text-pine">Action Directives</h3>
+          </div>
+          <span class="text-xs text-on-surface-variant font-medium">Protocol Step 1 of 3</span>
+        </div>
+
+        {% if is_admin %}
+          <!-- ADMIN DIRECTIVES -->
+          <!-- Directive 1: Targeted NGS -->
+          <div class="p-4 rounded-xl border border-outline-variant/40 hover:border-jungle/40 transition-colors bg-white flex flex-col gap-3">
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-waterhole-container text-midnight flex items-center justify-center font-bold text-xs">
+                  01
+                </div>
+                <div>
+                  <h4 class="text-sm font-bold text-pine">Schedule Pre-Marital Gene Panel</h4>
+                  <span class="text-[11px] text-on-surface-variant">Recommended for Locus HBB 11p15.4</span>
+                </div>
+              </div>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-error-container text-on-error-container">Priority High</span>
+            </div>
+            <p class="text-xs text-on-surface-variant leading-relaxed">
+              Targeted Sanger sequencing confirms carrier boundaries for both partners prior to marital genetic clearance certification.
+            </p>
+            <div class="flex items-center justify-between pt-1">
+              <span class="text-[11px] text-on-surface-variant font-medium">Estimated Lab TAT: 48h (Riyadh Central)</span>
+              <button type="button" onclick="scheduleGenePanel()" class="px-3.5 py-1.5 rounded-lg bg-pine hover:bg-jungle text-white text-xs font-bold transition-all shadow-sm">
+                Schedule Panel
+              </button>
+            </div>
+          </div>
+
+          <!-- Directive 2: Genetic Consultation -->
+          <div class="p-4 rounded-xl border border-outline-variant/40 hover:border-jungle/40 transition-colors bg-white flex flex-col gap-3">
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-surface-container-high text-pine flex items-center justify-center font-bold text-xs">
+                  02
+                </div>
+                <div>
+                  <h4 class="text-sm font-bold text-pine">Genetic Counseling Consultation</h4>
+                  <span class="text-[11px] text-on-surface-variant">Dr. Alisha Patel (FACMG) • Tele-genetics</span>
+                </div>
+              </div>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-surface-container-high text-pine">Routine</span>
+            </div>
+            <p class="text-xs text-on-surface-variant leading-relaxed">
+              Review pedigree transmission risk vectors, punnett squares, and prenatal diagnostic alternatives in a private zero-knowledge session.
+            </p>
+            <div class="flex items-center justify-between pt-1">
+              <span class="text-[11px] text-on-surface-variant font-medium">Next available slot: Thursday 14:00 (GST)</span>
+              <a href="{{ url_for('privacy_security') }}" class="px-3.5 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-pine text-xs font-bold transition-all border border-outline-variant/40">
+                Book Session
+              </a>
+            </div>
+          </div>
+        {% elif state.is_fresh_user %}
+          <!-- FRESH USER DIRECTIVE: COMPLETE INTAKE -->
+          <div class="p-4 rounded-xl border border-dashed border-outline-variant bg-surface-container-low flex flex-col gap-3">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-jungle text-white flex items-center justify-center font-bold text-xs">
+                01
+              </div>
+              <div>
+                <h4 class="text-sm font-bold text-pine">Record Family Pedigree Lineage</h4>
+                <span class="text-[11px] text-on-surface-variant">First-degree relatives (Parents & Siblings)</span>
+              </div>
+            </div>
+            <p class="text-xs text-on-surface-variant leading-relaxed">
+              Autonomous risk intelligence requires documenting your father, mother, or siblings to detect recessive carrier inheritance traits.
+            </p>
+            <div class="pt-1">
+              <button type="button" onclick="openAddMemberModalWithGen('gen2', 'Father')" class="w-full py-2 px-3 rounded-lg bg-jungle hover:bg-jungle-dark text-white text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer">
+                <span class="material-symbols-outlined text-[16px]">add</span>
+                <span>Begin Family Intake Now</span>
+              </button>
+            </div>
+          </div>
+        {% else %}
+          <!-- RECALCULATED USER DIRECTIVES -->
+          <div class="p-4 rounded-xl border border-outline-variant/40 hover:border-jungle/40 transition-colors bg-white flex flex-col gap-3">
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-waterhole-container text-midnight flex items-center justify-center font-bold text-xs">
+                  01
+                </div>
+                <div>
+                  <h4 class="text-sm font-bold text-pine">Schedule Preventive Gene Panel</h4>
+                  <span class="text-[11px] text-on-surface-variant">Targeted sequencing for {{ state.diagnostic_locus }}</span>
+                </div>
+              </div>
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-jungle-light text-jungle-dark">Active</span>
+            </div>
+            <p class="text-xs text-on-surface-variant leading-relaxed">
+              Targeted NGS sequencing kit validates molecular carrier variants based on your entered pedigree trajectory.
+            </p>
+            <div class="flex items-center justify-between pt-1">
+              <span class="text-[11px] text-on-surface-variant font-medium">Estimated Lab TAT: 48h</span>
+              <button type="button" onclick="scheduleGenePanel()" class="px-3.5 py-1.5 rounded-lg bg-pine hover:bg-jungle text-white text-xs font-bold transition-all shadow-sm cursor-pointer">
+                Schedule Panel
+              </button>
+            </div>
+          </div>
+        {% endif %}
+
+      </div>
+
+      <!-- Ask GenWell AI Clinical Assistant Card -->
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-outline-variant/40 flex flex-col gap-4">
+        <div class="flex items-center justify-between pb-2 border-b border-outline-variant/20">
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-lg bg-midnight-light flex items-center justify-center text-midnight">
+              <span class="material-symbols-outlined text-[20px]">smart_toy</span>
+            </div>
+            <div>
+              <h3 class="text-sm font-bold text-pine">Ask GenWell AI</h3>
+              <p class="text-[11px] text-on-surface-variant">Clinical Genetics Assistant • Vertex AI / Local Engine</p>
+            </div>
+          </div>
+          <span class="px-2 py-0.5 rounded bg-jungle-light text-jungle-dark text-[10px] font-bold uppercase tracking-wider">
+            Verified Knowledge
+          </span>
+        </div>
+
+        <p class="text-xs text-on-surface-variant leading-relaxed">
+          Ask clinical questions regarding carrier risks, Punnett probabilities, consanguinity metrics, and pre-marital testing pathways.
+        </p>
+
+        <!-- Interactive Question Input -->
+        <div class="relative flex items-center">
+          <input type="text" id="genwellInput" placeholder="e.g. What does 3rd-degree consanguinity mean for my child?"
+                 class="w-full h-11 pl-3.5 pr-24 rounded-xl bg-surface-container-low text-xs border border-outline-variant/40 focus:bg-white focus:ring-2 focus:ring-jungle focus:outline-none transition-all placeholder:text-outline"/>
+          <button type="button" onclick="submitGenWellQuery()"
+                  class="absolute right-1.5 h-8 px-3 rounded-lg bg-pine hover:bg-jungle text-white text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-sm">
+            <span>Ask</span>
+            <span class="material-symbols-outlined text-[14px]">send</span>
+          </button>
+        </div>
+
+        <!-- AI Response Container (Populated via JS) -->
+        <div id="aiResponseContainer" class="hidden p-3.5 rounded-xl bg-surface-container-low border border-outline-variant/30 flex flex-col gap-2">
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-waterhole" id="aiSourceBadge">GenWell AI Clinical Intelligence</span>
+            <span class="text-[10px] text-jungle-dark font-bold bg-jungle-light px-2 py-0.5 rounded" id="aiConfidenceBadge">95% Reliability</span>
+          </div>
+          <p class="text-xs text-pine leading-relaxed" id="aiResponseText"></p>
+        </div>
+
+        <!-- Preset Suggested Clinical Queries -->
+        <div class="flex flex-col gap-1.5 pt-1">
+          <span class="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider">Quick Inquiries:</span>
+          <div class="flex flex-col gap-1.5">
+            <button type="button" onclick="askPresetQuery('What does 3rd-degree consanguinity mean for my child?')"
+                    class="text-left text-pine bg-surface-container-low hover:bg-surface-container px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center gap-1.5 border border-outline-variant/20 cursor-pointer">
+              <span class="material-symbols-outlined text-[14px] text-waterhole">search</span>
+              <span>What does 3rd-degree consanguinity mean for my child?</span>
+            </button>
+            <button type="button" onclick="askPresetQuery('Can G6PD trait be passed down if mother is carrier?')"
+                    class="text-left text-pine bg-surface-container-low hover:bg-surface-container px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center gap-1.5 border border-outline-variant/20 cursor-pointer">
+              <span class="material-symbols-outlined text-[14px] text-waterhole">search</span>
+              <span>Can G6PD trait be passed down if mother is carrier?</span>
+            </button>
+            <button type="button" onclick="askPresetQuery('Differences between Alpha vs Beta Thalassemia?')"
+                    class="text-left text-pine bg-surface-container-low hover:bg-surface-container px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center gap-1.5 border border-outline-variant/20 cursor-pointer">
+              <span class="material-symbols-outlined text-[14px] text-waterhole">search</span>
+              <span>Differences between Alpha vs Beta Thalassemia?</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="p-3.5 rounded-xl bg-surface-container-low border border-outline-variant/20 flex items-center justify-between mt-1">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-jungle text-[18px]">verified_user</span>
+            <span class="text-xs text-pine font-medium">Data parsed under local anonymized zero-knowledge proofs.</span>
+          </div>
+          <span class="material-symbols-outlined text-on-surface-variant text-[16px]">info</span>
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function scheduleGenePanel() {
+    alert("Gene Panel Scheduled: Targeted NGS Sanger sequencing kit has been reserved for collection at your local clinical center.");
+  }
+
+  function askPresetQuery(text) {
+    document.getElementById('genwellInput').value = text;
+    submitGenWellQuery();
+  }
+
+  function submitGenWellQuery() {
+    const input = document.getElementById('genwellInput');
+    const query = input.value.trim();
+    if (!query) return;
+
+    const container = document.getElementById('aiResponseContainer');
+    const sourceBadge = document.getElementById('aiSourceBadge');
+    const confidenceBadge = document.getElementById('aiConfidenceBadge');
+    const responseText = document.getElementById('aiResponseText');
+
+    container.classList.remove('hidden');
+    responseText.innerHTML = '<span class="inline-flex items-center gap-1.5 text-on-surface-variant"><span class="material-symbols-outlined animate-spin text-sm">progress_activity</span> Analyzing clinical pedigree & genomic literature...</span>';
+
+    fetch('{{ url_for("api_ai_ask") }}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: query })
+    })
+    .then(r => r.json())
+    .then(data => {
+      sourceBadge.textContent = data.source || 'Vertex AI / Clinical Engine';
+      confidenceBadge.textContent = data.confidence || '95% Reliability';
+      responseText.textContent = data.answer || 'Consultation complete.';
+    })
+    .catch(err => {
+      responseText.textContent = "Error generating AI clinical advice. Please verify network or try again.";
+    });
+  }
+
+  document.getElementById('genwellInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') submitGenWellQuery();
+  });
+</script>
+{% endblock %}
