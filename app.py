@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from functools import wraps
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    session, jsonify, flash
+    session, jsonify, flash, send_from_directory
 )
 from config import Config
 from database import (
@@ -49,6 +49,10 @@ def inject_user_context():
         user = get_user_by_id(session['user_id'])
     mask_identity = session.get('mask_identity', False)
     return dict(current_user=user, mask_identity=mask_identity)
+
+@app.route('/data/screen/<path:filename>')
+def serve_data_screen(filename):
+    return send_from_directory(os.path.join(app.root_path, 'data', 'screen'), filename)
 
 # ==================== AUTHENTICATION & DATA HIDING ROUTES ====================
 

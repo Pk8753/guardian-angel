@@ -66,6 +66,12 @@ class GuardianAngelTestCase(unittest.TestCase):
         self.assertNotIn(b'Health System SSO', response.data)
         self.assertNotIn(b'Google Workspace', response.data)
 
+        # Verify logo image is used and centered on green panel
+        self.assertIn(b'/data/screen/logo.png', response.data)
+        with self.client.get('/data/screen/logo.png') as logo_response:
+            self.assertEqual(logo_response.status_code, 200)
+            self.assertEqual(logo_response.mimetype, 'image/png')
+
     def test_admin_login_success(self):
         """Verify admin / admin authentication succeeds and redirects to dashboard"""
         response = self.client.post('/login', data={

@@ -60,24 +60,37 @@
           <div class="absolute -left-16 -top-16 w-80 h-80 rounded-full bg-secondary/10 blur-2xl pointer-events-none"></div>
 
           <!-- Upper Branding & Trust Statement -->
-          <div class="relative z-10 space-y-8">
+          <div class="relative z-10 space-y-6">
+
             <!-- Logo & Brand Header -->
-            <div class="flex items-center space-x-3">
-              <div class="w-11 h-11 rounded-lg bg-surface-container-lowest flex items-center justify-center text-primary-container shadow-sm">
-                <span class="material-symbols-outlined text-2xl" style="font-variation-settings: 'FILL' 1;">shield_with_heart</span>
+            <div class="flex flex-col items-center justify-center text-center space-y-2.5">
+
+              <!-- Bigger Logo -->
+              <div class="w-28 h-28 rounded-2xl bg-surface-container-lowest/10 backdrop-blur-sm p-2 flex items-center justify-center shadow-lg border border-white/10">
+                <img
+                  src="/static/screen/logo.png"
+                  alt="Guardian Angel Logo"
+                  class="w-full h-full object-contain rounded-xl"
+                />
               </div>
+
+              <!-- Brand Name -->
               <div>
-                <div class="flex items-center space-x-2">
-                  <span class="text-xl font-bold text-white tracking-tight">GuardianAngel</span>
-                  <span class="bg-tertiary-container text-tertiary-fixed text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">CLINICAL</span>
+                <div class="flex items-center justify-center space-x-2">
+                  <span class="text-2xl font-bold text-white tracking-tight">
+                    Guardian Angel
+                  </span>
                 </div>
-                <p class="text-xs text-primary-fixed-dim tracking-wide">Genomics Intelligence Platform</p>
+
+                <p class="text-xs text-primary-fixed-dim tracking-wide mt-0.5">
+                  Genomics Intelligence Platform
+                </p>
               </div>
             </div>
 
             <!-- Headline & Context -->
-            <div class="space-y-3 pt-2">
-              <h1 class="text-3xl sm:text-4xl font-bold text-white leading-tight">
+            <div class="space-y-2 pt-1">
+              <h1 class="text-2xl sm:text-3xl font-bold text-white leading-snug">
                 Your Family’s Health History Matters.
               </h1>
               <p class="text-sm text-primary-fixed-dim leading-relaxed">

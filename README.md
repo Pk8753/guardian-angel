@@ -1,8 +1,15 @@
-# GuardianAngel — Clinical Genomics Intelligence Platform
 
-**GuardianAngel** is an enterprise-grade clinical genetics and hereditary risk intelligence platform designed for precision medicine, pre-marital couple compatibility screening, and multi-generational consanguineous pedigree analysis.
+<div align="center">
+<img src="/static/screen/logo.png" alt="GuardianAngel Logo" width="150" height="150">
 
-The user interface is faithfully crafted according to the institutional clinical design system in `ui-screen/` with deep Pine (`#0c322c`), vibrant Jungle Green (`#30ba78`), Midnight Navy (`#192072`), and Waterhole Blue (`#2453ff`).
+<h1>Guardian Angel</h1>
+<p><strong>Genomics Intelligence Platform</strong></p>
+
+</div>
+
+
+
+**GuardianAngel** is an enterprise-grade clinical genetics and hereditary risk intelligence platform designed for precision medicine, pre-marital couple compatibility screening, and multi-generational consanguineous pedigree analysis..
 
 ---
 
@@ -10,13 +17,6 @@ The user interface is faithfully crafted according to the institutional clinical
 
 1. **Secure Login & Minimal Zero-Knowledge Vault Access (`/login`)**:
    - **Clean & Minimal Interface**: Clean dual-panel layout with left Pine brand narrative panel preserved.
-   - **Default Sign In**: Quick Fill for `admin` / `admin` with button label **"Sign in"**.
-   - **Streamlined Workflow**: Biometric prompts and external SSO buttons removed for a focused, institutional experience.
-   - **Create Account Flow with OTP Verification**:
-     - Fields: Full Legal Name, Email ID, Password, Date of Birth, Location / City.
-     - **Send OTP Feature**: Sends verification code to the entered email (integrated with static testing OTP **`9090`**).
-     - Submitting valid OTP (`9090`) registers the user, initializes their zero-knowledge profile with DOB and location, and opens the dashboard.
-   - Protected session management with unauthorized access redirection.
 
 2. **Executive Web Dashboard (`/dashboard`)**:
    - Matches `ui-screen/guardianangel_web_dashboard/`.
