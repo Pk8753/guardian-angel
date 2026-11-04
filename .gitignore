@@ -1,12 +1,93 @@
+# ==========================================
+# Operating System & Editors
+# ==========================================
 .DS_Store
+**/.DS_Store
+Thumbs.db
+ehthumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# ==========================================
+# Node.js & Next.js
+# ==========================================
+node_modules/
+**/node_modules/
+.pnp
+.pnp.js
+
+# Next.js build output
+.next/
+**/.next/
+out/
+**/out/
+dist/
+**/dist/
+build/
+**/build/
+
+# Next.js / TypeScript build info
+*.tsbuildinfo
+
+# Node / NPM / Yarn / PNPM logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+*.log
+
+# Vercel & Turbo
+.vercel
+.turbo
+
+# ==========================================
+# Python & Virtual Environments
+# ==========================================
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+**/venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Testing & Coverage
 .pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# ==========================================
+# Local Database, Secrets & Sensitive Files
+# ==========================================
+*.db
+*.sqlite
+*.sqlite3
 data/*.db
 data/gcs_local_storage/
-venv/
-.env
-ui-screen
+backend/data/*.db
+backend/data/gcs_local_storage/
 
+# Environment variables & secrets
+.env
+.env*.local
+*.env
+.secret*
+*.pem
+*.key
+
+# Antigravity / AI local scratch files
+.system_generated/
+.gemini/
+ui-screen

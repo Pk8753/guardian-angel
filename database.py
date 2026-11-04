@@ -132,6 +132,81 @@ def init_db():
 
     conn.commit()
 
+    # 6. Families Table (Multi-Pedigree Charts Module)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS families (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        family_id TEXT UNIQUE NOT NULL,
+        user_id INTEGER NOT NULL,
+        name TEXT,
+        trait_or_disorder_name TEXT,
+        number_of_generations INTEGER DEFAULT 1,
+        family_history_description TEXT,
+        share_token TEXT UNIQUE NOT NULL,
+        share_enabled INTEGER DEFAULT 0,
+        share_permission TEXT DEFAULT 'view',
+        share_expires_at TEXT,
+        show_names_on_shared_link INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+    """)
+
+    # 7. Clinical Conditions Table (3 Categories + India Pinned)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS conditions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT UNIQUE NOT NULL,
+        category TEXT NOT NULL,
+        gene TEXT,
+        inheritance TEXT,
+        often_not_inherited INTEGER DEFAULT 0,
+        is_common_in_india INTEGER DEFAULT 0,
+        description TEXT
+    );
+    """)
+
+    # 8. Condition Tests Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS condition_tests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        condition_id INTEGER NOT NULL,
+        test_name TEXT NOT NULL,
+        purpose TEXT NOT NULL,
+        FOREIGN KEY (condition_id) REFERENCES conditions(id)
+    );
+    """)
+
+    conn.commit()
+
+    # Migration: Ensure new pedigree columns exist
+    pedigree_columns = [
+        ("family_id", "TEXT"),
+        ("individual_id", "TEXT"),
+        ("genotype", "TEXT"),
+        ("genetic_test", "TEXT DEFAULT 'Not tested'"),
+        ("father_id", "TEXT"),
+        ("mother_id", "TEXT"),
+        ("partner_id", "TEXT"),
+        ("twin_group_id", "TEXT"),
+        ("twin_type", "TEXT"),
+        ("adoption_status", "TEXT DEFAULT 'none'"),
+        ("living_status", "TEXT DEFAULT 'Alive'"),
+        ("affected_status", "TEXT DEFAULT 'Unaffected'"),
+        ("cause_of_death", "TEXT"),
+        ("custom_x", "REAL"),
+        ("custom_y", "REAL"),
+        ("conditions", "TEXT"),
+    ]
+    for col_name, col_def in pedigree_columns:
+        try:
+            cursor.execute(f"ALTER TABLE pedigree_nodes ADD COLUMN {col_name} {col_def};")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
+
+
     # Migration: Ensure alias_name exists in users & pedigree_nodes
     try:
         cursor.execute("ALTER TABLE users ADD COLUMN alias_name TEXT;")
@@ -244,13 +319,35 @@ def init_db():
     for row in cursor.fetchall():
         cursor.execute("UPDATE pedigree_nodes SET alias_name = ? WHERE id = ?", (generate_pseudonym(), row['id']))
     conn.commit()
-    
+
+    # Seed Clinical Conditions & Tests (3 Categories + India Pinned)
+    cursor.execute("SELECT count(*) as cnt FROM conditions")
+    row = cursor.fetchone()
+    if not row or row[0] == 0:
+        seed_conditions_db(cursor)
+        conn.commit()
+
+    # Ensure admin has at least one default family record
+    cursor.execute("SELECT id FROM users WHERE username = 'admin'")
+    admin_row = cursor.fetchone()
+    if admin_row:
+        cursor.execute("SELECT id FROM families WHERE user_id = ?", (admin_row[0],))
+        if not cursor.fetchone():
+            cursor.execute("""
+            INSERT INTO families (family_id, user_id, name, trait_or_disorder_name, number_of_generations, family_history_description, share_token, share_enabled, share_permission, show_names_on_shared_link)
+            VALUES ('F-000123', ?, 'Al-Mansoor Clinical Pedigree', 'Beta Thalassemia & Hereditary Anemia', 3,
+                    'Three-generation consanguineous pedigree with autosomal recessive inheritance and twin branch.',
+                    '9f82d1c34e70b92a514d88e61204a9f8b4c2e6d19a3b8c7e4d2f01a6e9b8c7d5', 1, 'view', 0)
+            """, (admin_row[0],))
+            conn.commit()
+
     conn.close()
+
 
 # Database Helper Functions
 def get_user_by_username(username: str):
     conn = get_db_connection()
-    user = conn.execute("SELECT * FROM users WHERE username = ? OR email = ?", (username, username)).fetchone()
+    user = conn.execute("SELECT * FROM users WHERE LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?)", (username, username)).fetchone()
     conn.close()
     return user
 
@@ -348,10 +445,11 @@ def add_pedigree_node(user_id: int, data: dict):
     cursor = conn.cursor()
     node_key = data.get('node_key') or f"node_{os.urandom(4).hex()}"
     alias_name = data.get('alias_name') or generate_pseudonym()
+    family_id = data.get('family_id')
     
     cursor.execute("""
-    INSERT INTO pedigree_nodes (user_id, node_key, name, generation, sex, relationship, carrier_status, condition_locus, birth_year, notes, is_proband, alias_name)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO pedigree_nodes (user_id, node_key, name, generation, sex, relationship, carrier_status, condition_locus, birth_year, notes, is_proband, alias_name, family_id, custom_x, custom_y)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         user_id,
         node_key,
@@ -364,7 +462,10 @@ def add_pedigree_node(user_id: int, data: dict):
         data.get('birth_year', ''),
         data.get('notes', ''),
         1 if data.get('is_proband') else 0,
-        alias_name
+        alias_name,
+        family_id,
+        data.get('custom_x'),
+        data.get('custom_y')
     ))
     node_id = cursor.lastrowid
     conn.commit()
@@ -435,3 +536,166 @@ def add_privacy_delegation(user_id: int, data: dict):
     conn.commit()
     conn.close()
     return del_id
+
+# ==================== MULTI-FAMILY & ADVANCED PEDIGREE CHART MODULE ====================
+
+def seed_conditions_db(cursor):
+    """Seed the 3 Clinical Categories + India Pinned Conditions."""
+    conditions_data = [
+        # Category 1: Fertility-related
+        ("Fragile X-associated primary ovarian insufficiency (FMR1 premutation)", "Fertility-associated", "FMR1", "X-linked", 0, 0, "Premutation (55-200 CGG repeats) associated with elevated FSH and early ovarian cessation.", [("FMR1 Repeat Analysis", "Quantify CGG triplet repeats for carrier premutation status")]),
+        ("Kallmann syndrome (ANOS1 and others)", "Fertility-associated", "ANOS1", "X-linked / AD / AR", 0, 0, "Hypogonadotropic hypogonadism with anosmia or hyposmia.", [("Targeted Gene Panel", "Sequence ANOS1, FGFR1, PROKR2")]),
+        ("CFTR-related infertility / CBAVD", "Fertility-associated", "CFTR", "Autosomal recessive", 0, 1, "Congenital bilateral absence of vas deferens presenting with azoospermia.", [("CFTR Full Gene Sequencing", "Detect 5T allele and pathogenic variants")]),
+        ("Y-chromosome microdeletions (AZF)", "Fertility-associated", "AZF (Yq11)", "Y-linked", 1, 0, "Deletions in AZFa, AZFb, or AZFc regions leading to non-obstructive azoospermia or severe oligospermia.", [("Y-Chromosome Microdeletion PCR", "Evaluate AZFa, AZFb, AZFc STS markers")]),
+        ("Androgen insensitivity syndrome (AR)", "Fertility-associated", "AR", "X-linked recessive", 0, 0, "End-organ unresponsiveness to androgens in 46,XY individuals.", [("AR Gene Sequencing", "Detect androgen receptor coding mutations")]),
+        ("Congenital adrenal hyperplasia (CYP21A2)", "Fertility-associated", "CYP21A2", "Autosomal recessive", 0, 1, "21-hydroxylase deficiency affecting steroidogenesis, fertility, and virilization.", [("CYP21A2 MLPA & Sequencing", "Detect gene conversions and deletions")]),
+        ("Turner syndrome", "Fertility-associated", "Monosomy X (45,X)", "Chromosomal / Non-inherited", 1, 0, "45,X or mosaicism leading to ovarian dysgenesis and primary amenorrhea.", [("High-Resolution Karyotype", "Rule out 45,X/46,XX mosaicism")]),
+        ("Klinefelter syndrome (47,XXY)", "Fertility-associated", "47,XXY", "Chromosomal / Non-inherited", 1, 0, "Supernumerary X chromosome in males causing hypergonadotropic hypogonadism.", [("Peripheral Blood Karyotyping", "Confirm 47,XXY constitution")]),
+
+        # Category 2: Inherited disorders affecting offspring (India Pinned at Top)
+        ("Beta thalassemia (HBB)", "Inherited disorders affecting offspring", "HBB", "Autosomal recessive", 0, 1, "Severe microcytic hemolytic anemia requiring chronic transfusions in homozygous state.", [("Hemoglobin HPLC & HBB Sequencing", "Quantify HbA2 (>3.5%) and detect beta-globin mutations")]),
+        ("Alpha thalassemia (HBA1, HBA2)", "Inherited disorders affecting offspring", "HBA1, HBA2", "Autosomal recessive", 0, 1, "Deletional and non-deletional mutations causing HbH disease or Hydrops Fetalis.", [("Alpha-Globin StripAssay / MLPA", "Detect common 3.7kb and 4.2kb deletions")]),
+        ("Sickle cell disease (HBB)", "Inherited disorders affecting offspring", "HBB (HbS)", "Autosomal recessive", 0, 1, "Glu6Val mutation causing sickle-shaped erythrocyte vaso-occlusive crises.", [("Sickle Solubility & HPLC", "Identify HbS fraction and compound heterozygosity")]),
+        ("Cystic fibrosis (CFTR)", "Inherited disorders affecting offspring", "CFTR", "Autosomal recessive", 0, 1, "Multisystem exocrine dysfunction impacting pulmonary, pancreatic, and reproductive tracts.", [("CFTR Comprehensive NGS", "Screen deltaF508 and population-specific CFTR alleles")]),
+        ("Spinal muscular atrophy (SMN1)", "Inherited disorders affecting offspring", "SMN1", "Autosomal recessive", 0, 1, "Anterior horn cell degeneration leading to progressive proximal muscular atrophy.", [("SMN1/SMN2 Copy Number MLPA", "Assess homozygous deletion of SMN1 exon 7")]),
+        ("Tay-Sachs disease (HEXA)", "Inherited disorders affecting offspring", "HEXA", "Autosomal recessive", 0, 0, "Lysosomal storage disease causing neurodegeneration with cherry-red macular spot.", [("Hexosaminidase A Assay & HEXA NGS", "Quantify enzyme activity and pathogenic variants")]),
+        ("Phenylketonuria (PAH)", "Inherited disorders affecting offspring", "PAH", "Autosomal recessive", 0, 0, "Phenylalanine hydroxylase deficiency causing hyperphenylalaninemia and cognitive impairment.", [("Plasma Amino Acid Profile & PAH Sequencing", "Determine Phe/Tyr ratio and identify mutations")]),
+        ("Duchenne muscular dystrophy (DMD)", "Inherited disorders affecting offspring", "DMD", "X-linked recessive", 0, 1, "Severe progressive muscular dystrophy presenting in early childhood.", [("DMD MLPA & Exon Sequencing", "Detect large deletions/duplications in DMD gene")]),
+        ("Hemophilia A / B (F8, F9)", "Inherited disorders affecting offspring", "F8, F9", "X-linked recessive", 0, 1, "Coagulation factor VIII/IX deficiency with bleeding diathesis into joints and tissues.", [("Factor VIII/IX Activity & Inversion PCR", "Detect Intron 22 and Intron 1 inversions")]),
+        ("Huntington disease (HTT)", "Inherited disorders affecting offspring", "HTT", "Autosomal dominant", 0, 0, "Trinucleotide CAG repeat expansion causing chorea and progressive cognitive decline.", [("HTT Triplet Repeat PCR", "Quantify CAG repeat size")]),
+        ("Hereditary breast and ovarian cancer (BRCA1, BRCA2)", "Inherited disorders affecting offspring", "BRCA1, BRCA2", "Autosomal dominant", 0, 1, "High penetrance predisposition for mammary, ovarian, and prostate carcinomas.", [("BRCA1/2 NGS Comprehensive Panel", "Identify truncating and missense variants")]),
+        ("Lynch syndrome (MLH1, MSH2, MSH6, PMS2)", "Inherited disorders affecting offspring", "MLH1, MSH2, MSH6, PMS2", "Autosomal dominant", 0, 0, "DNA mismatch repair deficiency predisposing to colorectal and endometrial cancers.", [("MSI Analysis & MMR NGS Panel", "Detect microsatellite instability and germline MMR mutations")]),
+
+        # Category 3: Pregnancy loss & chromosome conditions
+        ("Robertsonian translocation (der(13;14), der(14;21))", "Pregnancy loss & chromosome conditions", "Whole arm acrocentric", "Chromosomal / Parental", 0, 0, "Centric fusion of acrocentric chromosomes predisposing to unbalanced gametes and miscarriage.", [("Parental High-Resolution Karyotyping", "Identify balanced carrier state in couples")]),
+        ("Reciprocal balanced chromosomal translocation", "Pregnancy loss & chromosome conditions", "Reciprocal segments", "Chromosomal / Parental", 0, 0, "Exchange of material between non-homologous chromosomes with 50%+ risk of unbalanced gametes.", [("Couple Karyotyping & Chromosomal Microarray (CMA)", "Delineate breakpoints and segmental imbalances")]),
+        ("Chromosomal inversion (e.g., inv(9))", "Pregnancy loss & chromosome conditions", "Pericentric / Paracentric", "Chromosomal", 0, 0, "Segmental chromosomal rotation, sometimes polymorphic or associated with recombinant gametes.", [("Cytogenetic Karyotype Analysis", "Distinguish benign heteromorphism from pathogenic inversion")]),
+        ("Recurrent aneuploidy risk", "Pregnancy loss & chromosome conditions", "Maternal age / Meiotic", "Non-inherited", 1, 0, "Meiotic nondisjunction risks correlated with maternal age or parental gonadal mosaicism.", [("PGT-A / Miscarriage Product Microarray (POC)", "Analyze karyotype of pregnancy loss tissue")]),
+        ("Antiphospholipid-associated recurrent loss", "Pregnancy loss & chromosome conditions", "Multifactorial / Autoimmune", "Complex", 1, 0, "Thrombotic microangiopathy in placental vasculature causing repeated fetal demise.", [("Lupus Anticoagulant & Anti-Cardiolipin Panel", "Test anticardiolipin antibodies and anti-beta2-GPI")]),
+        ("Not sure / Other", "Pregnancy loss & chromosome conditions", "Unspecified / Multifactorial", "Unknown", 0, 0, "Hereditary or idiopathic factors not covered in standard panels.", [("Clinical Genetics Consultation", "Comprehensive clinical exome evaluation")])
+    ]
+
+    for name, cat, gene, inh, often_not, is_india, desc, tests in conditions_data:
+        cursor.execute("""
+        INSERT OR IGNORE INTO conditions (name, category, gene, inheritance, often_not_inherited, is_common_in_india, description)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (name, cat, gene, inh, often_not, is_india, desc))
+        cond_id = cursor.lastrowid
+        if not cond_id:
+            row = cursor.execute("SELECT id FROM conditions WHERE name = ?", (name,)).fetchone()
+            if row:
+                cond_id = row[0]
+        if cond_id:
+            for t_name, t_purp in tests:
+                cursor.execute("""
+                INSERT OR IGNORE INTO condition_tests (condition_id, test_name, purpose)
+                VALUES (?, ?, ?)
+                """, (cond_id, t_name, t_purp))
+
+def create_family(user_id: int, data: dict):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    import random, secrets
+    family_id = f"F-{random.randint(100000, 999999)}"
+    share_token = secrets.token_hex(32)
+    name = data.get('name') or f"Family {family_id}"
+    trait = data.get('trait_or_disorder_name', '')
+    desc = data.get('family_history_description', '')
+    share_enabled = 1 if data.get('share_enabled') else 0
+
+    cursor.execute("""
+    INSERT INTO families (family_id, user_id, name, trait_or_disorder_name, number_of_generations, family_history_description, share_token, share_enabled)
+    VALUES (?, ?, ?, ?, 1, ?, ?, ?)
+    """, (family_id, user_id, name, trait, desc, share_token, share_enabled))
+    conn.commit()
+    conn.close()
+    return {
+        "family_id": family_id,
+        "name": name,
+        "trait_or_disorder_name": trait,
+        "share_token": share_token,
+        "share_enabled": share_enabled
+    }
+
+def get_user_families(user_id: int):
+    conn = get_db_connection()
+    rows = conn.execute("""
+    SELECT f.*,
+           (SELECT COUNT(*) FROM pedigree_nodes WHERE family_id = f.family_id) as member_count,
+           (SELECT name FROM pedigree_nodes WHERE family_id = f.family_id AND is_proband = 1 LIMIT 1) as proband_name
+    FROM families f
+    WHERE f.user_id = ?
+    ORDER BY f.created_at DESC
+    """, (user_id,)).fetchall()
+    conn.close()
+    families = []
+    for r in rows:
+        d = dict(r)
+        if not d.get('proband_name'):
+            d['proband_name'] = 'Proband (Unassigned)'
+        families.append(d)
+    return families
+
+def get_family_by_id(family_id: str):
+    conn = get_db_connection()
+    f = conn.execute("SELECT * FROM families WHERE family_id = ?", (family_id,)).fetchone()
+    if not f:
+        conn.close()
+        return None
+    fam = dict(f)
+    nodes = conn.execute("SELECT * FROM pedigree_nodes WHERE family_id = ? ORDER BY generation, birth_year", (family_id,)).fetchall()
+    fam['members'] = [dict(n) for n in nodes]
+    conn.close()
+    return fam
+
+def get_family_by_share_token(token: str):
+    conn = get_db_connection()
+    f = conn.execute("SELECT * FROM families WHERE share_token = ?", (token,)).fetchone()
+    if not f:
+        conn.close()
+        return None
+    fam = dict(f)
+    if not fam.get('share_enabled'):
+        conn.close()
+        return None
+    nodes = conn.execute("SELECT * FROM pedigree_nodes WHERE family_id = ?", (fam['family_id'],)).fetchall()
+    fam['members'] = [dict(n) for n in nodes]
+    conn.close()
+    return fam
+
+def update_family_share(family_id: str, enabled: bool):
+    conn = get_db_connection()
+    conn.execute("UPDATE families SET share_enabled = ? WHERE family_id = ?", (1 if enabled else 0, family_id))
+    conn.commit()
+    conn.close()
+
+def regenerate_family_token(family_id: str):
+    import secrets
+    new_token = secrets.token_hex(32)
+    conn = get_db_connection()
+    conn.execute("UPDATE families SET share_token = ? WHERE family_id = ?", (new_token, family_id))
+    conn.commit()
+    conn.close()
+    return new_token
+
+def update_node_position(node_id: int, custom_x: float, custom_y: float):
+    conn = get_db_connection()
+    conn.execute("UPDATE pedigree_nodes SET custom_x = ?, custom_y = ? WHERE id = ?", (custom_x, custom_y, node_id))
+    conn.commit()
+    conn.close()
+
+def get_conditions_catalog():
+    conn = get_db_connection()
+    conn.execute("UPDATE conditions SET category = 'Fertility-associated' WHERE category = 'fertility'")
+    conn.execute("UPDATE conditions SET category = 'Inherited disorders affecting offspring' WHERE category = 'inherited'")
+    conn.execute("UPDATE conditions SET category = 'Pregnancy loss & chromosome conditions' WHERE category = 'chromosomal'")
+    conn.commit()
+    rows = conn.execute("SELECT * FROM conditions ORDER BY category, is_common_in_india DESC, name ASC").fetchall()
+    conditions = []
+    for r in rows:
+        c = dict(r)
+        tests = conn.execute("SELECT test_name, purpose FROM condition_tests WHERE condition_id = ?", (c['id'],)).fetchall()
+        c['suggested_tests'] = [dict(t) for t in tests]
+        conditions.append(c)
+    conn.close()
+    return conditions
