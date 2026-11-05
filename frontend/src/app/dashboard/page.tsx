@@ -749,14 +749,15 @@ export default function DashboardPage() {
 
                   {/* Real Interactive SVG Tree Canvas */}
                   {activeFamilyLoading ? (
-                    <div className="w-full h-[600px] bg-slate-50/70 rounded-2xl border border-slate-200/80 flex items-center justify-center text-slate-400 text-xs">
+                    <div className="w-full h-[620px] bg-slate-50/70 rounded-2xl border border-slate-200/80 flex items-center justify-center text-slate-400 text-xs">
                       Loading family pedigree model...
                     </div>
                   ) : members.length > 0 ? (
-                    <div className="w-full h-[600px] rounded-2xl overflow-hidden border border-slate-200/90 relative">
+                    <div className="w-full h-[620px] rounded-2xl overflow-hidden relative">
                       <PedigreeCanvas
                         members={members}
                         isConsanguineous={isConsanguineous}
+                        className="h-full"
                       />
                     </div>
                   ) : (

@@ -316,15 +316,15 @@ def privacy_security():
 
 @app.route('/profile', methods=['GET', 'POST'])
 @app.route('/api/profile', methods=['GET', 'POST'])
+@login_required
 def profile_view():
-    user_id = session.get('user_id')
+    user_id = session['user_id']
     if request.method == 'POST':
         data = request.get_json(silent=True) or request.form.to_dict()
-        if user_id:
-            update_user_profile(user_id, data)
+        update_user_profile(user_id, data)
         return jsonify({"status": "success", "message": "Patient clinical details successfully updated."})
 
-    profile = get_user_profile(user_id) if user_id else {}
+    profile = get_user_profile(user_id)
     return jsonify({"status": "success", "profile": dict(profile) if profile else {}})
 
 # ==================== API ENDPOINTS ====================

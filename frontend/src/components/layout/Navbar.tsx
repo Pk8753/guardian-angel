@@ -21,9 +21,10 @@ export function Navbar() {
   const { user, logout } = useAuthStore();
   const [isDropdownOpen, setIsDropdownOpen] = React.useState(false);
 
-  const displayName = isSudoMode
-    ? user?.aliasName || 'Silent-Falcon-9214'
-    : user?.fullName || 'Dr. Tariq Al-Mansoor';
+  const realName = user?.fullName || user?.username || 'Patient';
+  const aliasName = user?.aliasName || 'Anonymous-Patient';
+  const displayName = isSudoMode ? aliasName : realName;
+  const initialChar = (displayName || user?.username || 'P').charAt(0).toUpperCase();
 
   return (
     <header className="sticky top-0 z-30 h-16 bg-white/90 backdrop-blur-xl border-b border-outline-variant/30 shadow-[0_1px_8px_rgba(12,50,44,0.03)] flex items-center justify-between px-4 sm:px-8">
@@ -128,12 +129,12 @@ export function Navbar() {
             <div className="flex flex-col text-right hidden sm:flex">
               <span className="text-xs font-bold text-pine leading-tight">{displayName}</span>
               <span className="text-[11px] text-jungle font-semibold leading-tight">
-                {isSudoMode ? t('sudo_pseudonym', activeLocale) : t('pro_member', activeLocale)}
+                {isSudoMode ? t('sudo_pseudonym', activeLocale) : `@${user?.username || 'user'} • Online`}
               </span>
             </div>
             <div className="relative">
               <div className="w-8 h-8 rounded-full bg-pine flex items-center justify-center text-white shadow-sm font-semibold text-xs">
-                {displayName.charAt(0)}
+                {initialChar}
               </div>
               <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-jungle ring-2 ring-white"></span>
             </div>
@@ -143,14 +144,16 @@ export function Navbar() {
           {isDropdownOpen && (
             <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-outline-variant/40 py-2 z-50">
               <div className="px-4 py-2 border-b border-outline-variant/20">
-                <p className="text-xs font-bold text-pine">{user?.fullName || 'Dr. Tariq Al-Mansoor'}</p>
+                <p className="text-xs font-bold text-pine">{realName}</p>
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="text-[10px] text-on-surface-variant">{t('sudo_alias', activeLocale)}</span>
+                  <span className="text-[10px] text-on-surface-variant font-medium">@{user?.username || 'user'}</span>
                   <span className="text-[10px] font-mono font-bold text-waterhole bg-waterhole-light px-1.5 py-0.5 rounded">
-                    {user?.aliasName || 'Silent-Falcon-9214'}
+                    {aliasName}
                   </span>
                 </div>
-                <p className="text-[10px] text-on-surface-variant mt-1">{user?.email || 'admin@guardianangel.bio'}</p>
+                {user?.email && (
+                  <p className="text-[10px] text-on-surface-variant mt-1 truncate">{user.email}</p>
+                )}
               </div>
 
               <button
