@@ -693,7 +693,7 @@ def seed_conditions_db(cursor):
                 """, (cond_id, t_name, t_purp))
 
 def get_next_family_id():
-    """Generates sequential unique Family Pedigree Chart ID as F-00001, F-00002 without collision."""
+    """Generates sequential unique Family Pedigree Chart ID as FA-000001, FA-000002 without collision."""
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT family_id FROM families")
@@ -701,28 +701,24 @@ def get_next_family_id():
     highest_num = 0
     for r in rows:
         fid = str(r[0]) if r[0] else ''
-        try:
-            if fid.startswith('F-'):
-                num = int(fid[2:])
-                if num > highest_num:
-                    highest_num = num
-            elif fid.startswith('FA-'):
+        if fid.startswith('FA-'):
+            try:
                 num = int(fid[3:])
                 if num > highest_num:
                     highest_num = num
-        except (ValueError, TypeError):
-            continue
+            except (ValueError, TypeError):
+                continue
     conn.close()
-    return f"F-{highest_num + 1:05d}"
+    return f"FA-{highest_num + 1:06d}"
 
 def create_family(user_id: int, data: dict):
     conn = get_db_connection()
     cursor = conn.cursor()
     import secrets
     
-    # Requirement: Generate Family Pedigree Chart ID as F-00001 (or FA-000001) and no two tree can have similar ID
+    # Requirement: Generate Family Pedigree Chart ID as FA-000001, FA-000002 and no two trees can have similar ID
     requested_id = data.get('family_id')
-    if requested_id and (requested_id.startswith('F-') or requested_id.startswith('FA-')):
+    if requested_id and requested_id.startswith('FA-'):
         existing = cursor.execute("SELECT id FROM families WHERE family_id = ?", (requested_id,)).fetchone()
         if existing:
             family_id = get_next_family_id()

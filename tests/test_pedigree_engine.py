@@ -1,6 +1,13 @@
 import unittest
 import json
 import os
+import sys
+import tempfile
+import shutil
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from config import Config
 from app import app
 from database import (
     init_db, create_family, get_user_families, get_family_by_id,
@@ -10,11 +17,17 @@ from database import (
 
 class PedigreeEngineTestCase(unittest.TestCase):
     def setUp(self):
+        self.test_dir = tempfile.mkdtemp()
+        self.orig_data_dir = Config.DATA_DIR
+        self.orig_db_path = Config.DATABASE_PATH
+        Config.DATA_DIR = self.test_dir
+        Config.DATABASE_PATH = os.path.join(self.test_dir, 'test_ga.db')
+        init_db()
+
         self.app = app
         self.app.config['TESTING'] = True
         self.app.config['SECRET_KEY'] = 'test_secret_key'
         self.client = self.app.test_client()
-        init_db()
 
         # Login as user / user
         with self.client.session_transaction() as sess:
@@ -24,8 +37,13 @@ class PedigreeEngineTestCase(unittest.TestCase):
             sess['user_id'] = u['id']
             self.user_id = u['id']
 
+    def tearDown(self):
+        Config.DATA_DIR = self.orig_data_dir
+        Config.DATABASE_PATH = self.orig_db_path
+        shutil.rmtree(self.test_dir, ignore_errors=True)
+
     def test_family_creation_and_auto_id_and_token(self):
-        """Verify Step 1 Module A: System auto-generates Family ID (F-XXXXXX) and 64-char crypto share token"""
+        """Verify Step 1 Module A: System auto-generates sequential Family ID (FA-000001, FA-000002) and 64-char crypto share token"""
         fam = create_family(self.user_id, {
             'name': 'Bates Family Lineage',
             'trait_or_disorder_name': 'Beta Thalassemia',
@@ -33,14 +51,23 @@ class PedigreeEngineTestCase(unittest.TestCase):
             'share_enabled': 1
         })
         self.assertIn('family_id', fam)
-        self.assertTrue(fam['family_id'].startswith(('FA-', 'F-')))
+        self.assertEqual(fam['family_id'], 'FA-000001')
         self.assertEqual(len(fam['share_token']), 64)
+
+        fam2 = create_family(self.user_id, {'name': 'Second Family Lineage'})
+        self.assertEqual(fam2['family_id'], 'FA-000002')
 
         # Retrieve family from DB
         stored = get_family_by_id(fam['family_id'])
         self.assertIsNotNone(stored)
         self.assertEqual(stored['name'], 'Bates Family Lineage')
         self.assertEqual(stored['share_enabled'], 1)
+
+        # Verify /api/pedigree/share/<token> endpoint
+        share_res = self.client.get(f'/api/pedigree/share/{fam["share_token"]}')
+        self.assertEqual(share_res.status_code, 200)
+        self.assertEqual(share_res.get_json()['status'], 'success')
+        self.assertEqual(share_res.get_json()['family']['family_id'], 'FA-000001')
 
     def test_multi_family_dashboard_listing(self):
         """Verify user can create and list multiple family pedigree charts"""

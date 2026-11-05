@@ -270,40 +270,59 @@ export default function PedigreePage() {
     const serverMemberId = json.member_id || Date.now();
     const serverPseudonym = json.member?.pseudonym || memberData.pseudonym || 'Relative';
 
-    const newMemberNode: PedigreeMember = {
-      id: serverMemberId,
-      family_id: activeFamily.family_id,
-      pseudonym: serverPseudonym,
-      full_name: memberData.full_name || serverPseudonym,
-      relationship_to_proband: memberData.relationship_to_proband || 'relative',
-      sex: memberData.sex || 'male',
-      is_proband: false,
-      is_deceased: memberData.is_deceased || false,
-      is_carrier: memberData.is_carrier || false,
-      is_affected: memberData.is_affected || false,
-      conditions: memberData.conditions || [],
-      fertility_conditions: memberData.fertility_conditions,
-      inherited_conditions: memberData.inherited_conditions,
-      chromosomal_conditions: memberData.chromosomal_conditions,
-      gene_variant: memberData.gene_variant,
-      genetic_testing_status: memberData.genetic_testing_status,
-      carrier_details: memberData.carrier_details,
-      test_results: memberData.test_results,
-      age_at_diagnosis: memberData.age_at_diagnosis,
-      medical_history: memberData.medical_history,
-      dob: memberData.dob,
-      living_status: memberData.living_status,
-      location: activeFamily.members?.[0]?.location || 'Mumbai, Maharashtra'
-    };
-
-    setActiveFamily((prev) => {
-      if (!prev) return null;
-      const existing = prev.members || [];
-      return {
-        ...prev,
-        members: [...existing.filter((m) => m.id !== serverMemberId), newMemberNode]
+    // Auto-refresh the pedigree tree immediately from server with all generational relationships
+    const famRes = await fetch(`/api/families/${activeFamily.family_id}`);
+    if (famRes.ok) {
+      const famData = await famRes.json();
+      const fullFam = famData.family || famData;
+      setActiveFamily(fullFam);
+    } else {
+      const newMemberNode: PedigreeMember = {
+        id: serverMemberId,
+        family_id: activeFamily.family_id,
+        pseudonym: serverPseudonym,
+        full_name: memberData.full_name || serverPseudonym,
+        relationship_to_proband: memberData.relationship_to_proband || 'relative',
+        sex: memberData.sex || 'male',
+        is_proband: false,
+        is_deceased: memberData.is_deceased || false,
+        is_carrier: memberData.is_carrier || false,
+        is_affected: memberData.is_affected || false,
+        conditions: memberData.conditions || [],
+        fertility_conditions: memberData.fertility_conditions,
+        inherited_conditions: memberData.inherited_conditions,
+        chromosomal_conditions: memberData.chromosomal_conditions,
+        gene_variant: memberData.gene_variant,
+        genetic_testing_status: memberData.genetic_testing_status,
+        carrier_details: memberData.carrier_details,
+        test_results: memberData.test_results,
+        age_at_diagnosis: memberData.age_at_diagnosis,
+        medical_history: memberData.medical_history,
+        dob: memberData.dob,
+        living_status: memberData.living_status,
+        location: activeFamily.members?.[0]?.location || 'Mumbai, Maharashtra'
       };
-    });
+
+      setActiveFamily((prev) => {
+        if (!prev) return null;
+        const existing = prev.members || [];
+        return {
+          ...prev,
+          members: [...existing.filter((m) => m.id !== serverMemberId), newMemberNode]
+        };
+      });
+    }
+
+    // Refresh family list member counts
+    fetch('/api/families')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data) {
+          const list = Array.isArray(data) ? data : data.families || [];
+          setFamilies(list);
+        }
+      })
+      .catch(() => {});
   };
 
   // Callback when editing a member
@@ -321,13 +340,20 @@ export default function PedigreePage() {
       throw new Error(err.message || 'Failed to update family member on server.');
     }
 
-    setActiveFamily((prev) => {
-      if (!prev) return null;
-      const updated = (prev.members || []).map((m) =>
-        m.id === memberId ? { ...m, ...memberData } : m
-      );
-      return { ...prev, members: updated };
-    });
+    const famRes = await fetch(`/api/families/${activeFamily.family_id}`);
+    if (famRes.ok) {
+      const famData = await famRes.json();
+      const fullFam = famData.family || famData;
+      setActiveFamily(fullFam);
+    } else {
+      setActiveFamily((prev) => {
+        if (!prev) return null;
+        const updated = (prev.members || []).map((m) =>
+          m.id === memberId ? { ...m, ...memberData } : m
+        );
+        return { ...prev, members: updated };
+      });
+    }
   };
 
   // Delete Member
@@ -1056,6 +1082,9 @@ export default function PedigreePage() {
             setIsWizardOpen(false);
             setEditingMember(null);
             setInitialRelation(null);
+            if (activeFamily?.family_id) {
+              loadFamilies(activeFamily.family_id);
+            }
             if (typeof window !== 'undefined') {
               const url = new URL(window.location.href);
               if (url.searchParams.has('create')) {
