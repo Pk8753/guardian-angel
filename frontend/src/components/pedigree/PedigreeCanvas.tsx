@@ -15,6 +15,7 @@ interface PedigreeCanvasProps {
   onAddRelative?: (member: PedigreeMember) => void;
   onPositionChange?: (memberId: string | number, x: number, y: number) => void;
   filterTier?: string; // 'all' | 'gen1' | 'gen2' | 'gen3'
+  className?: string;
 }
 
 export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
@@ -24,7 +25,8 @@ export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
   onSelectMember,
   onAddRelative,
   onPositionChange,
-  filterTier = 'all'
+  filterTier = 'all',
+  className
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const transformRef = useRef<ReactZoomPanPinchRef>(null);
@@ -96,7 +98,7 @@ export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-[620px] bg-slate-50/70 rounded-2xl border border-slate-200/80 overflow-hidden shadow-inner select-none flex flex-col"
+      className={`relative w-full bg-slate-50/70 rounded-2xl border border-slate-200/80 overflow-hidden shadow-inner select-none flex flex-col ${className || 'h-[620px]'}`}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
     >
@@ -151,7 +153,7 @@ export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
             </div>
 
             {/* Transform Canvas Area */}
-            <TransformComponent wrapperClass="w-full h-full flex-1" contentClass="w-full h-full">
+            <TransformComponent wrapperClass="w-full flex-1 min-h-0" contentClass="w-full h-full">
               <svg
                 id="pedigree-svg-root"
                 width={layout.bounds.width}
@@ -407,7 +409,7 @@ export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
             </TransformComponent>
 
             {/* Bottom NSGC Standard Legend matching screen.png */}
-            <div className="shrink-0 bg-white border-t border-slate-200/80 px-4 py-2.5 flex items-center justify-between flex-wrap gap-3 text-[11px] text-slate-600 font-medium">
+            <div className="shrink-0 z-10 bg-white border-t border-slate-200/80 px-4 py-2.5 flex items-center justify-between flex-wrap gap-3 text-[11px] text-slate-600 font-medium">
               <div className="flex items-center gap-4 flex-wrap">
                 {/* Male */}
                 <div className="flex items-center gap-1.5">

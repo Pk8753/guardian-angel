@@ -34,6 +34,11 @@ class Config:
     PORT = int(os.environ.get('PORT', 5000))
     DEBUG = os.environ.get('FLASK_DEBUG', 'False').lower() in ('true', '1', 't')
     
+    # Session Cookie Security
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    SESSION_COOKIE_SECURE = os.environ.get('SESSION_COOKIE_SECURE', 'False').lower() in ('true', '1', 't')
+    
     # GCP Configuration
     GCP_PROJECT_ID = os.environ.get('GCP_PROJECT_ID', os.environ.get('GOOGLE_CLOUD_PROJECT', 'guardian-angel-health'))
     GCP_REGION = os.environ.get('GCP_REGION', 'us-central1')

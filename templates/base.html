@@ -215,18 +215,19 @@
         </button>
 
         <!-- User Identity Menu -->
-        {% set display_name = user_alias if mask_identity else (current_user.full_name if current_user and current_user.full_name else 'Tariq Al-Mansoor') %}
+        {% set real_name = current_user.full_name if current_user and current_user.full_name else (current_user.username if current_user else 'Patient') %}
+        {% set display_name = user_alias if mask_identity else real_name %}
         <div class="relative" id="userMenuDropdown">
           <button type="button" onclick="toggleUserMenu()" class="flex items-center gap-2.5 pl-2 py-1 rounded-lg hover:bg-surface-container transition-colors focus:outline-none cursor-pointer">
             <div class="flex flex-col text-right hidden sm:flex">
               <span class="text-xs font-bold text-pine leading-tight" id="headerUserName">{{ display_name }}</span>
               <span class="text-[11px] text-jungle font-semibold leading-tight">
-                {% if mask_identity %}🎭 Sudo Pseudonym{% else %}Pro Member • Online{% endif %}
+                {% if mask_identity %}🎭 Sudo Pseudonym{% else %}@{{ current_user.username if current_user else 'user' }} • Online{% endif %}
               </span>
             </div>
             <div class="relative">
               <div class="w-8 h-8 rounded-full bg-pine flex items-center justify-center text-white shadow-sm font-semibold text-xs" id="headerUserInitial">
-                {{ display_name[0] }}
+                {{ display_name[0] | upper }}
               </div>
               <span class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-jungle ring-2 ring-white"></span>
             </div>
@@ -235,12 +236,14 @@
           <!-- Dropdown popup -->
           <div id="userMenu" class="hidden absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-outline-variant/50 py-2 z-50">
             <div class="px-4 py-2 border-b border-outline-variant/20">
-              <p class="text-xs font-bold text-pine" id="dropdownLegalName">{{ current_user.full_name if current_user else 'Tariq Al-Mansoor' }}</p>
+              <p class="text-xs font-bold text-pine" id="dropdownLegalName">{{ real_name }}</p>
               <div class="flex items-center gap-1.5 mt-0.5">
-                <span class="text-[10px] text-on-surface-variant">Sudo Alias:</span>
+                <span class="text-[10px] text-on-surface-variant font-medium">@{{ current_user.username if current_user else 'user' }}</span>
                 <span class="text-[10px] font-mono font-bold text-waterhole bg-waterhole-light px-1.5 py-0.2 rounded">{{ user_alias }}</span>
               </div>
-              <p class="text-[10px] text-on-surface-variant mt-1">{{ current_user.email if current_user else 'admin@guardianangel.bio' }}</p>
+              {% if current_user and current_user.email %}
+              <p class="text-[10px] text-on-surface-variant mt-1">{{ current_user.email }}</p>
+              {% endif %}
             </div>
             
             <button type="button" onclick="toggleDataHiding()" class="w-full text-left flex items-center gap-2.5 px-4 py-2 text-xs text-pine hover:bg-surface-container transition-colors">

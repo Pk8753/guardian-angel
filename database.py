@@ -7,7 +7,9 @@ import sqlite3
 import os
 import json
 import hashlib
+import hmac
 import random
+from werkzeug.security import generate_password_hash, check_password_hash
 from config import Config
 
 ADJECTIVES = [
@@ -42,12 +44,23 @@ def get_db_connection():
     return conn
 
 def hash_password(password: str) -> str:
-    """Secure SHA-256 password hash with salt."""
-    salt = "guardian_angel_clinical_salt_2026"
-    return hashlib.sha256((password + salt).encode('utf-8')).hexdigest()
+    """Generate a secure cryptographic salted hash using Werkzeug (scrypt/PBKDF2)."""
+    return generate_password_hash(password)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return hash_password(plain_password) == hashed_password
+    if not hashed_password or not plain_password:
+        return False
+    # Check modern hashes (scrypt, pbkdf2)
+    if hashed_password.startswith(('scrypt:', 'pbkdf2:')):
+        return check_password_hash(hashed_password, plain_password)
+    # Constant-time comparison fallback for legacy SHA-256 hashes
+    legacy_salt = "guardian_angel_clinical_salt_2026"
+    legacy_hash = hashlib.sha256((plain_password + legacy_salt).encode('utf-8')).hexdigest()
+    if hmac.compare_digest(legacy_hash, hashed_password):
+        return True
+    alt_salt = "guardian_angel_salt_2026"
+    alt_hash = hashlib.sha256((plain_password + alt_salt).encode('utf-8')).hexdigest()
+    return hmac.compare_digest(alt_hash, hashed_password)
 
 def init_db():
     conn = get_db_connection()

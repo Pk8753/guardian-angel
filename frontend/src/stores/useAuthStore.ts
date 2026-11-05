@@ -20,6 +20,23 @@ interface AuthState {
   updateUser: (updates: Partial<UserSession>) => void;
 }
 
+export const normalizeUser = (raw: any): UserSession | null => {
+  if (!raw) return null;
+  const fullName = raw.fullName || raw.full_name || raw.name || raw.username || 'Patient';
+  const aliasName = raw.aliasName || raw.alias_name || 'Anonymous-Patient';
+  return {
+    id: raw.id,
+    username: raw.username,
+    fullName,
+    aliasName,
+    email: raw.email || '',
+    isAdmin: raw.isAdmin ?? (typeof raw.username === 'string' && raw.username.toLowerCase() === 'admin'),
+    isFreshUser: raw.isFreshUser ?? false,
+    dob: raw.dob,
+    location: raw.location
+  };
+};
+
 const getInitialAuth = (): { user: UserSession | null; isAuthenticated: boolean } => {
   if (typeof window === 'undefined') {
     return { user: null, isAuthenticated: false };
@@ -28,7 +45,9 @@ const getInitialAuth = (): { user: UserSession | null; isAuthenticated: boolean 
     const hasCookie = document.cookie.includes('ga_auth_session=1');
     const stored = localStorage.getItem('ga_user');
     if (hasCookie && stored) {
-      return { user: JSON.parse(stored), isAuthenticated: true };
+      const parsed = JSON.parse(stored);
+      const normalized = normalizeUser(parsed);
+      return { user: normalized, isAuthenticated: !!normalized };
     }
   } catch {
     // Ignore parse error
@@ -41,8 +60,9 @@ const initial = getInitialAuth();
 export const useAuthStore = create<AuthState>((set) => ({
   user: initial.user,
   isAuthenticated: initial.isAuthenticated,
-  login: (user) => {
-    if (typeof window !== 'undefined') {
+  login: (rawUser) => {
+    const user = normalizeUser(rawUser);
+    if (typeof window !== 'undefined' && user) {
       try {
         localStorage.setItem('ga_user', JSON.stringify(user));
         document.cookie = 'ga_auth_session=1; path=/; max-age=86400; SameSite=Lax';
@@ -50,7 +70,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         console.error('Storage error', e);
       }
     }
-    set({ user, isAuthenticated: true });
+    set({ user, isAuthenticated: !!user });
   },
   logout: () => {
     if (typeof window !== 'undefined') {
@@ -67,7 +87,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
   updateUser: (updates) =>
     set((state) => {
-      const updated = state.user ? { ...state.user, ...updates } : null;
+      const updated = state.user ? normalizeUser({ ...state.user, ...updates }) : null;
       if (typeof window !== 'undefined' && updated) {
         try {
           localStorage.setItem('ga_user', JSON.stringify(updated));
