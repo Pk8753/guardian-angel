@@ -39,6 +39,7 @@ interface FamilyWizardModalProps {
   initialStep?: 1 | 2 | 3;
   editingMember?: PedigreeMember | null;
   initialRelation?: string | null;
+  newFamilyId?: string | null;
 }
 
 const ADJECTIVES = [
@@ -185,7 +186,8 @@ export const FamilyWizardModal: React.FC<FamilyWizardModalProps> = ({
   existingFamily,
   initialStep = 1,
   editingMember = null,
-  initialRelation = null
+  initialRelation = null,
+  newFamilyId = null
 }) => {
   // Wizard active step: 1 (About Family), 2 (Verify Profile), 3 (Add Members / Form)
   const [step, setStep] = useState<1 | 2 | 3>(initialStep);
@@ -285,21 +287,25 @@ export const FamilyWizardModal: React.FC<FamilyWizardModalProps> = ({
 
   // Generate Family Pedigree Chart ID as FA-000001 (Sequential and Unique, no duplicate IDs)
   useEffect(() => {
-    if (isOpen && !existingFamily && !familyId) {
-      fetch('/api/families/next-id')
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          if (data && data.next_family_id) {
-            setFamilyId(data.next_family_id);
-          } else {
+    if (isOpen && !existingFamily) {
+      if (newFamilyId) {
+        setFamilyId(newFamilyId);
+      } else {
+        fetch('/api/families/next-id')
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => {
+            if (data && data.next_family_id) {
+              setFamilyId(data.next_family_id);
+            } else {
+              setFamilyId('FA-000001');
+            }
+          })
+          .catch(() => {
             setFamilyId('FA-000001');
-          }
-        })
-        .catch(() => {
-          setFamilyId('FA-000001');
-        });
+          });
+      }
     }
-  }, [isOpen, existingFamily, familyId]);
+  }, [isOpen, existingFamily, newFamilyId]);
 
   // Fetch logged-in user profile from backend
   useEffect(() => {
@@ -385,9 +391,15 @@ export const FamilyWizardModal: React.FC<FamilyWizardModalProps> = ({
       } else {
         setStep(1);
         setActiveFormRelation(null);
+        setFamilyName('');
+        setConditionsOfInterest([]);
+        setFamilyHealthHistory('');
+        if (newFamilyId) {
+          setFamilyId(newFamilyId);
+        }
       }
     }
-  }, [isOpen, editingMember, existingFamily, initialStep, initialRelation]);
+  }, [isOpen, editingMember, existingFamily, initialStep, initialRelation, newFamilyId]);
 
   // Open Form for specific relationship card
   const openFormForRelation = (relId: string) => {

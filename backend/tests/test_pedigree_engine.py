@@ -69,6 +69,11 @@ class PedigreeEngineTestCase(unittest.TestCase):
         self.assertEqual(share_res.get_json()['status'], 'success')
         self.assertEqual(share_res.get_json()['family']['family_id'], 'FA-000001')
 
+        # Verify next-id endpoint reports next sequential ID (FA-000003)
+        next_res = self.client.get('/api/families/next-id')
+        self.assertEqual(next_res.status_code, 200)
+        self.assertEqual(next_res.get_json()['next_family_id'], 'FA-000003')
+
     def test_multi_family_dashboard_listing(self):
         """Verify user can create and list multiple family pedigree charts"""
         f1 = create_family(self.user_id, {'name': 'Maternal Pedigree'})

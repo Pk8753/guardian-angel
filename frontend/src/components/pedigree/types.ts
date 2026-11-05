@@ -111,5 +111,6 @@ export interface FamilyRecord {
   updated_at: string;
   share_token?: string;
   share_status?: 'private' | 'link_shared' | 'consult_shared';
+  member_count?: number;
   members?: PedigreeMember[];
 }
