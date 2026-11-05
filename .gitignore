@@ -93,3 +93,4 @@ backend/data/gcs_local_storage/
 .system_generated/
 .gemini/
 ui-screen
+backend/data/gcs_local_storage
