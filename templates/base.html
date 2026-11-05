@@ -204,20 +204,14 @@
           </span>
           <span class="hidden sm:inline">
             {% if mask_identity %}
-              <span class="text-jungle font-mono font-bold">{{ user_alias }}</span> (Masked)
+              Privacy: <span class="text-jungle font-mono font-bold">ON</span>
             {% else %}
-              Data Hiding: <span class="text-on-surface-variant font-medium">OFF</span>
+              Privacy: <span class="text-on-surface-variant font-medium">OFF</span>
             {% endif %}
           </span>
           <span class="sm:hidden font-mono text-[10px]">
-            {% if mask_identity %}🔒 Masked{% else %}👁️ Real{% endif %}
+            {% if mask_identity %}🔒 ON{% else %}👁️ OFF{% endif %}
           </span>
-        </button>
-
-        <!-- Notification Bell -->
-        <button type="button" class="relative w-9 h-9 rounded-lg flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low hover:text-pine transition-colors" title="Notifications">
-          <span class="material-symbols-outlined text-[20px]">notifications</span>
-          <span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-jungle"></span>
         </button>
 
         <!-- User Identity Menu -->
@@ -253,7 +247,7 @@
               <span class="material-symbols-outlined text-[16px] text-waterhole">
                 {% if mask_identity %}visibility{% else %}visibility_off{% endif %}
               </span>
-              <span>{% if mask_identity %}Disable Data Hiding (Show Real Name){% else %}Enable Data Hiding (Mask with Sudo Name){% endif %}</span>
+              <span>{% if mask_identity %}Disable Privacy Mode (Show Real Name){% else %}Enable Privacy Mode (Mask with Sudo Name){% endif %}</span>
             </button>
 
             <a href="{{ url_for('profile_view') }}" class="flex items-center gap-2.5 px-4 py-2 text-xs text-on-surface hover:bg-surface-container transition-colors">

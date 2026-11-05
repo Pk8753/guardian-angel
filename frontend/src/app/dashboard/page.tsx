@@ -6,6 +6,11 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { Navbar } from '@/components/layout/Navbar';
 import { AuthGuard } from '@/components/layout/AuthGuard';
 import { useAuthStore } from '@/stores/useAuthStore';
+import { useUIStore } from '@/stores/useUIStore';
+import { t } from '@/lib/translations';
+import { PedigreeCanvas } from '@/components/pedigree/PedigreeCanvas';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 import {
   GitBranch,
   Dna,
@@ -19,8 +24,6 @@ import {
   Clock,
   Send,
   HelpCircle,
-  ZoomIn,
-  ZoomOut,
   Maximize2,
   FileText,
   AlertCircle,
@@ -34,24 +37,143 @@ import {
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
+  const { activeLocale } = useUIStore();
   const firstName = user?.fullName ? user.fullName.split(' ')[0] : (user?.username || 'Patient');
 
-  // Multiple Family Pedigrees State
+  // Multiple Family Pedigrees State & Default Family Tree State
   const [families, setFamilies] = useState<any[]>([]);
   const [familiesLoading, setFamiliesLoading] = useState(true);
+  const [activeFamily, setActiveFamily] = useState<any | null>(null);
+  const [activeFamilyLoading, setActiveFamilyLoading] = useState(true);
+  const [exportingPDF, setExportingPDF] = useState(false);
 
   useEffect(() => {
     fetch('/api/families')
       .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
+      .then(async (data) => {
         if (data) {
           const list = Array.isArray(data) ? data : data.families || [];
           setFamilies(list);
+
+          if (list.length > 0) {
+            // Sort families by member count descending so the tree with the most members is selected by default
+            const sortedByMembers = [...list].sort((a: any, b: any) => {
+              const countA = a.member_count ?? (a.members?.length || 0);
+              const countB = b.member_count ?? (b.members?.length || 0);
+              return countB - countA;
+            });
+            const targetId = sortedByMembers[0]?.family_id || list[0].family_id;
+
+            if (targetId) {
+              try {
+                const famRes = await fetch(`/api/families/${targetId}`);
+                if (famRes.ok) {
+                  const famData = await famRes.json();
+                  setActiveFamily(famData.family || famData);
+                }
+              } catch (err) {
+                console.error('Failed to load active family:', err);
+              }
+            }
+          }
         }
       })
       .catch((e) => console.error('Failed to load families:', e))
-      .finally(() => setFamiliesLoading(false));
+      .finally(() => {
+        setFamiliesLoading(false);
+        setActiveFamilyLoading(false);
+      });
   }, []);
+
+  // Compute real metrics from active family members
+  const members = activeFamily?.members || [];
+  const pedigreeSize = members.length;
+  const generationCount = new Set(
+    members
+      .map((m: any) => m.generation || (m.generation_index ? `Gen ${m.generation_index}` : null))
+      .filter(Boolean)
+  ).size;
+
+  const uniquePhenotypes: string[] = Array.from(
+    new Set<string>(
+      members.flatMap((m: any) => {
+        const list: string[] = [];
+        if (Array.isArray(m.conditions)) list.push(...m.conditions);
+        if (m.trait_or_disorder_name) list.push(m.trait_or_disorder_name);
+        if (m.condition_locus) list.push(m.condition_locus);
+        if (m.inherited_conditions) {
+          if (Array.isArray(m.inherited_conditions)) list.push(...m.inherited_conditions);
+          else list.push(m.inherited_conditions);
+        }
+        if (m.is_carrier && !list.length) list.push('Carrier Trait');
+        if (m.is_affected && !list.length) list.push('Affected Trait');
+        return list.map((c: any) => (typeof c === 'string' ? c : c?.name || c?.condition_name || '')).filter(Boolean);
+      })
+    )
+  );
+
+  const carrierCount = members.filter((m: any) => m.is_carrier).length;
+  const affectedCount = members.filter((m: any) => m.is_affected).length;
+  const isConsanguineous = !!activeFamily?.is_consanguineous;
+  const aiRiskCount = carrierCount + affectedCount + (isConsanguineous ? 1 : 0);
+
+  const spouse = members.find((m: any) =>
+    ['spouse', 'wife', 'husband', 'partner'].includes((m.relationship_to_proband || '').toLowerCase())
+  );
+
+  const completenessPercentage = React.useMemo(() => {
+    if (!members.length) return 0;
+    let totalScore = 0;
+    members.forEach((m: any) => {
+      let memberScore = 0;
+      if (m.full_name || m.name || m.pseudonym) memberScore += 25;
+      if (m.sex && m.sex !== 'unknown') memberScore += 25;
+      if (m.relationship_to_proband) memberScore += 25;
+      if (
+        (m.conditions && m.conditions.length > 0) ||
+        m.medical_history ||
+        m.is_carrier ||
+        m.is_affected ||
+        m.dob ||
+        m.living_status ||
+        m.age_or_age_at_death
+      ) {
+        memberScore += 25;
+      }
+      totalScore += memberScore;
+    });
+    return Math.min(100, Math.max(10, Math.round(totalScore / members.length)));
+  }, [members]);
+
+  const handleExportPDF = async () => {
+    const svgElement = document.getElementById('pedigree-svg-root');
+    if (!svgElement) {
+      alert('Pedigree canvas is not currently rendered or ready to export.');
+      return;
+    }
+
+    try {
+      setExportingPDF(true);
+      const canvas = await html2canvas(svgElement as any, {
+        backgroundColor: '#ffffff',
+        scale: 2
+      });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'landscape',
+        unit: 'px',
+        format: [canvas.width, canvas.height]
+      });
+      pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+      const famId = activeFamily?.family_id || 'FA-000001';
+      pdf.save(`pedigree-${famId}-clinical-report.pdf`);
+    } catch (e) {
+      console.error('PDF export error:', e);
+      alert('Failed to export PDF. Please try again.');
+    } finally {
+      setExportingPDF(false);
+    }
+  };
 
   const handleDeleteFamily = async (familyId: string, familyName?: string) => {
     if (!confirm(`Are you sure you want to delete family chart "${familyName || familyId}"? The chart will be removed, but all family members will be preserved in your database.`)) {
@@ -76,7 +198,6 @@ export default function DashboardPage() {
   // Interactive AI Question State
   const [query, setQuery] = useState('');
   const [aiAnswer, setAiAnswer] = useState<string | null>(null);
-  const [zoomLevel, setZoomLevel] = useState(1);
   const [bookingConfirmed, setBookingConfirmed] = useState(false);
   const [panelScheduled, setPanelScheduled] = useState(false);
 
@@ -104,7 +225,7 @@ export default function DashboardPage() {
       setAiAnswer(matched.a);
     } else {
       setAiAnswer(
-        `GenWell AI analyzed your question regarding "${questionText}": Based on your 3-generation family tree, your family has documented Beta-Thalassemia and G6PD traits. A simple carrier test with your partner is the safest first step.`
+        `Care AI analyzed your question regarding "${questionText}": Based on your family tree, your records have documented hereditary traits. A simple carrier test with your partner is the safest first step.`
       );
     }
   };
@@ -125,21 +246,42 @@ export default function DashboardPage() {
                 <div className="flex items-center gap-2 flex-wrap text-xs">
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 font-bold border border-emerald-200/80 text-[11px] tracking-wide">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    CLINICAL NODE: ACTIVE
-                  </span>
-                  <span className="text-slate-500 text-[11px] font-medium">
-                    Locus 11p15.4 Indexed
+                    {t('clinical_node_active', activeLocale)}
                   </span>
                 </div>
 
                 <h1 className="text-2xl sm:text-3xl font-extrabold text-[#09332c] tracking-tight">
-                  Good Morning, {firstName}
+                  {t('good_morning', activeLocale)}, {firstName}
                 </h1>
 
                 <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-                  Your family health journey starts with understanding. Your records show{' '}
-                  <strong className="text-slate-800 font-bold">92% complete details</strong> across 3
-                  mapped generations of your family.
+                  {activeLocale === 'ar' ? (
+                    members.length > 0 ? (
+                      <>
+                        تبدأ رحلة صحة عائلتك بالفهم السليم. تشير سجلاتك إلى{' '}
+                        <strong className="text-slate-800 font-bold">{completenessPercentage}% اكتمال البيانات</strong> عبر{' '}
+                        {generationCount} {generationCount === 1 ? 'جيل موثق' : 'أجيال موثقة'} من عائلتك.
+                      </>
+                    ) : (
+                      <>
+                        تبدأ رحلة صحة عائلتك بالفهم السليم. تشير سجلاتك إلى{' '}
+                        <strong className="text-slate-800 font-bold">0% اكتمال البيانات</strong> عبر 0 أجيال موثقة.
+                      </>
+                    )
+                  ) : (
+                    members.length > 0 ? (
+                      <>
+                        Your family health journey starts with understanding. Your records show{' '}
+                        <strong className="text-slate-800 font-bold">{completenessPercentage}% complete details</strong> across{' '}
+                        {generationCount} mapped {generationCount === 1 ? 'generation' : 'generations'} of your family.
+                      </>
+                    ) : (
+                      <>
+                        Your family health journey starts with understanding. Your records show{' '}
+                        <strong className="text-slate-800 font-bold">0% complete details</strong> across 0 mapped generations. Start by creating a pedigree tree.
+                      </>
+                    )
+                  )}
                 </p>
 
                 <div className="pt-2 flex items-center gap-3 flex-wrap">
@@ -148,21 +290,21 @@ export default function DashboardPage() {
                     className="inline-flex items-center gap-2 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-bold transition shadow-xs"
                   >
                     <Plus className="w-4 h-4" />
-                    <span>Create Family Pedigree</span>
+                    <span>{t('btn_create_pedigree', activeLocale)}</span>
                   </Link>
                   <Link
                     href="/pedigree"
                     className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition"
                   >
                     <GitBranch className="w-3.5 h-3.5 text-teal-800" />
-                    <span>View Pedigree Charts</span>
+                    <span>{t('btn_view_pedigree', activeLocale)}</span>
                   </Link>
                 </div>
               </div>
 
               {/* Right Priority Diagnostic Badge Tile */}
               <div className="flex items-center gap-4 bg-gradient-to-br from-slate-50 to-emerald-50/40 p-4 rounded-xl border border-slate-200/90 shadow-xs w-full lg:w-auto shrink-0">
-                {/* Circular 92% Gauge */}
+                {/* Circular Gauge */}
                 <div className="relative w-20 h-20 flex items-center justify-center shrink-0">
                   <svg className="w-full h-full -rotate-90 transform" viewBox="0 0 100 100">
                     <circle
@@ -180,30 +322,52 @@ export default function DashboardPage() {
                       r="40"
                       stroke="currentColor"
                       strokeDasharray="251.2"
-                      strokeDashoffset={251.2 - (251.2 * 92) / 100}
+                      strokeDashoffset={251.2 - (251.2 * completenessPercentage) / 100}
                       strokeLinecap="round"
                       strokeWidth="8"
                     />
                   </svg>
                   <div className="absolute flex flex-col items-center">
-                    <span className="text-xl font-black text-slate-800 leading-none">92%</span>
+                    <span className="text-xl font-black text-slate-800 leading-none">{completenessPercentage}%</span>
                     <span className="text-[9px] text-slate-500 font-bold leading-none mt-1">INDEX</span>
                   </div>
                 </div>
 
                 <div className="flex flex-col justify-center">
                   <span className="text-[10px] uppercase tracking-widest text-teal-800 font-bold">
-                    PRIORITY DIAGNOSTIC
+                    {t('priority_diagnostic', activeLocale)}
                   </span>
                   <h4 className="text-sm font-bold text-slate-900 mt-0.5">
-                    Carrier Scan Recommended
+                    {carrierCount > 0
+                      ? (activeLocale === 'ar' ? 'يوصى بفحص النواقل الجينية' : 'Carrier Scan Recommended')
+                      : affectedCount > 0
+                      ? (activeLocale === 'ar' ? 'متابعة سريرية موصى بها' : 'Clinical Follow-up Recommended')
+                      : isConsanguineous
+                      ? (activeLocale === 'ar' ? 'تقييم زواج الأقارب موصى به' : 'Consanguinity Screening Advised')
+                      : members.length > 0
+                      ? (activeLocale === 'ar' ? 'فحص صحي شامل' : 'Baseline Genetic Health Scan')
+                      : (activeLocale === 'ar' ? 'لا توجد بيانات للفحص' : 'No Priority Diagnostic Data')}
                   </h4>
                   <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                    <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[10px] font-semibold">
-                      Locus: HBB 11p15.4
-                    </span>
+                    {uniquePhenotypes.length > 0 ? (
+                      <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[10px] font-semibold truncate max-w-[160px]">
+                        {uniquePhenotypes[0]}
+                      </span>
+                    ) : activeFamily?.trait_or_disorder_name ? (
+                      <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[10px] font-semibold truncate max-w-[160px]">
+                        {activeFamily.trait_or_disorder_name}
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[10px] font-semibold">
+                        {members.length > 0 ? 'Standard Panel' : 'None'}
+                      </span>
+                    )}
                     <span className="px-2 py-0.5 rounded bg-emerald-100/70 text-emerald-800 text-[10px] font-bold">
-                      Autosomal Recessive
+                      {isConsanguineous
+                        ? 'Consanguineous'
+                        : carrierCount > 0
+                        ? (activeLocale === 'ar' ? 'وراثة متنحية' : 'Autosomal Recessive')
+                        : (activeLocale === 'ar' ? 'فحص وقائي' : 'Preventative')}
                     </span>
                   </div>
                 </div>
@@ -216,23 +380,44 @@ export default function DashboardPage() {
               <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.03)] flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between text-slate-500 mb-2">
-                    <span className="text-[11px] font-bold uppercase tracking-wider">PEDIGREE SIZE</span>
+                    <span className="text-[11px] font-bold uppercase tracking-wider">{t('stat_pedigree_size', activeLocale)}</span>
                     <GitBranch className="w-4 h-4 text-slate-400" />
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-black text-slate-900 leading-none">18</span>
-                    <span className="text-xs text-slate-500 font-semibold">Members</span>
+                    <span className="text-3xl font-black text-slate-900 leading-none">{families.length}</span>
+                    <span className="text-xs text-slate-500 font-semibold">{families.length === 1 ? 'Tree' : 'Trees'}</span>
                   </div>
-                  <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
-                    3 generations mapped with both mother and father sides.
-                  </p>
+                  {families.length > 0 ? (
+                    <div className="space-y-1.5 mt-2.5 max-h-28 overflow-y-auto pr-1">
+                      {families.map((fam) => {
+                        const count = fam.member_count ?? (fam.members?.length || (fam.family_id === activeFamily?.family_id ? activeFamily?.members?.length : null) || 0);
+                        return (
+                          <div key={fam.family_id} className="flex items-center justify-between text-[11px] bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
+                            <span className="font-mono font-bold text-teal-800">{fam.family_id}</span>
+                            <span className="text-slate-600 font-medium">
+                              : {count} {count === 1 ? 'member in tree' : 'members in tree'}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="space-y-1 mt-2">
+                      <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                        0 pedigree trees created.
+                      </p>
+                      <p className="text-[10px] text-slate-500 leading-normal">
+                        Pedigree size shows the number of pedigree trees of the user and total members in each tree.
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <Link
                   href="/pedigree"
                   className="inline-flex items-center gap-1 text-xs font-bold text-teal-700 hover:text-teal-800 mt-4 transition"
                 >
-                  <span>View Pedigree Canvas</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  <span>{t('btn_view_canvas', activeLocale)}</span>
+                  <ArrowRight className="w-3.5 h-3.5 rtl-flip" />
                 </Link>
               </div>
 
@@ -240,28 +425,48 @@ export default function DashboardPage() {
               <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.03)] flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between text-slate-500 mb-2">
-                    <span className="text-[11px] font-bold uppercase tracking-wider">PHENOTYPES</span>
+                    <span className="text-[11px] font-bold uppercase tracking-wider">{t('stat_phenotypes', activeLocale)}</span>
                     <Dna className="w-4 h-4 text-slate-400" />
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-black text-slate-900 leading-none">2</span>
-                    <span className="text-xs text-slate-500 font-semibold">Reported</span>
+                    <span className="text-3xl font-black text-slate-900 leading-none">{uniquePhenotypes.length}</span>
+                    <span className="text-xs text-slate-500 font-semibold">{t('stat_reported', activeLocale)}</span>
                   </div>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200/80 text-[10px] font-bold">
-                      &beta;-Thal trait
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/80 text-[10px] font-bold">
-                      G6PD Def.
-                    </span>
-                  </div>
+                  {uniquePhenotypes.length > 0 ? (
+                    <div className="space-y-1.5 mt-2">
+                      <div className="flex flex-wrap gap-1">
+                        {uniquePhenotypes.slice(0, 2).map((pt, idx) => (
+                          <span key={idx} className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200/80 text-[10px] font-bold truncate max-w-[150px]">
+                            {pt}
+                          </span>
+                        ))}
+                        {uniquePhenotypes.length > 2 && (
+                          <span className="px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold">
+                            +{uniquePhenotypes.length - 2}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-slate-500 leading-normal">
+                        Documented clinical traits and observed health conditions.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1 mt-2">
+                      <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                        0 clinical traits reported.
+                      </p>
+                      <p className="text-[10px] text-slate-500 leading-normal">
+                        Phenotypes are observable physical traits or clinical conditions (such as blood disorders or inherited traits). No clinical traits are reported yet for this family.
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <Link
                   href="/pedigree"
                   className="inline-flex items-center gap-1 text-xs font-bold text-teal-700 hover:text-teal-800 mt-4 transition"
                 >
-                  <span>Update History</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  <span>{t('btn_update_history', activeLocale)}</span>
+                  <ArrowRight className="w-3.5 h-3.5 rtl-flip" />
                 </Link>
               </div>
 
@@ -269,23 +474,43 @@ export default function DashboardPage() {
               <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.03)] flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between text-slate-500 mb-2">
-                    <span className="text-[11px] font-bold uppercase tracking-wider">AI SURVEILLANCE</span>
+                    <span className="text-[11px] font-bold uppercase tracking-wider">{t('stat_ai_surveillance', activeLocale)}</span>
                     <Sparkles className="w-4 h-4 text-teal-600" />
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-black text-teal-700 leading-none">3</span>
-                    <span className="text-xs text-slate-500 font-semibold">High-Priority</span>
+                    <span className={`text-3xl font-black leading-none ${aiRiskCount > 0 ? 'text-teal-700' : 'text-slate-900'}`}>{aiRiskCount}</span>
+                    <span className="text-xs text-slate-500 font-semibold">{aiRiskCount > 0 ? t('stat_high_priority', activeLocale) : 'Alerts'}</span>
                   </div>
-                  <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
-                    Key health risks detected that could pass down to children.
-                  </p>
+                  {aiRiskCount > 0 ? (
+                    <div className="space-y-1 mt-2">
+                      <p className="text-[11px] text-slate-700 font-semibold leading-relaxed">
+                        {[
+                          carrierCount ? `${carrierCount} carrier${carrierCount > 1 ? 's' : ''}` : null,
+                          affectedCount ? `${affectedCount} affected` : null,
+                          isConsanguineous ? 'Consanguineous union' : null
+                        ].filter(Boolean).join(' • ')}
+                      </p>
+                      <p className="text-[10px] text-slate-500 leading-normal">
+                        {t('stat_ai_desc', activeLocale)}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1 mt-2">
+                      <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                        0 elevated risk flags detected.
+                      </p>
+                      <p className="text-[10px] text-slate-500 leading-normal">
+                        AI surveillance scans your family tree to flag recessive traits and hereditary risks that could pass down to children.
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <Link
                   href="/risk-analysis"
                   className="inline-flex items-center gap-1 text-xs font-bold text-teal-700 hover:text-teal-800 mt-4 transition"
                 >
-                  <span>Review Intelligence</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  <span>{t('btn_review_intel', activeLocale)}</span>
+                  <ArrowRight className="w-3.5 h-3.5 rtl-flip" />
                 </Link>
               </div>
 
@@ -293,30 +518,50 @@ export default function DashboardPage() {
               <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.03)] flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between text-slate-500 mb-2">
-                    <span className="text-[11px] font-bold uppercase tracking-wider">SPOUSAL HARMONY</span>
+                    <span className="text-[11px] font-bold uppercase tracking-wider">{t('stat_spousal_harmony', activeLocale)}</span>
                     <Users className="w-4 h-4 text-slate-400" />
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-xs text-slate-700">
-                      FZ
+                  {spouse ? (
+                    <div className="space-y-2 mt-1">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-teal-50 border border-teal-200 flex items-center justify-center font-bold text-xs text-teal-800 shrink-0">
+                          {(spouse.full_name || spouse.pseudonym || 'P').slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="text-xs font-bold text-slate-900 leading-tight truncate">
+                            {spouse.full_name || spouse.pseudonym}
+                          </h4>
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 mt-0.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            {isConsanguineous ? 'Consanguineous Union' : 'Linked Partner'}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-slate-500 leading-normal">
+                        Carrier traits matched between partners to protect future child health.
+                      </p>
                     </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-900 leading-tight">
-                        Fatima Al-Zahra
-                      </h4>
-                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                        Linked Tree Verified
-                      </span>
+                  ) : (
+                    <div className="space-y-1">
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-3xl font-black text-slate-900 leading-none">0</span>
+                        <span className="text-xs text-slate-500 font-semibold">Linked</span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                        0 partners linked yet.
+                      </p>
+                      <p className="text-[10px] text-slate-500 leading-normal">
+                        Spousal harmony evaluates genetic compatibility between partners before marriage or pregnancy to prevent inherited conditions in future children.
+                      </p>
                     </div>
-                  </div>
+                  )}
                 </div>
                 <Link
                   href="/couple-assessment"
                   className="inline-flex items-center gap-1 text-xs font-bold text-teal-700 hover:text-teal-800 mt-4 transition"
                 >
-                  <span>Review Couple Assessment</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  <span>{t('btn_assess_couple', activeLocale)}</span>
+                  <ArrowRight className="w-3.5 h-3.5 rtl-flip" />
                 </Link>
               </div>
             </div>
@@ -337,14 +582,6 @@ export default function DashboardPage() {
                     Multi-pedigree chart library with auto-generated Family IDs, clinical linkage, and shareable doctor links.
                   </p>
                 </div>
-
-                <Link
-                  href="/pedigree?create=true"
-                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-bold transition shadow-xs self-start sm:self-auto"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Create Family Pedigree</span>
-                </Link>
               </div>
 
               {/* Charts Table matching Requirement 7 */}
@@ -467,199 +704,85 @@ export default function DashboardPage() {
 
             {/* ==================== 3. MAIN 2-COLUMN SECTION ==================== */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-              {/* -------------------- LEFT COLUMN (7 COLS) -------------------- */}
-              <div className="lg:col-span-7 space-y-5">
+              {/* -------------------- LEFT COLUMN (8 COLS) -------------------- */}
+              <div className="lg:col-span-8 space-y-5">
                 {/* Lineage Pedigree Model Card */}
                 <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-[0_1px_4px_rgba(0,0,0,0.04)] space-y-4">
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <h2 className="text-base font-bold text-[#09332c]">
                           Lineage Pedigree Model
                         </h2>
-                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-semibold text-[10px]">
-                          3 Generations
-                        </span>
+                        {activeFamily && (
+                          <span className="text-sm font-bold text-teal-800 bg-teal-50 px-2.5 py-0.5 rounded-lg border border-teal-200/80">
+                            {activeFamily.family_name || activeFamily.name || `Family ${activeFamily.family_id}`}
+                          </span>
+                        )}
+                        {members.length > 0 && (
+                          <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-semibold text-[11px]">
+                            {members.length} {members.length === 1 ? 'member' : 'members'}
+                          </span>
+                        )}
+                        {generationCount > 0 && (
+                          <span className="px-2 py-0.5 rounded-full bg-teal-50 text-teal-800 border border-teal-200/80 font-bold text-[10px]">
+                            {generationCount} {generationCount === 1 ? 'Generation' : 'Generations'}
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        Family health tree showing parents, grandparents, and cousin connections.
+                        Interactive clinical pedigree chart showing family relationships, carriers, and phenotypes.
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
-                      <button
-                        type="button"
-                        onClick={() => setZoomLevel((z) => Math.max(0.7, z - 0.1))}
-                        className="p-1 rounded text-slate-600 hover:bg-white transition"
-                        title="Zoom Out"
-                      >
-                        <ZoomOut className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setZoomLevel((z) => Math.min(1.4, z + 0.1))}
-                        className="p-1 rounded text-slate-600 hover:bg-white transition"
-                        title="Zoom In"
-                      >
-                        <ZoomIn className="w-3.5 h-3.5" />
-                      </button>
+                    <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
                       <Link
                         href="/pedigree"
-                        className="p-1 rounded text-slate-600 hover:bg-white transition"
-                        title="Open Full Screen"
+                        className="px-2.5 py-1 rounded-lg text-slate-700 hover:bg-white hover:text-teal-900 transition text-xs font-semibold flex items-center gap-1.5"
+                        title="Open in Pedigree Studio"
                       >
-                        <Maximize2 className="w-3.5 h-3.5" />
+                        <Maximize2 className="w-3.5 h-3.5 text-teal-800" />
+                        <span>Interactive Studio</span>
                       </Link>
                     </div>
                   </div>
 
-                  {/* SVG Tree Diagram Box matching template */}
-                  <div
-                    className="w-full bg-[#f8faf9] rounded-xl p-5 border border-slate-200/90 flex flex-col items-center justify-center overflow-x-auto"
-                    style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'top center' }}
-                  >
-                    <svg viewBox="0 0 620 320" className="w-full max-w-xl h-auto select-none">
-                      {/* Generation I (Grandparents) */}
-                      <g transform="translate(40, 20)">
-                        {/* I-1: Paternal Grandfather */}
-                        <g transform="translate(30, 0)">
-                          <rect x="0" y="0" width="34" height="34" fill="#ffffff" stroke="#1e293b" strokeWidth="2" rx="2" />
-                          <circle cx="17" cy="17" r="4" fill="#0f766e" />
-                          <text x="17" y="-6" textAnchor="middle" fontSize="10" fontWeight="bold" fill="#64748b">I-1</text>
-                          <text x="17" y="44" textAnchor="middle" fontSize="9" fontWeight="600" fill="#334155">Paternal GF</text>
-                          <text x="17" y="55" textAnchor="middle" fontSize="8" fill="#0f766e">Carrier (HBB)</text>
-                        </g>
-
-                        {/* I-2: Paternal Grandmother */}
-                        <g transform="translate(130, 0)">
-                          <circle cx="17" cy="17" r="17" fill="#ffffff" stroke="#1e293b" strokeWidth="2" />
-                          <text x="17" y="-6" textAnchor="middle" fontSize="10" fontWeight="bold" fill="#64748b">I-2</text>
-                          <text x="17" y="44" textAnchor="middle" fontSize="9" fontWeight="600" fill="#334155">Paternal GM</text>
-                          <text x="17" y="55" textAnchor="middle" fontSize="8" fill="#64748b">Non-carrier</text>
-                        </g>
-
-                        {/* Line I-1 to I-2 */}
-                        <line x1="64" y1="17" x2="130" y2="17" stroke="#334155" strokeWidth="1.5" />
-                        <line x1="97" y1="17" x2="97" y2="70" stroke="#334155" strokeWidth="1.5" />
-
-                        {/* I-3: Maternal Grandfather */}
-                        <g transform="translate(340, 0)">
-                          <rect x="0" y="0" width="34" height="34" fill="#ffffff" stroke="#1e293b" strokeWidth="2" rx="2" />
-                          <text x="17" y="-6" textAnchor="middle" fontSize="10" fontWeight="bold" fill="#64748b">I-3</text>
-                          <text x="17" y="44" textAnchor="middle" fontSize="9" fontWeight="600" fill="#334155">Maternal GF</text>
-                          <text x="17" y="55" textAnchor="middle" fontSize="8" fill="#64748b">Non-carrier</text>
-                        </g>
-
-                        {/* I-4: Maternal Grandmother */}
-                        <g transform="translate(440, 0)">
-                          <circle cx="17" cy="17" r="17" fill="#ffffff" stroke="#1e293b" strokeWidth="2" />
-                          <circle cx="17" cy="17" r="4" fill="#10b981" />
-                          <text x="17" y="-6" textAnchor="middle" fontSize="10" fontWeight="bold" fill="#64748b">I-4</text>
-                          <text x="17" y="44" textAnchor="middle" fontSize="9" fontWeight="600" fill="#334155">Maternal GM</text>
-                          <text x="17" y="55" textAnchor="middle" fontSize="8" fill="#059669">Carrier (G6PD)</text>
-                        </g>
-
-                        {/* Line I-3 to I-4 */}
-                        <line x1="374" y1="17" x2="440" y2="17" stroke="#334155" strokeWidth="1.5" />
-                        <line x1="407" y1="17" x2="407" y2="70" stroke="#334155" strokeWidth="1.5" />
-                      </g>
-
-                      {/* Generation II (Parents) */}
-                      <g transform="translate(40, 110)">
-                        {/* II-1: Father Omar */}
-                        <g transform="translate(80, 0)">
-                          <rect x="0" y="0" width="36" height="36" fill="#ffffff" stroke="#0f766e" strokeWidth="2" rx="2" />
-                          <rect x="0" y="0" width="18" height="36" fill="#0f766e" rx="1" />
-                          <text x="18" y="-6" textAnchor="middle" fontSize="10" fontWeight="bold" fill="#64748b">II-1</text>
-                          <text x="18" y="48" textAnchor="middle" fontSize="9" fontWeight="bold" fill="#0f3830">Father (Omar)</text>
-                          <text x="18" y="59" textAnchor="middle" fontSize="8" fill="#0f766e">&beta;-Thalassemia Trait</text>
-                        </g>
-
-                        {/* Consanguinity Double Line connecting II-1 and II-2 */}
-                        <line x1="116" y1="15" x2="388" y2="15" stroke="#0f766e" strokeWidth="2" />
-                        <line x1="116" y1="21" x2="388" y2="21" stroke="#0f766e" strokeWidth="2" />
-                        
-                        {/* Center Consanguinity Label */}
-                        <g transform="translate(230, 2)">
-                          <rect x="0" y="0" width="80" height="26" rx="6" fill="#ffffff" stroke="#cbd5e1" strokeWidth="1" />
-                          <text x="40" y="12" textAnchor="middle" fontSize="8" fontWeight="bold" fill="#64748b">3&deg;</text>
-                          <text x="40" y="21" textAnchor="middle" fontSize="7" fill="#475569">Consanguinity</text>
-                        </g>
-
-                        {/* II-2: Mother Layla */}
-                        <g transform="translate(388, 0)">
-                          <circle cx="18" cy="18" r="18" fill="#ffffff" stroke="#059669" strokeWidth="2" />
-                          <path d="M 18 0 A 18 18 0 0 1 18 36 Z" fill="#10b981" />
-                          <text x="18" y="-6" textAnchor="middle" fontSize="10" fontWeight="bold" fill="#64748b">II-2</text>
-                          <text x="18" y="48" textAnchor="middle" fontSize="9" fontWeight="bold" fill="#0f3830">Mother (Layla)</text>
-                          <text x="18" y="59" textAnchor="middle" fontSize="8" fill="#059669">G6PD Carrier</text>
-                        </g>
-
-                        {/* Drop Stem from union to Proband */}
-                        <line x1="270" y1="21" x2="270" y2="85" stroke="#334155" strokeWidth="1.5" />
-                      </g>
-
-                      {/* Generation III (Proband / You) */}
-                      <g transform="translate(40, 215)">
-                        <g transform="translate(251, 0)">
-                          <rect x="0" y="0" width="38" height="38" fill="#ffffff" stroke="#10b981" strokeWidth="2.5" rx="3" />
-                          <rect x="0" y="0" width="19" height="38" fill="#0f766e" rx="1" />
-                          <text x="19" y="-6" textAnchor="middle" fontSize="10" fontWeight="bold" fill="#0f766e">III-1</text>
-                          
-                          {/* Proband Tag */}
-                          <g transform="translate(-18, 44)">
-                            <rect x="0" y="0" width="74" height="18" rx="9" fill="#0f172a" />
-                            <text x="37" y="12" textAnchor="middle" fontSize="9" fontWeight="bold" fill="#ffffff">
-                              {firstName} (You)
-                            </text>
-                          </g>
-
-                          <text x="19" y="74" textAnchor="middle" fontSize="8" fontWeight="semibold" fill="#0f766e">
-                            Carrier (HBB &amp; G6PD heterozygous)
-                          </text>
-                        </g>
-                      </g>
-                    </svg>
-
-                    {/* Pedigree Legend */}
-                    <div className="flex flex-wrap items-center justify-center gap-4 pt-3 mt-2 border-t border-slate-200/80 text-[11px] text-slate-600">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-3.5 h-3.5 rounded-sm border border-slate-700 bg-white" />
-                        <span>Clear / Unaffected</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-3.5 h-3.5 rounded-sm border border-slate-700 bg-gradient-to-r from-teal-700 from-50% to-white to-50%" />
-                        <span>Heterozygous Carrier</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-3.5 h-3.5 rounded-sm border border-slate-700 bg-slate-900" />
-                        <span>Affected</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-3.5 h-3.5 rounded-full border border-slate-700 bg-slate-200" />
-                        <span>Female Node</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-3.5 h-3.5 rounded-sm border border-slate-700 bg-slate-200" />
-                        <span>Male Node</span>
-                      </div>
+                  {/* Real Interactive SVG Tree Canvas */}
+                  {activeFamilyLoading ? (
+                    <div className="w-full h-[600px] bg-slate-50/70 rounded-2xl border border-slate-200/80 flex items-center justify-center text-slate-400 text-xs">
+                      Loading family pedigree model...
                     </div>
-                  </div>
+                  ) : members.length > 0 ? (
+                    <div className="w-full h-[600px] rounded-2xl overflow-hidden border border-slate-200/90 relative">
+                      <PedigreeCanvas
+                        members={members}
+                        isConsanguineous={isConsanguineous}
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-full h-[400px] bg-slate-50/70 rounded-2xl border border-slate-200/80 flex flex-col items-center justify-center text-center p-6 space-y-3">
+                      <GitBranch className="w-10 h-10 text-slate-300" />
+                      <h3 className="text-sm font-bold text-slate-700">No Relatives in Default Tree</h3>
+                      <p className="text-xs text-slate-500 max-w-sm">
+                        Open the full interactive editor to add parents, siblings, children, and partners to your pedigree chart.
+                      </p>
+                      <Link
+                        href="/pedigree"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-bold transition shadow-xs"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Relatives in Editor</span>
+                      </Link>
+                    </div>
+                  )}
 
-                  <div className="flex items-center justify-between pt-1">
-                    <button
-                      type="button"
-                      onClick={() => alert('Downloading official clinical PDF report...')}
-                      className="inline-flex items-center gap-1.5 text-xs font-bold text-teal-800 hover:text-teal-900 transition"
-                    >
-                      <FileText className="w-4 h-4 text-teal-700" />
-                      <span>Export Clinical PDF</span>
-                    </button>
+                  <div className="flex items-center justify-end pt-1">
                     <Link
                       href="/pedigree"
-                      className="text-xs font-bold text-slate-500 hover:text-slate-800 transition"
+                      className="text-xs font-bold text-slate-500 hover:text-teal-800 transition flex items-center gap-1"
                     >
-                      Open Full Interactive Editor &rarr;
+                      <span>Open Full Interactive Editor</span>
+                      <ArrowRight className="w-3.5 h-3.5 rtl-flip" />
                     </Link>
                   </div>
                 </div>
@@ -710,8 +833,8 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* -------------------- RIGHT COLUMN (5 COLS) -------------------- */}
-              <div className="lg:col-span-5 space-y-5">
+              {/* -------------------- RIGHT COLUMN (4 COLS) -------------------- */}
+              <div className="lg:col-span-4 space-y-5">
                 {/* Action Directives Card */}
                 <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-[0_1px_4px_rgba(0,0,0,0.04)] space-y-4">
                   <div className="flex items-center justify-between">
@@ -824,11 +947,11 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {/* Ask GenWell AI Card */}
+                {/* Ask Care AI Card */}
                 <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-[0_1px_4px_rgba(0,0,0,0.04)] space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h2 className="text-sm font-bold text-slate-900">Ask GenWell AI</h2>
+                      <h2 className="text-sm font-bold text-slate-900">Ask Care AI</h2>
                       <p className="text-[11px] text-slate-500">
                         Ask any question about your family health in plain English
                       </p>
@@ -866,7 +989,7 @@ export default function DashboardPage() {
                     <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-1 text-xs">
                       <div className="flex items-center gap-1.5 font-bold text-emerald-900">
                         <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>GenWell Health Answer:</span>
+                        <span>Care AI Health Answer:</span>
                       </div>
                       <p className="text-slate-700 leading-relaxed text-[11px]">{aiAnswer}</p>
                     </div>
