@@ -1,6 +1,13 @@
 import unittest
 import json
 import os
+import sys
+import tempfile
+import shutil
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from config import Config
 from app import app
 from database import (
     init_db, create_family, get_user_families, get_family_by_id,
@@ -10,11 +17,17 @@ from database import (
 
 class PedigreeEngineTestCase(unittest.TestCase):
     def setUp(self):
+        self.test_dir = tempfile.mkdtemp()
+        self.orig_data_dir = Config.DATA_DIR
+        self.orig_db_path = Config.DATABASE_PATH
+        Config.DATA_DIR = self.test_dir
+        Config.DATABASE_PATH = os.path.join(self.test_dir, 'test_ga.db')
+        init_db()
+
         self.app = app
         self.app.config['TESTING'] = True
         self.app.config['SECRET_KEY'] = 'test_secret_key'
         self.client = self.app.test_client()
-        init_db()
 
         # Login as user / user
         with self.client.session_transaction() as sess:
@@ -24,8 +37,13 @@ class PedigreeEngineTestCase(unittest.TestCase):
             sess['user_id'] = u['id']
             self.user_id = u['id']
 
+    def tearDown(self):
+        Config.DATA_DIR = self.orig_data_dir
+        Config.DATABASE_PATH = self.orig_db_path
+        shutil.rmtree(self.test_dir, ignore_errors=True)
+
     def test_family_creation_and_auto_id_and_token(self):
-        """Verify Step 1 Module A: System auto-generates Family ID (F-XXXXXX) and 64-char crypto share token"""
+        """Verify Step 1 Module A: System auto-generates sequential Family ID (FA-000001, FA-000002) and 64-char crypto share token"""
         fam = create_family(self.user_id, {
             'name': 'Bates Family Lineage',
             'trait_or_disorder_name': 'Beta Thalassemia',
@@ -33,14 +51,23 @@ class PedigreeEngineTestCase(unittest.TestCase):
             'share_enabled': 1
         })
         self.assertIn('family_id', fam)
-        self.assertTrue(fam['family_id'].startswith('F-'))
+        self.assertEqual(fam['family_id'], 'FA-000001')
         self.assertEqual(len(fam['share_token']), 64)
+
+        fam2 = create_family(self.user_id, {'name': 'Second Family Lineage'})
+        self.assertEqual(fam2['family_id'], 'FA-000002')
 
         # Retrieve family from DB
         stored = get_family_by_id(fam['family_id'])
         self.assertIsNotNone(stored)
         self.assertEqual(stored['name'], 'Bates Family Lineage')
         self.assertEqual(stored['share_enabled'], 1)
+
+        # Verify /api/pedigree/share/<token> endpoint
+        share_res = self.client.get(f'/api/pedigree/share/{fam["share_token"]}')
+        self.assertEqual(share_res.status_code, 200)
+        self.assertEqual(share_res.get_json()['status'], 'success')
+        self.assertEqual(share_res.get_json()['family']['family_id'], 'FA-000001')
 
     def test_multi_family_dashboard_listing(self):
         """Verify user can create and list multiple family pedigree charts"""
@@ -176,5 +203,179 @@ class PedigreeEngineTestCase(unittest.TestCase):
         res = self.client.get('/pedigree')
         self.assertEqual(res.status_code, 200)
 
+    def test_auto_generated_sudo_name_for_new_members(self):
+        """Verify all new added family members have an auto-generated Reddit-style sudo-name"""
+        fam = create_family(self.user_id, {'name': 'Sudo Name Test Family'})
+        f_id = fam['family_id']
+
+        # Add member without specifying alias_name or name
+        res = self.client.post(f'/api/families/{f_id}/members', json={
+            'relationship_to_proband': 'brother',
+            'sex': 'male',
+            'is_carrier': True,
+            'conditions': ['Beta-Thalassemia Minor']
+        })
+        self.assertEqual(res.status_code, 201)
+        data = res.get_json()
+        self.assertIn('member', data)
+        self.assertTrue(bool(data['member']['pseudonym']))
+        self.assertIn('-', data['member']['pseudonym'])  # Reddit-style Adjective-Noun-1234
+
+        # Verify saved in database against family_id
+        fam_record = get_family_by_id(f_id)
+        member = fam_record['members'][0]
+        self.assertEqual(member['family_id'], f_id)
+        self.assertTrue(bool(member['pseudonym']))
+        self.assertTrue(bool(member['alias_name']))
+        self.assertEqual(member['conditions'], ['Beta-Thalassemia Minor'])
+
+    def test_all_16_relationship_options_persistence(self):
+        """Verify adding relatives with all 16 relation options saves against family_id"""
+        fam = create_family(self.user_id, {'name': '16 Relations Family'})
+        f_id = fam['family_id']
+
+        relations = [
+            ('father', 'male'),
+            ('mother', 'female'),
+            ('full_sibling', 'male'),
+            ('half_sibling_father', 'male'),
+            ('half_sibling_mother', 'female'),
+            ('twin_identical', 'male'),
+            ('twin_fraternal', 'female'),
+            ('husband_wife', 'female'),
+            ('son', 'male'),
+            ('daughter', 'female'),
+            ('paternal_uncle_aunt', 'male'),
+            ('maternal_uncle_aunt', 'female'),
+            ('grandparents', 'male'),
+            ('cousin', 'female'),
+            ('adopted_child', 'male'),
+            ('pregnancy_loss', 'unknown'),
+        ]
+
+        for rel, sex in relations:
+            res = self.client.post(f'/api/families/{f_id}/members', json={
+                'relationship_to_proband': rel,
+                'sex': sex,
+                'living_status': 'Alive' if rel != 'pregnancy_loss' else 'Unknown'
+            })
+            self.assertEqual(res.status_code, 201)
+
+        fam_record = get_family_by_id(f_id)
+        self.assertEqual(len(fam_record['members']), 16)
+        saved_relations = [m['relationship_to_proband'] for m in fam_record['members']]
+        for rel, _ in relations:
+            self.assertIn(rel, saved_relations)
+            
+        # Verify every single member has an auto-generated sudo-name
+        for m in fam_record['members']:
+            self.assertTrue(bool(m['pseudonym']))
+            self.assertTrue(bool(m['alias_name']))
+
+    def test_family_tree_creation_persistence_after_refresh(self):
+        """Verify that newly created family trees and relatives persist in the database across page refreshes"""
+        # Step 1: User creates family via API
+        create_res = self.client.post('/api/families', json={
+            'family_name': 'Khan Clinical Pedigree',
+            'health_conditions_of_interest': ['Autosomal Recessive Thalassemia'],
+            'family_history_description': 'Documented carrier branch'
+        })
+        self.assertEqual(create_res.status_code, 201)
+        created_fam = create_res.get_json()['family']
+        fam_id = created_fam['family_id']
+        self.assertTrue(fam_id.startswith(('FA-', 'F-')))
+
+        # Step 2: User adds proband
+        p_res = self.client.post(f'/api/families/{fam_id}/members', json={
+            'name': 'Aarav Khan',
+            'sex': 'male',
+            'relationship_to_proband': 'self',
+            'is_proband': True,
+            'living_status': 'Alive'
+        })
+        self.assertEqual(p_res.status_code, 201)
+
+        # Step 3: User adds relatives (Father, Mother, Brother)
+        for rel, name, sex in [('father', 'Rahim Khan', 'male'), ('mother', 'Zahra Khan', 'female'), ('full_sibling', 'Tariq Khan', 'male')]:
+            m_res = self.client.post(f'/api/families/{fam_id}/members', json={
+                'name': name,
+                'sex': sex,
+                'relationship_to_proband': rel,
+                'living_status': 'Alive'
+            })
+            self.assertEqual(m_res.status_code, 201)
+            self.assertTrue(bool(m_res.get_json()['member']['pseudonym']))
+
+        # Simulating Page Refresh: Client makes a fresh GET /api/families request
+        list_res = self.client.get('/api/families')
+        self.assertEqual(list_res.status_code, 200)
+        families = list_res.get_json()['families']
+        target = next((f for f in families if f['family_id'] == fam_id), None)
+        self.assertIsNotNone(target, "Created family must be present in user family list after refresh")
+        self.assertEqual(target['member_count'], 4)
+
+        # Simulating Page Refresh: Client loads active family details GET /api/families/<id>
+        detail_res = self.client.get(f'/api/families/{fam_id}')
+        self.assertEqual(detail_res.status_code, 200)
+        full_fam = detail_res.get_json()['family']
+        self.assertEqual(full_fam['family_id'], fam_id)
+        self.assertEqual(len(full_fam['members']), 4)
+
+        relations = [m['relationship_to_proband'] for m in full_fam['members']]
+        self.assertIn('self', relations)
+        self.assertIn('father', relations)
+        self.assertIn('mother', relations)
+        self.assertIn('full_sibling', relations)
+
+        # Every member must have an alias_name / pseudonym
+        for m in full_fam['members']:
+            self.assertTrue(bool(m.get('pseudonym') or m.get('alias_name')))
+
+    def test_family_deletion_preserves_members(self):
+        """Verify deleting a family chart deletes the family record while keeping members intact in DB"""
+        fam = create_family(self.user_id, {'name': 'Temporary Chart to Delete'})
+        f_id = fam['family_id']
+
+        # Add a member to this family
+        add_res = self.client.post(f'/api/families/{f_id}/members', json={
+            'name': 'Devi Sharma',
+            'generation': 'gen1',
+            'sex': 'female',
+            'relationship': 'mother',
+            'carrier_status': 'carrier',
+            'condition_locus': 'Sickle Cell Trait'
+        })
+        self.assertEqual(add_res.status_code, 201)
+        m_id = add_res.get_json()['member_id']
+
+        # Delete family via DELETE /api/families/<f_id>
+        del_res = self.client.delete(f'/api/families/{f_id}')
+        self.assertEqual(del_res.status_code, 200)
+
+        # Family record must be gone
+        self.assertIsNone(get_family_by_id(f_id))
+
+        # Member record must remain intact in database
+        nodes_res = self.client.get('/api/pedigree-nodes')
+        self.assertEqual(nodes_res.status_code, 200)
+        data = nodes_res.get_json()
+        user_nodes = data if isinstance(data, list) else data.get('pedigree_nodes', [])
+        preserved_node = next((n for n in user_nodes if n['id'] == m_id), None)
+        self.assertIsNotNone(preserved_node, "Member must remain preserved in database after family deletion")
+        self.assertEqual(preserved_node['name'], 'Devi Sharma')
+        self.assertIsNone(preserved_node['family_id'], "Preserved member must be unlinked from deleted family")
+
+        # Create another family and re-link the preserved member
+        fam2 = create_family(self.user_id, {'name': 'New Tree Later'})
+        f2_id = fam2['family_id']
+        link_res = self.client.post(f'/api/families/{f2_id}/members', json={
+            'existing_member_id': m_id
+        })
+        self.assertEqual(link_res.status_code, 201)
+
+        f2_data = get_family_by_id(f2_id)
+        self.assertTrue(any(m['id'] == m_id for m in f2_data['members']), "Preserved member must be linkable to new tree")
+
 if __name__ == '__main__':
     unittest.main()
+

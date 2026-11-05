@@ -41,6 +41,7 @@ export const PedigreeNodeSymbol: React.FC<PedigreeNodeSymbolProps> = ({
             stroke={strokeColor}
             strokeWidth={strokeWidth}
             rx={2}
+            className="transition-colors group-hover:stroke-teal-700"
           />
         );
       case 'female':
@@ -52,6 +53,7 @@ export const PedigreeNodeSymbol: React.FC<PedigreeNodeSymbolProps> = ({
             fill={fillColor}
             stroke={strokeColor}
             strokeWidth={strokeWidth}
+            className="transition-colors group-hover:stroke-teal-700"
           />
         );
       case 'pregnancy_loss':
@@ -61,6 +63,7 @@ export const PedigreeNodeSymbol: React.FC<PedigreeNodeSymbolProps> = ({
             fill={fillColor}
             stroke={strokeColor}
             strokeWidth={strokeWidth}
+            className="transition-colors group-hover:stroke-teal-700"
           />
         );
       case 'other':
@@ -73,6 +76,7 @@ export const PedigreeNodeSymbol: React.FC<PedigreeNodeSymbolProps> = ({
             fill={fillColor}
             stroke={strokeColor}
             strokeWidth={strokeWidth}
+            className="transition-colors group-hover:stroke-teal-700"
           />
         );
     }
@@ -81,7 +85,7 @@ export const PedigreeNodeSymbol: React.FC<PedigreeNodeSymbolProps> = ({
   return (
     <g
       transform={`translate(${x}, ${y})`}
-      className="cursor-pointer select-none transition-transform hover:scale-105"
+      className="cursor-pointer select-none group transition-opacity hover:opacity-90"
       onClick={() => onSelect?.(member)}
     >
       {/* Selection Glow */}
@@ -188,30 +192,6 @@ export const PedigreeNodeSymbol: React.FC<PedigreeNodeSymbolProps> = ({
           {member.conditions.slice(0, 2).join(', ')}
           {member.conditions.length > 2 ? '...' : ''}
         </text>
-      )}
-
-      {/* Quick Add Relative Button (visible on hover or when selected) */}
-      {isSelected && (
-        <g
-          transform={`translate(${half + 8}, 0)`}
-          className="cursor-pointer hover:opacity-90"
-          onClick={(e) => {
-            e.stopPropagation();
-            onAddRelative?.(member);
-          }}
-        >
-          <circle cx={10} cy={0} r={12} fill="#006a60" />
-          <text
-            x={10}
-            y={4}
-            textAnchor="middle"
-            fill="#ffffff"
-            fontSize="14"
-            fontWeight="bold"
-          >
-            +
-          </text>
-        </g>
       )}
     </g>
   );

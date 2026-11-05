@@ -34,7 +34,9 @@ def generate_pseudonym(prefix: str = "") -> str:
     return f"{adj}-{noun}-{num}"
 
 def get_db_connection():
-    os.makedirs(Config.DATA_DIR, exist_ok=True)
+    db_dir = os.path.dirname(os.path.abspath(Config.DATABASE_PATH))
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
     conn = sqlite3.connect(Config.DATABASE_PATH)
     conn.row_factory = sqlite3.Row
     return conn
@@ -78,9 +80,26 @@ def init_db():
         kinship_degree TEXT,
         phenotypic_notes TEXT,
         emergency_contact TEXT,
+        height TEXT,
+        weight TEXT,
+        known_traits TEXT,
         FOREIGN KEY (user_id) REFERENCES users(id)
     );
     """)
+
+    # Ensure added columns exist in existing database tables
+    try:
+        cursor.execute("ALTER TABLE user_profiles ADD COLUMN height TEXT;")
+    except Exception:
+        pass
+    try:
+        cursor.execute("ALTER TABLE user_profiles ADD COLUMN weight TEXT;")
+    except Exception:
+        pass
+    try:
+        cursor.execute("ALTER TABLE user_profiles ADD COLUMN known_traits TEXT;")
+    except Exception:
+        pass
 
     # 3. Pedigree Nodes Table
     cursor.execute("""
@@ -403,6 +422,7 @@ def get_user_profile(user_id: int):
 def update_user_profile(user_id: int, data: dict):
     conn = get_db_connection()
     cursor = conn.cursor()
+    cursor.execute("INSERT OR IGNORE INTO user_profiles (user_id) VALUES (?)", (user_id,))
     if 'full_name' in data and data['full_name']:
         cursor.execute("UPDATE users SET full_name = ? WHERE id = ?", (data['full_name'], user_id))
     if 'alias_name' in data and data['alias_name']:
@@ -417,7 +437,10 @@ def update_user_profile(user_id: int, data: dict):
         country = COALESCE(?, country),
         kinship_degree = COALESCE(?, kinship_degree),
         phenotypic_notes = COALESCE(?, phenotypic_notes),
-        emergency_contact = COALESCE(?, emergency_contact)
+        emergency_contact = COALESCE(?, emergency_contact),
+        height = COALESCE(?, height),
+        weight = COALESCE(?, weight),
+        known_traits = COALESCE(?, known_traits)
     WHERE user_id = ?
     """, (
         data.get('dob'),
@@ -428,6 +451,9 @@ def update_user_profile(user_id: int, data: dict):
         data.get('kinship_degree'),
         data.get('phenotypic_notes'),
         data.get('emergency_contact'),
+        data.get('height'),
+        data.get('weight'),
+        data.get('known_traits'),
         user_id
     ))
     conn.commit()
@@ -440,34 +466,65 @@ def get_pedigree_nodes(user_id: int):
     return [dict(n) for n in nodes]
 
 def add_pedigree_node(user_id: int, data: dict):
-    """Adds a family member node and assigns an automatic Reddit-style pseudonym."""
+    """Adds a family member node and assigns an automatic Reddit-style pseudonym (sudo-name)."""
     conn = get_db_connection()
     cursor = conn.cursor()
     node_key = data.get('node_key') or f"node_{os.urandom(4).hex()}"
-    alias_name = data.get('alias_name') or generate_pseudonym()
+    
+    # Requirement: All added family members must have auto-generated sudo-name (pseudonym)
+    provided_alias = data.get('alias_name') or data.get('pseudonym')
+    if provided_alias and provided_alias not in ['Relative', 'Family Member', 'Proband', 'self'] and '-' in provided_alias:
+        alias_name = provided_alias
+    else:
+        alias_name = generate_pseudonym()
+
     family_id = data.get('family_id')
+    name = data.get('full_name') or data.get('name') or alias_name
+    rel = data.get('relationship_to_proband') or data.get('relationship') or 'relative'
+
+    conditions = data.get('conditions')
+    if isinstance(conditions, list):
+        condition_locus = ", ".join(conditions) if len(conditions) > 0 else 'None documented'
+    else:
+        condition_locus = conditions or 'None documented'
+
+    carrier_status = data.get('carrier_details') or data.get('carrier_status') or ('Carrier' if data.get('is_carrier') else 'clear')
+    birth_year = data.get('dob') or data.get('birth_year') or ''
+    is_proband = 1 if data.get('is_proband') else 0
+    notes = data.get('medical_history') or data.get('notes', '')
+
+    father_id = str(data.get('father_id')) if data.get('father_id') is not None else None
+    mother_id = str(data.get('mother_id')) if data.get('mother_id') is not None else None
+    partner_id = str(data.get('partner_id') or (data.get('spouse_ids', [None])[0] if data.get('spouse_ids') else None)) if (data.get('partner_id') or data.get('spouse_ids')) else None
+    twin_group_id = data.get('twin_group_id')
+    twin_type = 'identical' if data.get('is_identical_twin') else data.get('twin_type')
+    adoption_status = data.get('adoption_status', 'none')
+    living_status = data.get('living_status') or ('Deceased' if data.get('is_deceased') else 'Alive')
+    affected_status = 'Affected' if data.get('is_affected') else ('Carrier' if data.get('is_carrier') else 'Unaffected')
+    cause_of_death = data.get('cause_of_death')
+    custom_x = data.get('custom_x')
+    custom_y = data.get('custom_y')
+    raw_conditions = json.dumps(conditions) if isinstance(conditions, list) else str(conditions or '')
     
     cursor.execute("""
-    INSERT INTO pedigree_nodes (user_id, node_key, name, generation, sex, relationship, carrier_status, condition_locus, birth_year, notes, is_proband, alias_name, family_id, custom_x, custom_y)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO pedigree_nodes (
+        user_id, node_key, name, generation, sex, relationship, carrier_status,
+        condition_locus, birth_year, notes, is_proband, alias_name, family_id,
+        father_id, mother_id, partner_id, twin_group_id, twin_type, adoption_status,
+        living_status, affected_status, cause_of_death, custom_x, custom_y, conditions
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
-        user_id,
-        node_key,
-        data.get('name', 'Family Member'),
-        data.get('generation', 'gen2'),
-        data.get('sex', 'male'),
-        data.get('relationship', 'Relative'),
-        data.get('carrier_status', 'clear'),
-        data.get('condition_locus', 'None documented'),
-        data.get('birth_year', ''),
-        data.get('notes', ''),
-        1 if data.get('is_proband') else 0,
-        alias_name,
-        family_id,
-        data.get('custom_x'),
-        data.get('custom_y')
+        user_id, node_key, name, data.get('generation', 'gen2'), data.get('sex', 'male'),
+        rel, carrier_status, condition_locus, birth_year, notes, is_proband, alias_name,
+        family_id, father_id, mother_id, partner_id, twin_group_id, twin_type,
+        adoption_status, living_status, affected_status, cause_of_death, custom_x, custom_y, raw_conditions
     ))
     node_id = cursor.lastrowid
+    
+    if family_id:
+        cursor.execute("UPDATE families SET updated_at = CURRENT_TIMESTAMP WHERE family_id = ?", (family_id,))
+    
     conn.commit()
     conn.close()
     return node_id
@@ -475,6 +532,27 @@ def add_pedigree_node(user_id: int, data: dict):
 def update_pedigree_node(node_id: int, user_id: int, data: dict):
     conn = get_db_connection()
     cursor = conn.cursor()
+    
+    # Conditions format
+    conds = data.get('conditions')
+    condition_locus = None
+    raw_conditions = None
+    if conds is not None:
+        if isinstance(conds, list):
+            condition_locus = ", ".join(conds) if len(conds) > 0 else 'None documented'
+            raw_conditions = json.dumps(conds)
+        else:
+            condition_locus = str(conds)
+            raw_conditions = str(conds)
+
+    living_status = data.get('living_status')
+    if not living_status and 'is_deceased' in data:
+        living_status = 'Deceased' if data['is_deceased'] else 'Alive'
+
+    carrier_status = data.get('carrier_details') or data.get('carrier_status')
+    if not carrier_status and 'is_carrier' in data:
+        carrier_status = 'Carrier' if data['is_carrier'] else 'clear'
+
     cursor.execute("""
     UPDATE pedigree_nodes
     SET name = COALESCE(?, name),
@@ -485,21 +563,43 @@ def update_pedigree_node(node_id: int, user_id: int, data: dict):
         condition_locus = COALESCE(?, condition_locus),
         birth_year = COALESCE(?, birth_year),
         notes = COALESCE(?, notes),
-        alias_name = COALESCE(?, alias_name)
+        alias_name = COALESCE(?, alias_name),
+        father_id = COALESCE(?, father_id),
+        mother_id = COALESCE(?, mother_id),
+        partner_id = COALESCE(?, partner_id),
+        living_status = COALESCE(?, living_status),
+        cause_of_death = COALESCE(?, cause_of_death),
+        custom_x = COALESCE(?, custom_x),
+        custom_y = COALESCE(?, custom_y),
+        conditions = COALESCE(?, conditions)
     WHERE id = ? AND user_id = ?
     """, (
-        data.get('name'),
+        data.get('name') or data.get('full_name'),
         data.get('generation'),
         data.get('sex'),
-        data.get('relationship'),
-        data.get('carrier_status'),
-        data.get('condition_locus'),
-        data.get('birth_year'),
-        data.get('notes'),
-        data.get('alias_name'),
+        data.get('relationship') or data.get('relationship_to_proband'),
+        carrier_status,
+        condition_locus,
+        data.get('birth_year') or data.get('dob'),
+        data.get('notes') or data.get('medical_history'),
+        data.get('alias_name') or data.get('pseudonym'),
+        str(data.get('father_id')) if data.get('father_id') is not None else None,
+        str(data.get('mother_id')) if data.get('mother_id') is not None else None,
+        str(data.get('partner_id')) if data.get('partner_id') is not None else None,
+        living_status,
+        data.get('cause_of_death'),
+        data.get('custom_x'),
+        data.get('custom_y'),
+        raw_conditions,
         node_id,
         user_id
     ))
+    
+    # Touch updated_at for family
+    row = cursor.execute("SELECT family_id FROM pedigree_nodes WHERE id = ?", (node_id,)).fetchone()
+    if row and row['family_id']:
+        cursor.execute("UPDATE families SET updated_at = CURRENT_TIMESTAMP WHERE family_id = ?", (row['family_id'],))
+        
     conn.commit()
     conn.close()
 
@@ -592,14 +692,49 @@ def seed_conditions_db(cursor):
                 VALUES (?, ?, ?)
                 """, (cond_id, t_name, t_purp))
 
+def get_next_family_id():
+    """Generates sequential unique Family Pedigree Chart ID as FA-000001, FA-000002 without collision."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT family_id FROM families")
+    rows = cursor.fetchall()
+    highest_num = 0
+    for r in rows:
+        fid = str(r[0]) if r[0] else ''
+        if fid.startswith('FA-'):
+            try:
+                num = int(fid[3:])
+                if num > highest_num:
+                    highest_num = num
+            except (ValueError, TypeError):
+                continue
+    conn.close()
+    return f"FA-{highest_num + 1:06d}"
+
 def create_family(user_id: int, data: dict):
     conn = get_db_connection()
     cursor = conn.cursor()
-    import random, secrets
-    family_id = f"F-{random.randint(100000, 999999)}"
+    import secrets
+    
+    # Requirement: Generate Family Pedigree Chart ID as FA-000001, FA-000002 and no two trees can have similar ID
+    requested_id = data.get('family_id')
+    if requested_id and requested_id.startswith('FA-'):
+        existing = cursor.execute("SELECT id FROM families WHERE family_id = ?", (requested_id,)).fetchone()
+        if existing:
+            family_id = get_next_family_id()
+        else:
+            family_id = requested_id
+    else:
+        family_id = get_next_family_id()
+
     share_token = secrets.token_hex(32)
-    name = data.get('name') or f"Family {family_id}"
+    name = data.get('family_name') or data.get('name') or f"Family {family_id}"
+    
     trait = data.get('trait_or_disorder_name', '')
+    if not trait and data.get('health_conditions_of_interest'):
+        h = data.get('health_conditions_of_interest')
+        trait = ", ".join(h) if isinstance(h, list) else str(h)
+
     desc = data.get('family_history_description', '')
     share_enabled = 1 if data.get('share_enabled') else 0
 
@@ -612,9 +747,11 @@ def create_family(user_id: int, data: dict):
     return {
         "family_id": family_id,
         "name": name,
+        "family_name": name,
         "trait_or_disorder_name": trait,
         "share_token": share_token,
-        "share_enabled": share_enabled
+        "share_enabled": share_enabled,
+        "created_at": "Just now"
     }
 
 def get_user_families(user_id: int):
@@ -631,6 +768,7 @@ def get_user_families(user_id: int):
     families = []
     for r in rows:
         d = dict(r)
+        d['family_name'] = d.get('name') or f"Family {d.get('family_id')}"
         if not d.get('proband_name'):
             d['proband_name'] = 'Proband (Unassigned)'
         families.append(d)
@@ -643,8 +781,45 @@ def get_family_by_id(family_id: str):
         conn.close()
         return None
     fam = dict(f)
-    nodes = conn.execute("SELECT * FROM pedigree_nodes WHERE family_id = ? ORDER BY generation, birth_year", (family_id,)).fetchall()
-    fam['members'] = [dict(n) for n in nodes]
+    fam['family_name'] = fam.get('name') or f"Family {fam.get('family_id')}"
+    nodes = conn.execute("SELECT * FROM pedigree_nodes WHERE family_id = ? ORDER BY generation, id ASC", (family_id,)).fetchall()
+    members = []
+    for n in nodes:
+        d = dict(n)
+        # Ensure every member has a sudo-name (alias_name)
+        if not d.get('alias_name'):
+            d['alias_name'] = generate_pseudonym()
+            conn.execute("UPDATE pedigree_nodes SET alias_name = ? WHERE id = ?", (d['alias_name'], d['id']))
+            conn.commit()
+
+        d['pseudonym'] = d.get('alias_name') or d.get('name') or 'Relative'
+        d['full_name'] = d.get('name') or d.get('alias_name') or ''
+        d['relationship_to_proband'] = d.get('relationship') or 'relative'
+
+        # Parse conditions
+        cond_str = d.get('condition_locus') or ''
+        cond_list = []
+        if d.get('conditions'):
+            try:
+                cond_list = json.loads(d['conditions'])
+            except Exception:
+                cond_list = [c.strip() for c in d['conditions'].split(',') if c.strip()]
+        if not cond_list and cond_str:
+            cond_list = [c.strip() for c in cond_str.split(',') if c.strip() and c.strip().lower() != 'none documented']
+
+        d['conditions'] = cond_list
+        d['is_affected'] = len(cond_list) > 0 or d.get('affected_status') == 'Affected'
+        d['is_carrier'] = str(d.get('carrier_status', '')).lower() in ['carrier', 'positive']
+        d['is_proband'] = bool(d.get('is_proband'))
+        d['is_deceased'] = d.get('living_status') == 'Deceased'
+        d['dob'] = d.get('birth_year') or ''
+        d['father_id'] = d.get('father_id')
+        d['mother_id'] = d.get('mother_id')
+        d['spouse_ids'] = [d['partner_id']] if d.get('partner_id') else []
+        d['twin_group_id'] = d.get('twin_group_id')
+        d['is_identical_twin'] = d.get('twin_type') == 'identical'
+        members.append(d)
+    fam['members'] = members
     conn.close()
     return fam
 
@@ -658,10 +833,37 @@ def get_family_by_share_token(token: str):
     if not fam.get('share_enabled'):
         conn.close()
         return None
-    nodes = conn.execute("SELECT * FROM pedigree_nodes WHERE family_id = ?", (fam['family_id'],)).fetchall()
-    fam['members'] = [dict(n) for n in nodes]
     conn.close()
-    return fam
+    return get_family_by_id(fam['family_id'])
+
+def delete_family(family_id: str, user_id: int):
+    """
+    Deletes a family chart while keeping newly created members intact in pedigree_nodes
+    so that the user can create another tree and add them later.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    fam = cursor.execute("SELECT * FROM families WHERE family_id = ?", (family_id,)).fetchone()
+    if not fam:
+        conn.close()
+        return False, "Family chart not found"
+
+    fam_dict = dict(fam)
+    user = cursor.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()
+    is_admin = user and dict(user).get('username', '').lower() == 'admin'
+    if fam_dict.get('user_id') and fam_dict['user_id'] != user_id and not is_admin:
+        conn.close()
+        return False, "Access denied"
+
+    # CRITICAL: Keep newly created members intact as user can create another tree and add them later.
+    # Unlink members from this deleted family by resetting family_id to NULL.
+    cursor.execute("UPDATE pedigree_nodes SET family_id = NULL WHERE family_id = ?", (family_id,))
+
+    # Delete family record
+    cursor.execute("DELETE FROM families WHERE family_id = ?", (family_id,))
+    conn.commit()
+    conn.close()
+    return True, "Family chart deleted successfully"
 
 def update_family_share(family_id: str, enabled: bool):
     conn = get_db_connection()

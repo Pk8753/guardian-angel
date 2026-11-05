@@ -1,30 +1,49 @@
 import { z } from 'zod';
 
 export const familySchema = z.object({
-  family_name: z.string().min(1, 'Family name is required').default('Primary Pedigree Lineage'),
-  proband_name: z.string().min(1, 'Proband name is required').default('Index Proband'),
+  family_name: z.string().min(1, 'Family name is required').default('Family Lineage'),
+  proband_name: z.string().optional().default('Index Proband'),
   is_consanguineous: z.boolean().default(false),
   consanguinity_notes: z.string().optional().default(''),
+  family_history_description: z.string().optional().default(''),
+  health_conditions_of_interest: z.array(z.string()).optional().default([]),
   share_enabled: z.boolean().optional().default(false)
 });
 
 export type FamilyFormData = z.infer<typeof familySchema>;
 
 export const memberSchema = z.object({
-  pseudonym: z.string().min(1, 'Name or pseudonym is required'),
+  pseudonym: z.string().default('Relative'),
+  full_name: z.string().optional(),
   sex: z.enum(['male', 'female', 'other', 'unknown', 'pregnancy_loss']).default('female'),
   relationship_to_proband: z.string().default('full_sibling'),
   is_proband: z.boolean().default(false),
   is_deceased: z.boolean().default(false),
-  age_or_age_at_death: z.number().nullable().optional(),
+  living_status: z.enum(['Alive', 'Deceased', 'Unknown']).optional(),
+  dob: z.string().optional(),
+  age_or_age_at_death: z.union([z.number(), z.string()]).nullable().optional(),
   cause_of_death: z.string().optional(),
   is_carrier: z.boolean().default(false),
   is_affected: z.boolean().default(false),
   conditions: z.array(z.string()).default([]),
+  fertility_conditions: z.array(z.string()).optional().default([]),
+  inherited_conditions: z.array(z.string()).optional().default([]),
+  chromosomal_conditions: z.array(z.string()).optional().default([]),
+  gene_variant: z.string().optional(),
+  genetic_testing_status: z.string().optional(),
+  carrier_details: z.string().optional(),
+  test_results: z.string().optional(),
+  age_at_diagnosis: z.union([z.number(), z.string()]).optional(),
+  medical_history: z.string().optional(),
+  medical_report_name: z.string().optional(),
+  location: z.string().optional(),
+  avatar_url: z.string().optional(),
+  omim_locus: z.string().optional(),
   notes: z.string().optional(),
   target_relative_id: z.union([z.number(), z.string()]).nullable().optional(),
   father_id: z.union([z.number(), z.string()]).nullable().optional(),
   mother_id: z.union([z.number(), z.string()]).nullable().optional(),
+  spouse_ids: z.array(z.union([z.number(), z.string()])).optional().default([]),
   custom_x: z.number().nullable().optional(),
   custom_y: z.number().nullable().optional()
 });

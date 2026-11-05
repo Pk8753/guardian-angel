@@ -1,8 +1,37 @@
 import os
 
+def _resolve_paths():
+    """
+    Enterprise-grade canonical path resolution for BASE_DIR, DATA_DIR, and DATABASE_PATH.
+    Guarantees a single source of truth whether invoked from repo root, backend/,
+    subdirectories, or inside Docker containers, with 12-factor environment variable overrides.
+    """
+    current_dir = os.path.abspath(os.path.dirname(__file__))
+    parent_dir = os.path.dirname(current_dir)
+
+    # Check if executed from within the backend/ subdirectory in a monorepo
+    if os.path.basename(current_dir) == 'backend' and (
+        os.path.isdir(os.path.join(parent_dir, 'data')) or
+        os.path.exists(os.path.join(parent_dir, 'package.json')) or
+        os.path.exists(os.path.join(parent_dir, 'backend'))
+    ):
+        base_dir = parent_dir
+    else:
+        base_dir = current_dir
+
+    env_data_dir = os.environ.get('DATA_DIR')
+    env_db_path = os.environ.get('DATABASE_PATH')
+
+    data_dir = os.path.abspath(env_data_dir) if env_data_dir else os.path.join(base_dir, 'data')
+    db_path = os.path.abspath(env_db_path) if env_db_path else os.path.join(data_dir, 'guardian_angel.db')
+
+    return base_dir, data_dir, db_path
+
+_BASE_DIR, _DATA_DIR, _DATABASE_PATH = _resolve_paths()
+
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY', 'guardian-angel-clinical-jwt-secret-2026-e2ee')
-    PORT = int(os.environ.get('PORT', 8080))
+    PORT = int(os.environ.get('PORT', 5000))
     DEBUG = os.environ.get('FLASK_DEBUG', 'False').lower() in ('true', '1', 't')
     
     # GCP Configuration
@@ -12,9 +41,9 @@ class Config:
     VERTEX_AI_LOCATION = os.environ.get('VERTEX_AI_LOCATION', 'us-central1')
     
     # Database Configuration (SQLite local, Cloud SQL compatible)
-    BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-    DATA_DIR = os.path.join(BASE_DIR, 'data')
-    DATABASE_PATH = os.path.join(DATA_DIR, 'guardian_angel.db')
+    BASE_DIR = _BASE_DIR
+    DATA_DIR = _DATA_DIR
+    DATABASE_PATH = _DATABASE_PATH
     
     # Default Admin Credentials
     ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'admin')

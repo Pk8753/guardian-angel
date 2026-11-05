@@ -21,7 +21,8 @@ from database import (
     delete_pedigree_node, get_privacy_delegations, add_privacy_delegation,
     generate_pseudonym, create_family, get_user_families, get_family_by_id,
     get_family_by_share_token, update_family_share, regenerate_family_token,
-    get_conditions_catalog, update_node_position
+    get_conditions_catalog, update_node_position, get_db_connection, get_next_family_id,
+    delete_family
 )
 from clinical_engine import compute_clinical_state
 from gcp_services import gcp_storage, vertex_ai
@@ -39,8 +40,11 @@ def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
-            flash("Please sign in to access your secure health vault.", "info")
-            return redirect(url_for('login'))
+            if request.path.startswith('/api/'):
+                return jsonify({"status": "error", "message": "Authentication required. Please sign in to access your secure health vault."}), 401
+            else:
+                flash("Please sign in to access your secure health vault.", "info")
+                return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
 
@@ -260,9 +264,32 @@ def login():
     return jsonify({"status": "success", "message": "GuardianAngel Auth API", "frontend": "http://localhost:3000/login"})
 
 @app.route('/logout')
+@app.route('/api/logout', methods=['GET', 'POST'])
 def logout():
     session.clear()
     return jsonify({"status": "success", "message": "You have been signed out from your zero-knowledge vault."})
+
+@app.route('/api/me', methods=['GET'])
+def api_me():
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({"status": "unauthenticated", "user": None}), 401
+    user = get_user_by_id(user_id)
+    if not user:
+        session.clear()
+        return jsonify({"status": "unauthenticated", "user": None}), 401
+    u_dict = dict(user)
+    return jsonify({
+        "status": "success",
+        "user": {
+            "id": u_dict['id'],
+            "username": u_dict['username'],
+            "full_name": u_dict.get('full_name') or u_dict['username'],
+            "alias_name": u_dict.get('alias_name') or '',
+            "email": u_dict.get('email') or '',
+            "isAdmin": u_dict['username'].lower() == 'admin'
+        }
+    })
 
 # ==================== MAIN VIEW ROUTES ====================
 
@@ -288,6 +315,7 @@ def privacy_security():
     return jsonify({"status": "success", "message": "GuardianAngel Privacy Security Headless API", "frontend": "http://localhost:3000/privacy-security"})
 
 @app.route('/profile', methods=['GET', 'POST'])
+@app.route('/api/profile', methods=['GET', 'POST'])
 def profile_view():
     user_id = session.get('user_id')
     if request.method == 'POST':
@@ -297,11 +325,12 @@ def profile_view():
         return jsonify({"status": "success", "message": "Patient clinical details successfully updated."})
 
     profile = get_user_profile(user_id) if user_id else {}
-    return jsonify({"status": "success", "profile": profile})
+    return jsonify({"status": "success", "profile": dict(profile) if profile else {}})
 
 # ==================== API ENDPOINTS ====================
 
 @app.route('/api/pedigree/nodes', methods=['GET'])
+@app.route('/api/pedigree-nodes', methods=['GET'])
 @login_required
 def api_pedigree_nodes():
     user_id = session['user_id']
@@ -373,6 +402,11 @@ def api_gcp_sync_pedigree():
 
 # ==================== MULTI-FAMILY & ADVANCED PEDIGREE CHART APIS ====================
 
+@app.route('/api/families/next-id', methods=['GET'])
+def api_next_family_id():
+    nid = get_next_family_id()
+    return jsonify({"status": "success", "next_family_id": nid})
+
 @app.route('/api/families', methods=['GET', 'POST'])
 @login_required
 def api_families():
@@ -384,12 +418,23 @@ def api_families():
     families = get_user_families(user_id)
     return jsonify({"status": "success", "families": families})
 
-@app.route('/api/families/<family_id>', methods=['GET', 'PUT'])
+@app.route('/api/families/<family_id>', methods=['GET', 'PUT', 'DELETE'])
 @login_required
 def api_family_detail(family_id):
+    user_id = session['user_id']
+    if request.method == 'DELETE':
+        success, msg = delete_family(family_id, user_id)
+        if not success:
+            code = 404 if "not found" in msg.lower() else 403
+            return jsonify({"status": "error", "message": msg}), code
+        return jsonify({"status": "success", "message": msg})
     fam = get_family_by_id(family_id)
     if not fam:
         return jsonify({"status": "error", "message": "Family not found"}), 404
+    user = get_user_by_id(user_id)
+    is_admin = user and user['username'].lower() == 'admin'
+    if fam.get('user_id') and fam['user_id'] != user_id and not is_admin:
+        return jsonify({"status": "error", "message": "Access denied"}), 403
     return jsonify({"status": "success", "family": fam})
 
 @app.route('/api/families/<family_id>/members', methods=['POST'])
@@ -397,9 +442,35 @@ def api_family_detail(family_id):
 def api_add_family_member(family_id):
     user_id = session['user_id']
     data = request.get_json() or {}
-    data['family_id'] = family_id
-    node_id = add_pedigree_node(user_id, data)
-    return jsonify({"status": "success", "member_id": node_id, "message": "Relative recorded"}), 201
+    conn = get_db_connection()
+
+    # Support re-linking existing unlinked member or creating new member
+    existing_node_id = data.get('existing_member_id') or data.get('node_id')
+    if existing_node_id:
+        conn.execute("UPDATE pedigree_nodes SET family_id = ? WHERE id = ? AND user_id = ?", (family_id, existing_node_id, user_id))
+        conn.commit()
+        node_id = existing_node_id
+    else:
+        data['family_id'] = family_id
+        conn.close()
+        node_id = add_pedigree_node(user_id, data)
+        conn = get_db_connection()
+
+    new_node = conn.execute("SELECT * FROM pedigree_nodes WHERE id = ?", (node_id,)).fetchone()
+    conn.close()
+    node_dict = dict(new_node) if new_node else {}
+    return jsonify({
+        "status": "success",
+        "member_id": node_id,
+        "member": {
+            "id": node_id,
+            "pseudonym": node_dict.get('alias_name'),
+            "alias_name": node_dict.get('alias_name'),
+            "full_name": node_dict.get('name'),
+            "family_id": family_id
+        },
+        "message": "Relative recorded"
+    }), 201
 
 @app.route('/api/families/<family_id>/members/<int:member_id>', methods=['PUT', 'DELETE'])
 @login_required

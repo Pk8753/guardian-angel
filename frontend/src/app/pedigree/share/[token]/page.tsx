@@ -17,12 +17,12 @@ export default function SharedPedigreePage() {
   useEffect(() => {
     if (!token) return;
     setLoading(true);
-    fetch(`/pedigree/share/${token}`)
+    fetch(`/api/pedigree/share/${token}`)
       .then((res) => {
         if (!res.ok) throw new Error('Shared chart not found or link has expired');
         return res.json();
       })
-      .then((data) => setFamily(data))
+      .then((data) => setFamily(data.family || data))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [token]);
@@ -43,7 +43,7 @@ export default function SharedPedigreePage() {
                 GuardianAngel Clinical Pedigree Viewer
               </h1>
               <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-mono text-[10px]">
-                {family?.family_id || 'F-DEIDENTIFIED'}
+                {family?.family_id || 'FA-DEIDENTIFIED'}
               </span>
             </div>
             <p className="text-[11px] text-slate-500">
