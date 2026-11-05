@@ -4,20 +4,23 @@ import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/useAuthStore';
+import { useUIStore } from '@/stores/useUIStore';
+import { t } from '@/lib/translations';
 import { LogOut } from 'lucide-react';
 
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { logout } = useAuthStore();
+  const { activeLocale } = useUIStore();
 
   const navItems = [
-    { label: 'Home Dashboard', href: '/dashboard', icon: 'dashboard' },
-    { label: 'Family Pedigree', href: '/pedigree', icon: 'account_tree' },
-    { label: 'AI Risk Analysis', href: '/risk-analysis', icon: 'genetics' },
-    { label: 'Couple Assessment', href: '/couple-assessment', icon: 'diversity_1' },
-    { label: 'Privacy & Security', href: '/privacy-security', icon: 'shield_lock' },
-    { label: 'Patient Profile & Details', href: '/profile', icon: 'person_pin' },
+    { label: t('nav_dashboard', activeLocale), href: '/dashboard', icon: 'dashboard' },
+    { label: t('nav_pedigree', activeLocale), href: '/pedigree', icon: 'account_tree' },
+    { label: t('nav_risk', activeLocale), href: '/risk-analysis', icon: 'genetics' },
+    { label: t('nav_couple', activeLocale), href: '/couple-assessment', icon: 'diversity_1' },
+    { label: t('nav_privacy', activeLocale), href: '/privacy-security', icon: 'shield_lock' },
+    { label: t('nav_profile', activeLocale), href: '/profile', icon: 'person_pin' },
   ];
 
   const handleSignOut = (e: React.MouseEvent) => {
@@ -36,10 +39,12 @@ export function Sidebar() {
           </div>
           <div className="flex flex-col">
             <div className="flex items-center gap-1.5">
-              <span className="text-xl font-bold text-pine tracking-tight leading-none">GuardianAngel</span>
+              <span className="text-xl font-bold text-pine tracking-tight leading-none">
+                {t('brand_title', activeLocale)}
+              </span>
             </div>
             <span className="text-[11px] font-semibold text-on-surface-variant uppercase tracking-wider mt-1">
-              Hereditary Intelligence
+              {t('brand_subtitle', activeLocale)}
             </span>
           </div>
         </Link>
@@ -49,8 +54,8 @@ export function Sidebar() {
           <div className="p-3 rounded-xl bg-surface-container-low border border-outline-variant/40 flex items-center gap-3">
             <span className="material-symbols-outlined text-jungle text-[20px]">verified_user</span>
             <div className="flex flex-col">
-              <span className="text-xs font-bold text-pine">Clinical Pedigree Engine</span>
-              <span className="text-[11px] text-on-surface-variant">v4.2 Certified Node • GCP Enclave</span>
+              <span className="text-xs font-bold text-pine">{t('engine_title', activeLocale)}</span>
+              <span className="text-[11px] text-on-surface-variant">{t('engine_sub', activeLocale)}</span>
             </div>
           </div>
         </div>
@@ -83,15 +88,17 @@ export function Sidebar() {
       <div className="flex flex-col gap-3 px-2 pt-4">
         <div className="p-3.5 rounded-xl bg-surface-container-low border border-outline-variant/40 flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Genomic Privacy</span>
+            <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">
+              {t('genomic_privacy', activeLocale)}
+            </span>
             <span className="flex h-2 w-2 relative">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-jungle opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-jungle"></span>
             </span>
           </div>
-          <p className="text-xs font-bold text-pine">Zero-Knowledge Hardware Vault</p>
+          <p className="text-xs font-bold text-pine">{t('vault_title', activeLocale)}</p>
           <p className="text-[11px] text-on-surface-variant leading-tight">
-            Encrypted with 256-bit AES client keys. HIPAA & DPDP Act 2023 certified.
+            {t('vault_desc', activeLocale)}
           </p>
         </div>
 
@@ -101,7 +108,7 @@ export function Sidebar() {
           className="flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-error hover:bg-error-container/20 rounded-lg transition-colors cursor-pointer w-full text-left"
         >
           <LogOut className="w-4 h-4 text-error" />
-          <span>Sign Out</span>
+          <span>{t('sign_out', activeLocale)}</span>
         </button>
       </div>
     </aside>

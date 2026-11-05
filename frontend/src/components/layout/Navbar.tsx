@@ -5,10 +5,19 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useUIStore } from '@/stores/useUIStore';
 import { useAuthStore } from '@/stores/useAuthStore';
+import { t } from '@/lib/translations';
+import { Sun, Moon } from 'lucide-react';
 
 export function Navbar() {
   const router = useRouter();
-  const { isSudoMode, toggleSudoMode, activeLocale, setActiveLocale } = useUIStore();
+  const {
+    isSudoMode,
+    toggleSudoMode,
+    activeLocale,
+    setActiveLocale,
+    isDarkMode,
+    toggleDarkMode
+  } = useUIStore();
   const { user, logout } = useAuthStore();
   const [isDropdownOpen, setIsDropdownOpen] = React.useState(false);
 
@@ -26,7 +35,7 @@ export function Navbar() {
           </span>
           <input
             type="text"
-            placeholder="Search bio-markers, pedigree IDs, family members..."
+            placeholder={t('search_placeholder', activeLocale)}
             className="w-full pl-9 pr-4 py-1.5 rounded-lg bg-surface-container-low text-on-surface placeholder:text-outline text-xs focus:outline-none focus:bg-white focus:ring-1 focus:ring-waterhole transition-all border border-outline-variant/30"
           />
         </div>
@@ -34,29 +43,50 @@ export function Navbar() {
 
       {/* Right Controls */}
       <div className="flex items-center gap-2 sm:gap-4">
-        {/* Language Selector */}
+        {/* Language Selector: USA English & UAE Arabic (Hindi removed) */}
         <div className="flex items-center gap-1 bg-surface-container-low px-2 py-1 rounded-full border border-outline-variant/30 text-[11px] font-bold">
           <button
+            type="button"
             onClick={() => setActiveLocale('en')}
-            className={`px-2 py-0.5 rounded-full cursor-pointer transition-all ${activeLocale === 'en' ? 'bg-pine text-white' : 'text-on-surface-variant'}`}
+            className={`px-2.5 py-0.5 rounded-full cursor-pointer transition-all ${
+              activeLocale === 'en'
+                ? 'bg-pine text-white shadow-xs'
+                : 'text-on-surface-variant hover:text-pine'
+            }`}
+            title="USA English"
           >
             EN
           </button>
           <button
+            type="button"
             onClick={() => setActiveLocale('ar')}
-            className={`px-2 py-0.5 rounded-full cursor-pointer transition-all ${activeLocale === 'ar' ? 'bg-pine text-white' : 'text-on-surface-variant'}`}
+            className={`px-2.5 py-0.5 rounded-full cursor-pointer transition-all ${
+              activeLocale === 'ar'
+                ? 'bg-pine text-white shadow-xs'
+                : 'text-on-surface-variant hover:text-pine'
+            }`}
+            title="UAE Arabic (العربية)"
           >
             العربية
           </button>
-          <button
-            onClick={() => setActiveLocale('hi')}
-            className={`px-2 py-0.5 rounded-full cursor-pointer transition-all ${activeLocale === 'hi' ? 'bg-pine text-white' : 'text-on-surface-variant'}`}
-          >
-            हिन्दी
-          </button>
         </div>
 
-        {/* DATA HIDING / SUDO MODE TOGGLE */}
+        {/* Dark / Light Mode Sun & Moon Toggle Button */}
+        <button
+          type="button"
+          onClick={toggleDarkMode}
+          className="w-9 h-9 rounded-lg flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low hover:text-pine transition-all cursor-pointer border border-outline-variant/20"
+          title={isDarkMode ? t('switch_light', activeLocale) : t('switch_dark', activeLocale)}
+          aria-label={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+        >
+          {isDarkMode ? (
+            <Sun className="w-4 h-4 text-amber-400 transition-transform hover:rotate-45" />
+          ) : (
+            <Moon className="w-4 h-4 text-slate-700 transition-transform hover:-rotate-12" />
+          )}
+        </button>
+
+        {/* PRIVACY TOGGLE BUTTON (formerly Data Hiding) */}
         <button
           type="button"
           onClick={toggleSudoMode}
@@ -65,7 +95,7 @@ export function Navbar() {
               ? 'bg-midnight text-white border-midnight-light'
               : 'bg-surface-container text-pine hover:bg-surface-container-high border-outline-variant/40'
           }`}
-          title="Toggle Reddit-style pseudonym data hiding (HIPAA Zero-Knowledge)"
+          title="Toggle HIPAA Zero-Knowledge Privacy Sudo Mode"
         >
           <span className={`material-symbols-outlined text-[16px] ${isSudoMode ? 'text-jungle' : 'text-on-surface-variant'}`}>
             {isSudoMode ? 'visibility_off' : 'visibility'}
@@ -73,23 +103,19 @@ export function Navbar() {
           <span className="hidden sm:inline">
             {isSudoMode ? (
               <>
-                <span className="text-jungle font-mono font-bold">{user?.aliasName || 'Silent-Falcon-9214'}</span> (Masked)
+                {t('privacy_label', activeLocale)}{' '}
+                <span className="text-jungle font-mono font-bold">ON</span>
               </>
             ) : (
               <>
-                Data Hiding: <span className="text-on-surface-variant font-medium">OFF</span>
+                {t('privacy_label', activeLocale)}{' '}
+                <span className="text-on-surface-variant font-medium">OFF</span>
               </>
             )}
           </span>
-        </button>
-
-        {/* Notifications */}
-        <button
-          type="button"
-          className="relative w-9 h-9 rounded-lg flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low hover:text-pine transition-colors cursor-pointer"
-        >
-          <span className="material-symbols-outlined text-[20px]">notifications</span>
-          <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-jungle"></span>
+          <span className="sm:hidden font-mono text-[10px]">
+            {isSudoMode ? '🔒 ON' : '👁️ OFF'}
+          </span>
         </button>
 
         {/* User Identity Chip */}
@@ -102,7 +128,7 @@ export function Navbar() {
             <div className="flex flex-col text-right hidden sm:flex">
               <span className="text-xs font-bold text-pine leading-tight">{displayName}</span>
               <span className="text-[11px] text-jungle font-semibold leading-tight">
-                {isSudoMode ? '🎭 Sudo Pseudonym' : 'Pro Member • Online'}
+                {isSudoMode ? t('sudo_pseudonym', activeLocale) : t('pro_member', activeLocale)}
               </span>
             </div>
             <div className="relative">
@@ -119,7 +145,7 @@ export function Navbar() {
               <div className="px-4 py-2 border-b border-outline-variant/20">
                 <p className="text-xs font-bold text-pine">{user?.fullName || 'Dr. Tariq Al-Mansoor'}</p>
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="text-[10px] text-on-surface-variant">Sudo Alias:</span>
+                  <span className="text-[10px] text-on-surface-variant">{t('sudo_alias', activeLocale)}</span>
                   <span className="text-[10px] font-mono font-bold text-waterhole bg-waterhole-light px-1.5 py-0.5 rounded">
                     {user?.aliasName || 'Silent-Falcon-9214'}
                   </span>
@@ -135,7 +161,7 @@ export function Navbar() {
                 <span className="material-symbols-outlined text-[16px] text-waterhole">
                   {isSudoMode ? 'visibility' : 'visibility_off'}
                 </span>
-                <span>{isSudoMode ? 'Disable Data Hiding' : 'Enable Data Hiding (Sudo)'}</span>
+                <span>{isSudoMode ? t('disable_privacy', activeLocale) : t('enable_privacy', activeLocale)}</span>
               </button>
 
               <Link
@@ -144,7 +170,7 @@ export function Navbar() {
                 className="flex items-center gap-2.5 px-4 py-2 text-xs text-on-surface hover:bg-surface-container transition-colors"
               >
                 <span className="material-symbols-outlined text-[16px] text-waterhole">person</span>
-                <span>Clinical Profile & Keys</span>
+                <span>{t('clinical_profile', activeLocale)}</span>
               </Link>
 
               <div className="border-t border-outline-variant/20 mt-1 pt-1">
@@ -158,7 +184,7 @@ export function Navbar() {
                   className="w-full text-left flex items-center gap-2.5 px-4 py-2 text-xs text-error hover:bg-error-container/20 transition-colors cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-[16px]">logout</span>
-                  <span>Sign Out</span>
+                  <span>{t('sign_out', activeLocale)}</span>
                 </button>
               </div>
             </div>
@@ -168,4 +194,3 @@ export function Navbar() {
     </header>
   );
 }
-
