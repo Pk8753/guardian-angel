@@ -28,7 +28,8 @@ import {
   Info,
   Plus,
   ExternalLink,
-  Share2
+  Share2,
+  Trash2
 } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -51,6 +52,26 @@ export default function DashboardPage() {
       .catch((e) => console.error('Failed to load families:', e))
       .finally(() => setFamiliesLoading(false));
   }, []);
+
+  const handleDeleteFamily = async (familyId: string, familyName?: string) => {
+    if (!confirm(`Are you sure you want to delete family chart "${familyName || familyId}"? The chart will be removed, but all family members will be preserved in your database.`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/families/${familyId}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Failed to delete family chart.');
+      }
+      setFamilies((prev) => prev.filter((f) => f.family_id !== familyId));
+    } catch (e: any) {
+      console.error('Delete chart error:', e);
+      alert(e.message || 'Failed to delete chart. Please try again.');
+    }
+  };
 
   // Interactive AI Question State
   const [query, setQuery] = useState('');
@@ -426,6 +447,14 @@ export default function DashboardPage() {
                                   <ExternalLink className="w-3.5 h-3.5" />
                                 </Link>
                               )}
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteFamily(fam.family_id, fam.family_name || fam.name)}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                                title="Delete Chart (Preserves Members in Database)"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           </td>
                         </tr>

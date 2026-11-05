@@ -41,6 +41,7 @@ export const PedigreeNodeSymbol: React.FC<PedigreeNodeSymbolProps> = ({
             stroke={strokeColor}
             strokeWidth={strokeWidth}
             rx={2}
+            className="transition-colors group-hover:stroke-teal-700"
           />
         );
       case 'female':
@@ -52,6 +53,7 @@ export const PedigreeNodeSymbol: React.FC<PedigreeNodeSymbolProps> = ({
             fill={fillColor}
             stroke={strokeColor}
             strokeWidth={strokeWidth}
+            className="transition-colors group-hover:stroke-teal-700"
           />
         );
       case 'pregnancy_loss':
@@ -61,6 +63,7 @@ export const PedigreeNodeSymbol: React.FC<PedigreeNodeSymbolProps> = ({
             fill={fillColor}
             stroke={strokeColor}
             strokeWidth={strokeWidth}
+            className="transition-colors group-hover:stroke-teal-700"
           />
         );
       case 'other':
@@ -73,6 +76,7 @@ export const PedigreeNodeSymbol: React.FC<PedigreeNodeSymbolProps> = ({
             fill={fillColor}
             stroke={strokeColor}
             strokeWidth={strokeWidth}
+            className="transition-colors group-hover:stroke-teal-700"
           />
         );
     }
@@ -81,7 +85,7 @@ export const PedigreeNodeSymbol: React.FC<PedigreeNodeSymbolProps> = ({
   return (
     <g
       transform={`translate(${x}, ${y})`}
-      className="cursor-pointer select-none transition-transform hover:scale-105"
+      className="cursor-pointer select-none group transition-opacity hover:opacity-90"
       onClick={() => onSelect?.(member)}
     >
       {/* Selection Glow */}
@@ -189,32 +193,6 @@ export const PedigreeNodeSymbol: React.FC<PedigreeNodeSymbolProps> = ({
           {member.conditions.length > 2 ? '...' : ''}
         </text>
       )}
-
-      {/* Quick Add Relative Button on any person card/symbol */}
-      <g
-        transform={`translate(${half + 4}, -${half - 4})`}
-        className={`cursor-pointer transition-all ${
-          isSelected ? 'opacity-100 scale-110' : 'opacity-70 hover:opacity-100 hover:scale-110'
-        }`}
-        onClick={(e) => {
-          e.stopPropagation();
-          onAddRelative?.(member);
-        }}
-      >
-        <title>{`Add relative to ${member.full_name || member.pseudonym}`}</title>
-        <circle cx={8} cy={8} r={9} fill="#0f766e" stroke="#ffffff" strokeWidth={1.5} className="shadow-xs" />
-        <text
-          x={8}
-          y={12}
-          textAnchor="middle"
-          fill="#ffffff"
-          fontSize="12"
-          fontWeight="bold"
-          fontFamily="sans-serif"
-        >
-          +
-        </text>
-      </g>
     </g>
   );
 };

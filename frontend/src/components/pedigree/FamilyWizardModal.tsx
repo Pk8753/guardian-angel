@@ -251,6 +251,25 @@ export const FamilyWizardModal: React.FC<FamilyWizardModalProps> = ({
     isConfirmed: boolean;
   } | null>(null);
 
+  // Previously created members preserved in database (available to link to new tree)
+  const [savedUnlinkedNodes, setSavedUnlinkedNodes] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (isOpen && step === 3) {
+      fetch('/api/pedigree-nodes')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data) {
+            const list = Array.isArray(data) ? data : data.pedigree_nodes || [];
+            const currentIds = new Set((existingFamily?.members || []).map((m: any) => m.id));
+            const available = list.filter((n: any) => !currentIds.has(n.id) && !n.is_proband);
+            setSavedUnlinkedNodes(available);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isOpen, step, existingFamily?.members]);
+
   // Filtered list of hereditary conditions based on user search (Defined before any return)
   const filteredHereditaryList = useMemo(() => {
     if (!conditionSearch.trim()) return COMPREHENSIVE_HEREDITARY_CATALOG.slice(0, 15);
@@ -1310,6 +1329,49 @@ export const FamilyWizardModal: React.FC<FamilyWizardModalProps> = ({
                       );
                     })}
                   </div>
+
+                  {/* Previously Created Relatives Preserved in Database */}
+                  {savedUnlinkedNodes.length > 0 && (
+                    <div className="p-4 bg-teal-50/70 rounded-2xl border border-teal-200 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="text-xs font-bold text-teal-950 uppercase tracking-wider block">
+                            Add Previously Created Relatives ({savedUnlinkedNodes.length})
+                          </span>
+                          <span className="text-[11px] text-teal-800">
+                            These relatives were preserved in your database. Click to add them into this family tree:
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {savedUnlinkedNodes.map((node) => (
+                          <button
+                            type="button"
+                            key={node.id}
+                            onClick={async () => {
+                              try {
+                                setLoading(true);
+                                await onAddMember({ existing_member_id: node.id });
+                                setSavedUnlinkedNodes((prev) => prev.filter((n) => n.id !== node.id));
+                                setRecentSavedName(node.name || node.alias_name || 'Relative');
+                              } catch (e: any) {
+                                setError(e.message || 'Failed to link relative');
+                              } finally {
+                                setLoading(false);
+                              }
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-teal-800 hover:text-white border border-teal-300 text-xs font-semibold text-teal-900 transition shadow-2xs group"
+                          >
+                            <Plus className="w-3.5 h-3.5 text-teal-700 group-hover:text-white" />
+                            <span>{node.name || node.alias_name}</span>
+                            <span className="text-[10px] text-teal-600 group-hover:text-teal-200 capitalize">
+                              ({(node.relationship || 'Relative').replace(/_/g, ' ')})
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Current Tree Members List */}
                   {existingFamily?.members && existingFamily.members.length > 0 && (

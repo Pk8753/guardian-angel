@@ -21,7 +21,8 @@ from database import (
     delete_pedigree_node, get_privacy_delegations, add_privacy_delegation,
     generate_pseudonym, create_family, get_user_families, get_family_by_id,
     get_family_by_share_token, update_family_share, regenerate_family_token,
-    get_conditions_catalog, update_node_position, get_db_connection, get_next_family_id
+    get_conditions_catalog, update_node_position, get_db_connection, get_next_family_id,
+    delete_family
 )
 from clinical_engine import compute_clinical_state
 from gcp_services import gcp_storage, vertex_ai
@@ -329,6 +330,7 @@ def profile_view():
 # ==================== API ENDPOINTS ====================
 
 @app.route('/api/pedigree/nodes', methods=['GET'])
+@app.route('/api/pedigree-nodes', methods=['GET'])
 @login_required
 def api_pedigree_nodes():
     user_id = session['user_id']
@@ -416,13 +418,19 @@ def api_families():
     families = get_user_families(user_id)
     return jsonify({"status": "success", "families": families})
 
-@app.route('/api/families/<family_id>', methods=['GET', 'PUT'])
+@app.route('/api/families/<family_id>', methods=['GET', 'PUT', 'DELETE'])
 @login_required
 def api_family_detail(family_id):
+    user_id = session['user_id']
+    if request.method == 'DELETE':
+        success, msg = delete_family(family_id, user_id)
+        if not success:
+            code = 404 if "not found" in msg.lower() else 403
+            return jsonify({"status": "error", "message": msg}), code
+        return jsonify({"status": "success", "message": msg})
     fam = get_family_by_id(family_id)
     if not fam:
         return jsonify({"status": "error", "message": "Family not found"}), 404
-    user_id = session['user_id']
     user = get_user_by_id(user_id)
     is_admin = user and user['username'].lower() == 'admin'
     if fam.get('user_id') and fam['user_id'] != user_id and not is_admin:
@@ -434,9 +442,20 @@ def api_family_detail(family_id):
 def api_add_family_member(family_id):
     user_id = session['user_id']
     data = request.get_json() or {}
-    data['family_id'] = family_id
-    node_id = add_pedigree_node(user_id, data)
     conn = get_db_connection()
+
+    # Support re-linking existing unlinked member or creating new member
+    existing_node_id = data.get('existing_member_id') or data.get('node_id')
+    if existing_node_id:
+        conn.execute("UPDATE pedigree_nodes SET family_id = ? WHERE id = ? AND user_id = ?", (family_id, existing_node_id, user_id))
+        conn.commit()
+        node_id = existing_node_id
+    else:
+        data['family_id'] = family_id
+        conn.close()
+        node_id = add_pedigree_node(user_id, data)
+        conn = get_db_connection()
+
     new_node = conn.execute("SELECT * FROM pedigree_nodes WHERE id = ?", (node_id,)).fetchone()
     conn.close()
     node_dict = dict(new_node) if new_node else {}

@@ -840,6 +840,35 @@ def get_family_by_share_token(token: str):
     conn.close()
     return get_family_by_id(fam['family_id'])
 
+def delete_family(family_id: str, user_id: int):
+    """
+    Deletes a family chart while keeping newly created members intact in pedigree_nodes
+    so that the user can create another tree and add them later.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    fam = cursor.execute("SELECT * FROM families WHERE family_id = ?", (family_id,)).fetchone()
+    if not fam:
+        conn.close()
+        return False, "Family chart not found"
+
+    fam_dict = dict(fam)
+    user = cursor.execute("SELECT username FROM users WHERE id = ?", (user_id,)).fetchone()
+    is_admin = user and dict(user).get('username', '').lower() == 'admin'
+    if fam_dict.get('user_id') and fam_dict['user_id'] != user_id and not is_admin:
+        conn.close()
+        return False, "Access denied"
+
+    # CRITICAL: Keep newly created members intact as user can create another tree and add them later.
+    # Unlink members from this deleted family by resetting family_id to NULL.
+    cursor.execute("UPDATE pedigree_nodes SET family_id = NULL WHERE family_id = ?", (family_id,))
+
+    # Delete family record
+    cursor.execute("DELETE FROM families WHERE family_id = ?", (family_id,))
+    conn.commit()
+    conn.close()
+    return True, "Family chart deleted successfully"
+
 def update_family_share(family_id: str, enabled: bool):
     conn = get_db_connection()
     conn.execute("UPDATE families SET share_enabled = ? WHERE family_id = ?", (1 if enabled else 0, family_id))

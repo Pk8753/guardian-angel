@@ -353,6 +353,48 @@ export default function PedigreePage() {
     }
   };
 
+  // Delete Family Chart (preserves members in DB)
+  const handleDeleteFamily = async (familyId: string) => {
+    if (!confirm('Are you sure you want to delete this family chart? The chart will be removed, but all family members will be preserved in your database.')) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/families/${familyId}`, {
+        method: 'DELETE'
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Failed to delete family chart.');
+      }
+
+      // Update local family list
+      const updatedList = families.filter((f) => f.family_id !== familyId);
+      setFamilies(updatedList);
+
+      if (updatedList.length > 0) {
+        // Switch to the first remaining family
+        const nextFamily = updatedList[0];
+        handleSelectFamily(nextFamily.family_id);
+      } else {
+        // No families left: clear active family and session storage
+        setActiveFamily(null);
+        setSelectedMember(null);
+        if (typeof window !== 'undefined') {
+          sessionStorage.removeItem('ga_active_family_id');
+          const url = new URL(window.location.href);
+          url.searchParams.delete('family_id');
+          url.searchParams.delete('create');
+          window.history.replaceState({}, '', url.pathname + (url.search ? url.search : ''));
+        }
+      }
+    } catch (err: any) {
+      console.error('Delete family error:', err);
+      alert(err.message || 'Failed to delete family chart. Please try again.');
+    }
+  };
+
   // Set as Proband
   const handleSetProband = async (member: PedigreeMember) => {
     if (!activeFamily) return;
@@ -651,7 +693,7 @@ export default function PedigreePage() {
                   {activeFamily ? (
                     <>
                       {/* Family Tree Header */}
-                      <div className="flex items-center justify-between px-2 py-1.5 border-b border-slate-100 text-xs text-slate-500 mb-3">
+                      <div className="flex items-center justify-between px-2 py-1.5 border-b border-slate-100 text-xs text-slate-500 mb-3 gap-2 flex-wrap">
                         <div className="flex items-center gap-2 flex-wrap">
                           <h2 className="text-sm font-bold text-slate-900">
                             {activeFamily.family_name}
@@ -664,9 +706,20 @@ export default function PedigreePage() {
                             <span>{members.length} Member{members.length === 1 ? '' : 's'} Connected</span>
                           </span>
                         </div>
-                        <span className="text-[11px] text-slate-400 italic">
-                          Click any person to view health details &bull; Drag to move
-                        </span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-[11px] text-slate-400 italic hidden sm:inline">
+                            Click any person to view health details &bull; Drag to move
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteFamily(activeFamily.family_id)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-rose-700 hover:text-white bg-rose-50 hover:bg-rose-700 border border-rose-200 rounded-lg transition shadow-2xs"
+                            title="Delete this family chart (members will be preserved in database)"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>Delete Chart</span>
+                          </button>
+                        </div>
                       </div>
 
                       {/* Interactive SVG Tree Canvas */}
@@ -675,13 +728,6 @@ export default function PedigreePage() {
                         isConsanguineous={activeFamily.is_consanguineous}
                         selectedMemberId={selectedMember?.id}
                         onSelectMember={(m) => setSelectedMember(m)}
-                        onAddRelative={(m) => {
-                          setSelectedMember(m);
-                          setEditingMember(null);
-                          setInitialRelation(null);
-                          setWizardStep(3);
-                          setIsWizardOpen(true);
-                        }}
                         onPositionChange={handlePositionChange}
                         filterTier={tierFilter}
                       />

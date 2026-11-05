@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useRef, useState, useMemo } from 'react';
-import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
+import { TransformWrapper, TransformComponent, ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
 import { PedigreeMember, PedigreeUnion } from './types';
 import { computePedigreeLayout, LayoutResult } from './layoutEngine';
 import { PedigreeNodeSymbol } from './PedigreeNodeSymbol';
@@ -27,8 +27,18 @@ export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
   filterTier = 'all'
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const transformRef = useRef<ReactZoomPanPinchRef>(null);
   const [draggingId, setDraggingId] = useState<string | number | null>(null);
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const dragStartPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const hasDragged = useRef<boolean>(false);
+
+  // Whenever members are created, added, or loaded, re-center tree view
+  useEffect(() => {
+    if (transformRef.current) {
+      transformRef.current.centerView(1);
+    }
+  }, [members.length]);
 
   // Filter members by generation tier if specified
   const tierFilteredMembers = useMemo(() => {
@@ -53,10 +63,12 @@ export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
     return map;
   }, [layout.members]);
 
-  // Handle Drag Repositioning
+  // Handle Drag Repositioning vs Clean Click Selection
   const handleMouseDown = (e: React.MouseEvent, member: PedigreeMember) => {
     e.stopPropagation();
     setDraggingId(member.id);
+    dragStartPos.current = { x: e.clientX, y: e.clientY };
+    hasDragged.current = false;
     const currX = member.x ?? 100;
     const currY = member.y ?? 100;
     setDragOffset({
@@ -67,9 +79,14 @@ export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!draggingId) return;
-    const newX = Math.round(e.clientX - dragOffset.x);
-    const newY = Math.round(e.clientY - dragOffset.y);
-    onPositionChange?.(draggingId, newX, newY);
+    const dx = Math.abs(e.clientX - dragStartPos.current.x);
+    const dy = Math.abs(e.clientY - dragStartPos.current.y);
+    if (dx > 4 || dy > 4) {
+      hasDragged.current = true;
+      const newX = Math.round(e.clientX - dragOffset.x);
+      const newY = Math.round(e.clientY - dragOffset.y);
+      onPositionChange?.(draggingId, newX, newY);
+    }
   };
 
   const handleMouseUp = () => {
@@ -84,6 +101,7 @@ export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
       onMouseUp={handleMouseUp}
     >
       <TransformWrapper
+        ref={transformRef}
         initialScale={1}
         minScale={0.3}
         maxScale={2.5}
@@ -117,9 +135,15 @@ export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
               <div className="h-4 w-px bg-slate-200 mx-1" />
               <button
                 type="button"
-                onClick={() => resetTransform()}
+                onClick={() => {
+                  if (transformRef.current) {
+                    transformRef.current.centerView(1);
+                  } else {
+                    resetTransform();
+                  }
+                }}
                 className="px-2 py-1 text-slate-600 hover:text-teal-800 hover:bg-slate-100 rounded-lg transition-colors text-[11px] font-semibold flex items-center gap-1"
-                title="Fit to Screen"
+                title="Center & Fit Pedigree"
               >
                 <Maximize2 className="w-3 h-3" />
                 <span>Fit</span>
@@ -278,10 +302,13 @@ export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
 
                         if (children.length === 0) return null;
 
-                        const sibshipY = unionY + 60;
                         const childXs = children.map((c) => c.x!);
-                        const sibMinX = Math.min(...childXs);
-                        const sibMaxX = Math.max(...childXs);
+                        const minChildY = Math.min(...children.map((c) => c.y!));
+                        const sibshipY = Math.min(unionY + 65, Math.round((unionY + minChildY) / 2));
+                        // Crucial fix: sibMinX and sibMaxX MUST include unionMidX so the horizontal line
+                        // always bridges the parent drop stem and all children seamlessly
+                        const sibMinX = Math.min(unionMidX, ...childXs);
+                        const sibMaxX = Math.max(unionMidX, ...childXs);
 
                         return (
                           <g key={`stem-${union.id}`}>
@@ -295,7 +322,7 @@ export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
                               strokeWidth={2}
                             />
 
-                            {/* Horizontal sibship crossbar */}
+                            {/* Horizontal sibship crossbar connecting union stem to every child */}
                             <line
                               x1={sibMinX}
                               y1={sibshipY}
@@ -335,17 +362,44 @@ export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
                   );
                 })}
 
+                {/* Single parent child lines (for half-siblings or single-parent branches) */}
+                {layout.members.map((m) => {
+                  if (m.father_id && m.mother_id) return null; // already handled by union
+                  const singleParentId = m.father_id || m.mother_id;
+                  if (!singleParentId) return null;
+                  const parent = memberMap.get(singleParentId);
+                  if (!parent || parent.x === undefined || parent.y === undefined || m.x === undefined || m.y === undefined) {
+                    return null;
+                  }
+
+                  const midY = Math.round((parent.y + m.y) / 2);
+                  const minX = Math.min(parent.x, m.x);
+                  const maxX = Math.max(parent.x, m.x);
+
+                  return (
+                    <g key={`single-parent-${parent.id}-${m.id}`}>
+                      <line x1={parent.x} y1={parent.y + 22} x2={parent.x} y2={midY} stroke="#334155" strokeWidth={2} />
+                      <line x1={minX} y1={midY} x2={maxX} y2={midY} stroke="#334155" strokeWidth={2} />
+                      <line x1={m.x} y1={midY} x2={m.x} y2={m.y - 22} stroke="#334155" strokeWidth={2} />
+                    </g>
+                  );
+                })}
+
                 {/* Individual Symbols */}
                 {layout.members.map((member) => (
                   <g
                     key={`member-node-${member.id}`}
                     onMouseDown={(e) => handleMouseDown(e, member)}
+                    onMouseUp={() => {
+                      if (!hasDragged.current) {
+                        onSelectMember?.(member);
+                      }
+                    }}
                   >
                     <PedigreeNodeSymbol
                       member={member}
                       isSelected={selectedMemberId === member.id}
                       onSelect={(m) => onSelectMember?.(m)}
-                      onAddRelative={(m) => onAddRelative?.(m)}
                     />
                   </g>
                 ))}

@@ -304,6 +304,51 @@ class PedigreeEngineTestCase(unittest.TestCase):
         for m in full_fam['members']:
             self.assertTrue(bool(m.get('pseudonym') or m.get('alias_name')))
 
+    def test_family_deletion_preserves_members(self):
+        """Verify deleting a family chart deletes the family record while keeping members intact in DB"""
+        fam = create_family(self.user_id, {'name': 'Temporary Chart to Delete'})
+        f_id = fam['family_id']
+
+        # Add a member to this family
+        add_res = self.client.post(f'/api/families/{f_id}/members', json={
+            'name': 'Devi Sharma',
+            'generation': 'gen1',
+            'sex': 'female',
+            'relationship': 'mother',
+            'carrier_status': 'carrier',
+            'condition_locus': 'Sickle Cell Trait'
+        })
+        self.assertEqual(add_res.status_code, 201)
+        m_id = add_res.get_json()['member_id']
+
+        # Delete family via DELETE /api/families/<f_id>
+        del_res = self.client.delete(f'/api/families/{f_id}')
+        self.assertEqual(del_res.status_code, 200)
+
+        # Family record must be gone
+        self.assertIsNone(get_family_by_id(f_id))
+
+        # Member record must remain intact in database
+        nodes_res = self.client.get('/api/pedigree-nodes')
+        self.assertEqual(nodes_res.status_code, 200)
+        data = nodes_res.get_json()
+        user_nodes = data if isinstance(data, list) else data.get('pedigree_nodes', [])
+        preserved_node = next((n for n in user_nodes if n['id'] == m_id), None)
+        self.assertIsNotNone(preserved_node, "Member must remain preserved in database after family deletion")
+        self.assertEqual(preserved_node['name'], 'Devi Sharma')
+        self.assertIsNone(preserved_node['family_id'], "Preserved member must be unlinked from deleted family")
+
+        # Create another family and re-link the preserved member
+        fam2 = create_family(self.user_id, {'name': 'New Tree Later'})
+        f2_id = fam2['family_id']
+        link_res = self.client.post(f'/api/families/{f2_id}/members', json={
+            'existing_member_id': m_id
+        })
+        self.assertEqual(link_res.status_code, 201)
+
+        f2_data = get_family_by_id(f2_id)
+        self.assertTrue(any(m['id'] == m_id for m in f2_data['members']), "Preserved member must be linkable to new tree")
+
 if __name__ == '__main__':
     unittest.main()
 
