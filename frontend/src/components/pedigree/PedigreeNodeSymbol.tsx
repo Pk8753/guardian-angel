@@ -190,29 +190,31 @@ export const PedigreeNodeSymbol: React.FC<PedigreeNodeSymbolProps> = ({
         </text>
       )}
 
-      {/* Quick Add Relative Button (visible on hover or when selected) */}
-      {isSelected && (
-        <g
-          transform={`translate(${half + 8}, 0)`}
-          className="cursor-pointer hover:opacity-90"
-          onClick={(e) => {
-            e.stopPropagation();
-            onAddRelative?.(member);
-          }}
+      {/* Quick Add Relative Button on any person card/symbol */}
+      <g
+        transform={`translate(${half + 4}, -${half - 4})`}
+        className={`cursor-pointer transition-all ${
+          isSelected ? 'opacity-100 scale-110' : 'opacity-70 hover:opacity-100 hover:scale-110'
+        }`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onAddRelative?.(member);
+        }}
+      >
+        <title>{`Add relative to ${member.full_name || member.pseudonym}`}</title>
+        <circle cx={8} cy={8} r={9} fill="#0f766e" stroke="#ffffff" strokeWidth={1.5} className="shadow-xs" />
+        <text
+          x={8}
+          y={12}
+          textAnchor="middle"
+          fill="#ffffff"
+          fontSize="12"
+          fontWeight="bold"
+          fontFamily="sans-serif"
         >
-          <circle cx={10} cy={0} r={12} fill="#006a60" />
-          <text
-            x={10}
-            y={4}
-            textAnchor="middle"
-            fill="#ffffff"
-            fontSize="14"
-            fontWeight="bold"
-          >
-            +
-          </text>
-        </g>
-      )}
+          +
+        </text>
+      </g>
     </g>
   );
 };

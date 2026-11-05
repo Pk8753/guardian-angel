@@ -114,5 +114,89 @@ class GuardianAngelAPITestCase(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertIsNotNone(res.get_json())
 
+    def test_canonical_database_path_resolution(self):
+        """Verify enterprise-grade canonical database path resolution across root and backend contexts"""
+        from config import _resolve_paths
+        base_dir, data_dir, db_path = _resolve_paths()
+        # Verify base_dir is normalized and canonical
+        self.assertTrue(os.path.isabs(base_dir))
+        self.assertTrue(os.path.isabs(data_dir))
+        self.assertTrue(os.path.isabs(db_path))
+        self.assertTrue(db_path.endswith('guardian_angel.db'))
+        self.assertEqual(data_dir, os.path.dirname(db_path))
+
+        # Verify environment variable override priority
+        with tempfile.TemporaryDirectory() as custom_dir:
+            custom_db = os.path.join(custom_dir, 'custom_isolated.db')
+            os.environ['DATABASE_PATH'] = custom_db
+            try:
+                _, _, resolved_custom_db = _resolve_paths()
+                self.assertEqual(resolved_custom_db, custom_db)
+            finally:
+                os.environ.pop('DATABASE_PATH', None)
+
+    def test_unauthenticated_protected_api_returns_401(self):
+        """Verify unauthenticated requests return 401 and are NEVER silently mutated to admin"""
+        res = self.client.get('/api/families')
+        self.assertEqual(res.status_code, 401)
+        data = res.get_json()
+        self.assertEqual(data.get('status'), 'error')
+
+    def test_api_me_unauthenticated_and_authenticated(self):
+        """Verify /api/me synchronizes user identity and rejects unauthenticated requests"""
+        # Unauthenticated request
+        res_unauth = self.client.get('/api/me')
+        self.assertEqual(res_unauth.status_code, 401)
+        self.assertEqual(res_unauth.get_json().get('status'), 'unauthenticated')
+
+        # Authenticated request
+        with self.client.session_transaction() as sess:
+            u = get_user_by_username('admin')
+            sess['user_id'] = u['id']
+
+        res_auth = self.client.get('/api/me')
+        self.assertEqual(res_auth.status_code, 200)
+        data = res_auth.get_json()
+        self.assertEqual(data.get('status'), 'success')
+        self.assertEqual(data['user']['username'], 'admin')
+
+    def test_api_logout_clears_session(self):
+        """Verify /api/logout clears backend session so frontend and backend logout stay in sync"""
+        with self.client.session_transaction() as sess:
+            u = get_user_by_username('admin')
+            sess['user_id'] = u['id']
+
+        res_logout = self.client.post('/api/logout')
+        self.assertEqual(res_logout.status_code, 200)
+
+        # After logout, /api/me must return 401
+        res_me = self.client.get('/api/me')
+        self.assertEqual(res_me.status_code, 401)
+
+    def test_family_ownership_enforcement(self):
+        """Verify non-admin users cannot access family charts belonging to another user"""
+        from database import create_family, create_user
+        admin_u = get_user_by_username('admin')
+        fam = create_family(admin_u['id'], {'family_name': 'Admin Secret Family'})
+        fam_id = fam['family_id']
+
+        # Create a regular non-admin patient
+        create_user(
+            username='patient_sarah',
+            password='Password123!',
+            email='sarah@patient.org',
+            full_name='Sarah Jenkins',
+            dob='1990-01-01',
+            location='Boston'
+        )
+        sarah = get_user_by_username('patient_sarah')
+
+        # Access family as Sarah -> must be denied (403)
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = sarah['id']
+
+        res = self.client.get(f'/api/families/{fam_id}')
+        self.assertEqual(res.status_code, 403)
+
 if __name__ == '__main__':
     unittest.main()

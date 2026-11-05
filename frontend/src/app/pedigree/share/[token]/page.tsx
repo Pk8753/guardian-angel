@@ -22,7 +22,7 @@ export default function SharedPedigreePage() {
         if (!res.ok) throw new Error('Shared chart not found or link has expired');
         return res.json();
       })
-      .then((data) => setFamily(data))
+      .then((data) => setFamily(data.family || data))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [token]);

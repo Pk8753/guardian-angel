@@ -10,17 +10,44 @@ interface AuthGuardProps {
 
 export function AuthGuard({ children }: AuthGuardProps) {
   const router = useRouter();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, login, logout } = useAuthStore();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-    // Double check cookie
+    let isMounted = true;
     const hasCookie = document.cookie.includes('ga_auth_session=1');
     if (!isAuthenticated && !hasCookie) {
       router.replace('/login');
+      return;
     }
-  }, [isAuthenticated, router]);
+
+    // Verify session identity with backend /api/me
+    fetch('/api/me')
+      .then((res) => {
+        if (!isMounted) return;
+        if (res.ok) {
+          return res.json().then((data) => {
+            if (data?.status === 'success' && data.user) {
+              login(data.user);
+            }
+          });
+        } else if (res.status === 401) {
+          // Backend session expired or missing — clear desynchronized client state
+          logout();
+          router.replace('/login');
+        }
+      })
+      .catch(() => {
+        // Network error / offline mode — maintain current client state
+      })
+      .finally(() => {
+        if (isMounted) setMounted(true);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthenticated, login, logout, router]);
 
   // Before mounting or if unauthenticated, show clinical redirect indicator
   if (!mounted || !isAuthenticated) {

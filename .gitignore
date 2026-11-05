@@ -76,7 +76,9 @@ htmlcov/
 *.sqlite3
 data/*.db
 data/gcs_local_storage/
+data/screen/
 backend/data/*.db
+backend/data/gcs_local_storage
 backend/data/gcs_local_storage/
 
 # Environment variables & secrets

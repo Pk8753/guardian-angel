@@ -60,6 +60,8 @@ export const useAuthStore = create<AuthState>((set) => ({
       } catch (e) {
         console.error('Storage error', e);
       }
+      // Invalidate backend session cookie to maintain identity synchronization
+      fetch('/api/logout', { method: 'POST' }).catch(() => {});
     }
     set({ user: null, isAuthenticated: false });
   },

@@ -24,14 +24,83 @@ export function computePedigreeLayout(
 
   // Clone members to avoid mutating inputs
   const members: PedigreeMember[] = rawMembers.map((m) => ({ ...m }));
+
+  // 0. Auto-link relationships if explicit parent/spouse IDs are unassigned
+  const proband = members.find((m) => m.is_proband) || members[0];
+  if (proband) {
+    const father = members.find((m) => (m.relationship_to_proband || '').toLowerCase() === 'father');
+    const mother = members.find((m) => (m.relationship_to_proband || '').toLowerCase() === 'mother');
+    const spouse = members.find((m) =>
+      ['spouse', 'husband_wife', 'husband', 'wife', 'partner'].includes((m.relationship_to_proband || '').toLowerCase())
+    );
+
+    // Link Proband to parents
+    if (father && !proband.father_id) proband.father_id = father.id;
+    if (mother && !proband.mother_id) proband.mother_id = mother.id;
+
+    // Link parents as mutual partners
+    if (father && mother) {
+      if (!father.spouse_ids || father.spouse_ids.length === 0) father.spouse_ids = [mother.id];
+      if (!mother.spouse_ids || mother.spouse_ids.length === 0) mother.spouse_ids = [father.id];
+    }
+
+    // Link Proband and Spouse
+    if (spouse) {
+      if (!proband.spouse_ids || proband.spouse_ids.length === 0) proband.spouse_ids = [spouse.id];
+      if (!spouse.spouse_ids || spouse.spouse_ids.length === 0) spouse.spouse_ids = [proband.id];
+    }
+
+    // Auto-link children, siblings, and twins
+    members.forEach((m) => {
+      const rel = (m.relationship_to_proband || '').toLowerCase();
+      // Siblings & Twins share parents
+      if (
+        rel === 'brother' ||
+        rel === 'sister' ||
+        rel === 'full_sibling' ||
+        rel === 'sibling' ||
+        rel === 'twin_identical' ||
+        rel === 'twin_fraternal'
+      ) {
+        if (father && !m.father_id) m.father_id = father.id;
+        if (mother && !m.mother_id) m.mother_id = mother.id;
+        if (rel.includes('twin')) {
+          m.twin_group_id = m.twin_group_id || 'twin-1';
+          if (rel === 'twin_identical') m.is_identical_twin = true;
+        }
+      } else if (rel === 'half_sibling_father') {
+        if (father && !m.father_id) m.father_id = father.id;
+      } else if (rel === 'half_sibling_mother') {
+        if (mother && !m.mother_id) m.mother_id = mother.id;
+      } else if (
+        rel === 'son' ||
+        rel === 'daughter' ||
+        rel === 'child' ||
+        rel === 'adopted_child' ||
+        rel === 'pregnancy_loss'
+      ) {
+        if (proband.sex === 'female') {
+          if (!m.mother_id) m.mother_id = proband.id;
+          if (spouse && !m.father_id) m.father_id = spouse.id;
+        } else {
+          if (!m.father_id) m.father_id = proband.id;
+          if (spouse && !m.mother_id) m.mother_id = spouse.id;
+        }
+        if (rel === 'pregnancy_loss') {
+          m.sex = 'pregnancy_loss';
+        }
+      }
+    });
+  }
+
   const memberMap = new Map<string | number, PedigreeMember>();
   members.forEach((m) => memberMap.set(m.id, m));
 
   // 1. Determine generational levels (0 = proband's generation, -1 = parents, -2 = grandparents, +1 = children)
-  // Find proband or default to first member
-  const proband = members.find((m) => m.is_proband) || members[0];
   const genLevelMap = new Map<string | number, number>();
-  genLevelMap.set(proband.id, 0);
+  if (proband) {
+    genLevelMap.set(proband.id, 0);
+  }
 
   // Traverse relationships to determine relative generations
   let changed = true;
@@ -83,10 +152,10 @@ export function computePedigreeLayout(
       // Infer generation from relationship string if still unset
       if (genLevelMap.get(m.id) === undefined) {
         const rel = (m.relationship_to_proband || '').toLowerCase();
-        if (rel.includes('grandparent')) genLevelMap.set(m.id, -2);
+        if (rel.includes('grandparent') || rel.includes('grandfather') || rel.includes('grandmother')) genLevelMap.set(m.id, -2);
         else if (rel.includes('father') || rel.includes('mother') || rel.includes('parent') || rel.includes('uncle') || rel.includes('aunt')) genLevelMap.set(m.id, -1);
-        else if (rel.includes('sibling') || rel.includes('spouse') || rel.includes('partner') || rel.includes('cousin') || rel.includes('self')) genLevelMap.set(m.id, 0);
-        else if (rel.includes('son') || rel.includes('daughter') || rel.includes('child')) genLevelMap.set(m.id, 1);
+        else if (rel.includes('sibling') || rel.includes('brother') || rel.includes('sister') || rel.includes('spouse') || rel.includes('partner') || rel.includes('husband') || rel.includes('wife') || rel.includes('cousin') || rel.includes('self') || rel.includes('twin')) genLevelMap.set(m.id, 0);
+        else if (rel.includes('son') || rel.includes('daughter') || rel.includes('child') || rel.includes('loss') || rel.includes('adopt')) genLevelMap.set(m.id, 1);
         else genLevelMap.set(m.id, 0);
         changed = true;
       }

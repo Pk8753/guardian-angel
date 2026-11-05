@@ -5,11 +5,15 @@ export type RelationType =
   | 'father'
   | 'mother'
   | 'full_sibling'
+  | 'brother'
+  | 'sister'
   | 'half_sibling_father'
   | 'half_sibling_mother'
   | 'twin_identical'
   | 'twin_fraternal'
   | 'spouse'
+  | 'husband'
+  | 'wife'
   | 'partner'
   | 'son'
   | 'daughter'
@@ -21,7 +25,10 @@ export type RelationType =
   | 'paternal_grandmother'
   | 'maternal_grandfather'
   | 'maternal_grandmother'
+  | 'grandparents'
+  | 'uncle_aunt'
   | 'first_cousin'
+  | 'cousin'
   | 'adopted_child'
   | 'pregnancy_loss';
 
@@ -38,6 +45,7 @@ export interface PedigreeMember {
   id: number | string;
   family_id: string;
   pseudonym: string;
+  full_name?: string;
   generation?: string; // 'I', 'II', 'III', 'IV'
   generation_index?: number;
   order_in_generation?: number;
@@ -59,6 +67,22 @@ export interface PedigreeMember {
   is_identical_twin?: boolean;
   custom_x?: number | null;
   custom_y?: number | null;
+  // Clinical Details & Report
+  gene_variant?: string;
+  genetic_testing_status?: 'Positive' | 'Negative' | 'Not tested' | 'Pending' | string;
+  carrier_details?: string;
+  test_results?: string;
+  age_at_diagnosis?: number | string;
+  medical_history?: string;
+  fertility_conditions?: string[];
+  inherited_conditions?: string[];
+  chromosomal_conditions?: string[];
+  medical_report_name?: string;
+  dob?: string;
+  living_status?: 'Alive' | 'Deceased' | 'Unknown';
+  location?: string;
+  avatar_url?: string;
+  omim_locus?: string;
   // Computed layout coordinates
   x?: number;
   y?: number;
@@ -76,15 +100,16 @@ export interface PedigreeUnion {
 
 export interface FamilyRecord {
   id: string;
-  family_id: string; // e.g. "F-000123"
+  family_id: string; // e.g. "F-00001" or "FA-000001"
   family_name: string;
+  name?: string;
   proband_name: string;
   is_consanguineous: boolean;
   consanguinity_notes?: string;
+  health_conditions_of_interest?: string[];
   created_at: string;
   updated_at: string;
   share_token?: string;
   share_status?: 'private' | 'link_shared' | 'consult_shared';
   members?: PedigreeMember[];
 }
-
