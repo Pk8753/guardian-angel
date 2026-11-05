@@ -77,32 +77,91 @@
 
 ## 🚀 Running on Local Machine
 
-### 1. Requirements
-- Python 3.10+
-- Flask & Gunicorn (already installed)
+The platform is divided into two dedicated components:
+- **`backend/`**: Headless Python / Flask REST API (Port 5000)
+- **`frontend/`**: Next.js (App Router) + TypeScript (strict) + Tailwind CSS + Custom SVG Pedigree Engine (Port 3000)
 
-### 2. Quick Start
-Run the startup script:
+---
+
+### 📋 Prerequisites
+- **Node.js**: v18.17+ or v20+ (tested up to v26)
+- **Python**: 3.10+
+- **npm** (comes with Node.js)
+
+---
+
+### Step 1: Start the Backend REST API (Port 5000)
+
+1. Open a terminal and navigate to the `backend/` directory:
+   ```bash
+   cd backend
+   ```
+2. Create and activate a Python virtual environment:
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
+3. Install Python dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+4. Start the Flask API server:
+   ```bash
+   python3 app.py
+   ```
+   *The backend REST API runs on **`http://127.0.0.1:5000`**.*
+
+---
+
+### Step 2: Start the Next.js Frontend (Port 3000)
+
+1. Open a second terminal and navigate to the `frontend/` directory:
+   ```bash
+   cd frontend
+   ```
+2. Install npm dependencies:
+   ```bash
+   npm install
+   ```
+3. Generate Prisma ORM client:
+   ```bash
+   npx prisma generate
+   ```
+4. Start the Next.js development server:
+   ```bash
+   npm run dev
+   ```
+5. Open your web browser to:
+   **[http://localhost:3000](http://localhost:3000)**
+
+---
+
+### 🔑 Authentication & Login Credentials
+
+- **First-Page Protection**: Visiting `http://localhost:3000` or any protected URL without a session automatically redirects to `http://localhost:3000/login`.
+- **Default Accounts**:
+  - **Admin**: Username: `admin` | Password: `admin`
+  - **Standard User**: Username: `user` | Password: `user`
+- **Register a New Account**:
+  - Click the **"Create Account"** tab on `/login`.
+  - Enter details (First name, Last name, Username, DOB, Email, Location, Password).
+  - Use testing verification OTP: **`9090`**.
+  - Sign in with your new credentials.
+
+---
+
+### 🧪 Running Test Suites
+
+#### 1. Backend REST API Tests:
 ```bash
-./run.sh
+python3 -m unittest discover tests -v
 ```
+*(All 17 tests verify health checks, authentication, OTP, multi-family pedigree engine, and condition catalog)*
 
-Or run directly with Python:
+#### 2. Frontend Production Build & Typecheck:
 ```bash
-python3 app.py
-```
-
-Open your browser to:
-**[http://127.0.0.1:8080](http://127.0.0.1:8080)**
-
-Sign in with:
-- **Username:** `admin`
-- **Password:** `admin`
-
-### 3. Running Unit Tests
-To verify all routes, database operations, and API endpoints:
-```bash
-python3 -m unittest tests/test_app.py -v
+cd frontend
+npm run build
 ```
 
 ---
@@ -153,28 +212,42 @@ gcloud builds submit --config=cloudbuild.yaml
 
 ```
 Guradian-Angel/
-├── app.py                     # Main Flask application & clinical API endpoints
-├── clinical_engine.py         # Dynamic clinical genetics calculation & dashboard generation engine
-├── config.py                  # Application configuration & GCP environment variables
-├── database.py                # SQLite schema & persistence (user, pedigree, privacy)
-├── gcp_services.py            # GCP Storage (GCS) & Vertex AI (Gemini) integrations
-├── Dockerfile                 # Container image for Google Cloud Run
-├── .dockerignore              # Docker build exclusions
-├── cloudbuild.yaml            # Google Cloud Build deployment pipeline
-├── deploy-gcp.sh              # 1-click GCP deployment script
-├── run.sh                     # Local development startup script
-├── requirements.txt           # Python package dependencies
-├── templates/                 # Jinja2 HTML templates matching the UI designs
-│   ├── base.html              # Institutional sidebar, topbar, global Add Member modal
-│   ├── login.html             # Secure login screen (admin / admin)
-│   ├── dashboard.html         # Dynamic Clinical Web Dashboard & Guided Intake Stepper
-│   ├── pedigree.html          # Interactive Family Tree Builder & Visualizer
-│   ├── risk_analysis.html     # AI Genetic Risk Intelligence
-│   ├── couple_assessment.html # Pre-Marital Couple Hereditary Assessment
-│   ├── privacy_security.html  # Privacy & Security Center with ZK-Delegations
-│   └── profile.html           # Patient Profile & Clinical Demographics
-├── tests/
-│   └── test_app.py            # Automated test suite (15 tests)
-└── ui-screen/                 # Original UI screen designs and prototypes
+├── backend/                             # Headless Flask REST API server
+│   ├── app.py                           # Clinical & pedigree REST API endpoints
+│   ├── clinical_engine.py               # Bayesian carrier & inbreeding (F-calc) engine
+│   ├── config.py                        # Backend configuration & environment settings
+│   ├── database.py                      # SQLite database layer with multi-family support
+│   ├── gcp_services.py                  # GCP Cloud Storage & Vertex AI integrations
+│   ├── requirements.txt                 # Python dependencies
+│   ├── run.sh                           # Backend startup script
+│   └── tests/                           # Backend unit test suite
+│
+├── frontend/                            # Next.js App Router (TypeScript + Tailwind)
+│   ├── package.json                     # Frontend dependencies & scripts
+│   ├── tsconfig.json                    # Strict TypeScript configuration
+│   ├── tailwind.config.js               # Clinical theme tokens & colors
+│   ├── next.config.js                   # API Proxy to backend (http://127.0.0.1:5000)
+│   ├── prisma/                          # Prisma ORM schema
+│   └── src/
+│       ├── middleware.ts                # Next.js Edge route guard (forces /login first)
+│       ├── app/
+│       │   ├── page.tsx                 # Root redirect to /login
+│       │   ├── login/page.tsx           # Clean login & registration view
+│       │   ├── dashboard/page.tsx       # Clinical web dashboard matching UI screen
+│       │   ├── pedigree/page.tsx        # Layered SVG pedigree tree editor
+│       │   ├── pedigree/share/[token]/  # Public de-identified read-only viewer
+│       │   ├── couple-assessment/       # Dual-lineage comparative synthesis (F=0.0625)
+│       │   ├── risk-analysis/           # ACMG monogenic variant risk intelligence
+│       │   ├── privacy-security/        # Sudo de-identification & 256-bit AES vault
+│       │   └── profile/                 # Patient clinical demographics
+│       └── components/
+│           ├── layout/                  # Sidebar, Navbar, and AuthGuard
+│           └── pedigree/                # Custom SVG layoutEngine, PedigreeCanvas, Modals
+│
+├── tests/                               # Root test suite runner
+│   ├── test_api.py                      # REST API test cases
+│   └── test_pedigree_engine.py          # Pedigree engine & multi-family test cases
+│
+└── ui-screen/                           # UI screen designs and visual templates
 ```
 

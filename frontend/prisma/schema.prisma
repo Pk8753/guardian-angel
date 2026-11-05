@@ -1,0 +1,127 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  username     String    @unique
+  passwordHash String    @map("password_hash")
+  email        String    @unique
+  fullName     String    @map("full_name")
+  role         String    @default("patient")
+  aliasName    String?   @map("alias_name")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  profile      Profile?
+  families     Family[]
+  nodes        PedigreeNode[]
+
+  @@map("users")
+}
+
+model Profile {
+  id                Int      @id @default(autoincrement())
+  userId            Int      @unique @map("user_id")
+  dob               String?
+  bloodType         String?  @map("blood_type")
+  phone             String?
+  city              String?
+  country           String?
+  kinshipDegree     String?  @map("kinship_degree")
+  phenotypicNotes   String?  @map("phenotypic_notes")
+  emergencyContact  String?  @map("emergency_contact")
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+model Family {
+  id                       Int              @id @default(autoincrement())
+  familyId                 String           @unique @map("family_id")
+  userId                   Int              @map("user_id")
+  name                     String?
+  traitOrDisorderName      String?          @map("trait_or_disorder_name")
+  numberOfGenerations      Int              @default(1) @map("number_of_generations")
+  familyHistoryDescription String?          @map("family_history_description")
+  shareToken               String           @unique @map("share_token")
+  shareEnabled             Boolean          @default(false) @map("share_enabled")
+  sharePermission          String           @default("view") @map("share_permission")
+  shareExpiresAt           DateTime?        @map("share_expires_at")
+  showNamesOnSharedLink    Boolean          @default(false) @map("show_names_on_shared_link")
+  createdAt                DateTime         @default(now()) @map("created_at")
+  updatedAt                DateTime         @updatedAt @map("updated_at")
+
+  user                     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  members                  PedigreeNode[]
+
+  @@map("families")
+}
+
+model PedigreeNode {
+  id              Int       @id @default(autoincrement())
+  userId          Int       @map("user_id")
+  familyId        String?   @map("family_id")
+  nodeKey         String    @map("node_key")
+  individualId    String?   @map("individual_id")
+  name            String
+  generation      String
+  sex             String
+  relationship    String
+  carrierStatus   String    @map("carrier_status")
+  affectedStatus  String    @default("Unaffected") @map("affected_status")
+  livingStatus    String    @default("Alive") @map("living_status")
+  conditionLocus  String?   @map("condition_locus")
+  birthYear       String?   @map("birth_year")
+  causeOfDeath    String?   @map("cause_of_death")
+  isProband       Boolean   @default(false) @map("is_proband")
+  aliasName       String?   @map("alias_name")
+  genotype        String?
+  geneticTest     String    @default("Not tested") @map("genetic_test")
+  fatherId        String?   @map("father_id")
+  motherId        String?   @map("mother_id")
+  partnerId       String?   @map("partner_id")
+  twinGroupId     String?   @map("twin_group_id")
+  twinType        String?   @map("twin_type")
+  adoptionStatus  String    @default("none") @map("adoption_status")
+  customX         Float?    @map("custom_x")
+  customY         Float?    @map("custom_y")
+  conditions      String?
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  family          Family?   @relation(fields: [familyId], references: [familyId], onDelete: Cascade)
+
+  @@map("pedigree_nodes")
+}
+
+model Condition {
+  id                 Int              @id @default(autoincrement())
+  name               String           @unique
+  category           String
+  gene               String?
+  inheritance        String?
+  oftenNotInherited  Boolean          @default(false) @map("often_not_inherited")
+  isCommonInIndia    Boolean          @default(false) @map("is_common_in_india")
+  description        String?
+
+  suggestedTests     ConditionTest[]
+
+  @@map("conditions")
+}
+
+model ConditionTest {
+  id           Int        @id @default(autoincrement())
+  conditionId  Int        @map("condition_id")
+  testName     String     @map("test_name")
+  purpose      String
+
+  condition    Condition  @relation(fields: [conditionId], references: [id], onDelete: Cascade)
+
+  @@map("condition_tests")
+}
+

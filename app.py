@@ -10,7 +10,7 @@ import re
 from datetime import datetime, timezone
 from functools import wraps
 from flask import (
-    Flask, render_template, request, redirect, url_for,
+    Flask, request, redirect, url_for,
     session, jsonify, flash, send_from_directory
 )
 from config import Config
@@ -19,7 +19,9 @@ from database import (
     verify_password, get_user_profile, update_user_profile,
     get_pedigree_nodes, add_pedigree_node, update_pedigree_node,
     delete_pedigree_node, get_privacy_delegations, add_privacy_delegation,
-    generate_pseudonym
+    generate_pseudonym, create_family, get_user_families, get_family_by_id,
+    get_family_by_share_token, update_family_share, regenerate_family_token,
+    get_conditions_catalog, update_node_position
 )
 from clinical_engine import compute_clinical_state
 from gcp_services import gcp_storage, vertex_ai
@@ -79,11 +81,11 @@ def regenerate_alias():
 EMAIL_REGEX = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
 USERNAME_REGEX = r'^[a-zA-Z0-9_.-]{2,30}$'
 
-@app.route('/api/check-username', methods=['POST'])
+@app.route('/api/check-username', methods=['GET', 'POST'])
 def api_check_username():
     """Checks whether a username is already taken. Returns availability status."""
     data = request.get_json(silent=True) or request.form or {}
-    username = data.get('username', '').strip().lower()
+    username = (data.get('username') or request.args.get('username') or '').strip().lower()
     
     if not username or not re.match(USERNAME_REGEX, username):
         return jsonify({
@@ -153,63 +155,61 @@ def api_verify_otp():
         }), 400
 
 @app.route('/login', methods=['GET', 'POST'])
+@app.route('/api/login', methods=['POST'])
+@app.route('/api/register', methods=['POST'])
 def login():
     if request.method == 'POST':
-        mode = request.form.get('mode', 'signin')
+        data = request.get_json(silent=True) or request.form or {}
+        mode = 'register' if request.path.endswith('/register') else data.get('mode', 'signin')
         
         if mode == 'register':
-            firstname = request.form.get('firstname', '').strip()
-            secondname = request.form.get('secondname', '').strip()
+            firstname = (data.get('firstname') or data.get('first_name') or '').strip()
+            secondname = (data.get('secondname') or data.get('last_name') or '').strip()
             fullname = f"{firstname} {secondname}".strip()
             if not fullname:
-                fullname = request.form.get('fullname', '').strip()
+                fullname = (data.get('fullname') or data.get('full_name') or '').strip()
                 if fullname:
                     parts = fullname.split(' ', 1)
                     firstname = parts[0]
                     secondname = parts[1] if len(parts) > 1 else ''
 
-            dob = request.form.get('dob', '').strip()
-            email = request.form.get('email', '').strip()
-            location = request.form.get('location', '').strip()
+            dob = (data.get('dob') or '').strip()
+            email = (data.get('email') or '').strip()
+            location = (data.get('location') or '').strip()
             
-            # Robust password extraction: check reg_password first, then any non-empty password entry
-            password = request.form.get('reg_password', '').strip()
-            if not password:
-                passwords = [p.strip() for p in request.form.getlist('password') if p.strip()]
-                password = passwords[-1] if passwords else request.form.get('password', '').strip()
-
-            otp = request.form.get('otp', '').strip()
+            # Password extraction
+            password = (data.get('reg_password') or data.get('password') or '').strip()
+            otp = (data.get('otp') or '').strip()
             
-            # Robust username extraction: check reg_username first, then username, then email prefix
-            username = request.form.get('reg_username', '').strip()
-            if not username:
-                usernames = [u.strip() for u in request.form.getlist('username') if u.strip()]
-                username = usernames[-1] if usernames else (request.form.get('username', '').strip() or (email.split('@')[0] if '@' in email else email))
+            # Username extraction
+            username = (data.get('reg_username') or data.get('username') or '').strip()
+            if not username and email:
+                username = email.split('@')[0]
             
             # Sequence validation
             if not email or not re.match(EMAIL_REGEX, email):
-                return render_template('login.html', error="Please enter a valid email address.", active_mode="register")
+                return jsonify({"status": "error", "message": "Please enter a valid email address."}), 400
 
             if not fullname or not password or not dob or not location:
-                return render_template('login.html', error="Please provide First name, Second name, Date of birth, Email, Location, and Password.", active_mode="register")
+                return jsonify({"status": "error", "message": "Please provide First name, Second name, Date of birth, Email, Location, and Password."}), 400
             
             if not username or not re.match(USERNAME_REGEX, username):
-                return render_template('login.html', error="Please choose a valid username (2-30 characters, letters, numbers, dots, hyphens, or underscores).", active_mode="register")
+                return jsonify({"status": "error", "message": "Please choose a valid username (2-30 characters, letters, numbers, dots, hyphens, or underscores)."}), 400
             
             # OTP verification
             expected_otp = session.get('registration_otp', '9090')
             if otp != '9090' and otp != expected_otp:
-                return render_template('login.html', error="Invalid verification code. Please verify your OTP.", active_mode="register")
+                return jsonify({"status": "error", "message": "Invalid verification code. Please verify your OTP."}), 400
             
             # Check username uniqueness
             existing_user = get_user_by_username(username)
             if existing_user:
-                return render_template('login.html', error="Username is already taken. Please choose a different username.", active_mode="register")
+                return jsonify({"status": "error", "message": "Username is already taken. Please choose a different username."}), 400
             
-            # Check email uniqueness (look up by email as username too)
+            # Check email uniqueness
             existing_email = get_user_by_username(email)
             if existing_email:
-                return render_template('login.html', error="This email is already registered. Please sign in.", active_mode="signin")
+                return jsonify({"status": "error", "message": "This email is already registered. Please sign in."}), 400
             
             user_id = create_user(
                 username=username,
@@ -220,20 +220,17 @@ def login():
                 location=location
             )
             if user_id:
-                # User requirement: Create account button must give message that your account has been created go to login page to enter.
-                flash("Your account has been created successfully. Please sign in to enter.", "success")
-                return render_template(
-                    'login.html',
-                    active_mode='signin',
-                    success="Your account has been created successfully! Please sign in with your credentials to access your health vault.",
-                    prefill_username=username
-                )
+                return jsonify({
+                    "status": "success",
+                    "message": "Your account has been created successfully! Please sign in with your credentials to access your health vault.",
+                    "username": username
+                }), 201
             else:
-                return render_template('login.html', error="Failed to create vault account. Please try again.", active_mode="register")
+                return jsonify({"status": "error", "message": "Failed to create vault account. Please try again."}), 500
 
-        # Sign In mode: Default user/user and admin/admin supported
-        username = request.form.get('signin_username', '').strip() or request.form.get('username', '').strip()
-        password = request.form.get('signin_password', '').strip() or request.form.get('password', '').strip()
+        # Sign In mode
+        username = (data.get('signin_username') or data.get('username') or '').strip()
+        password = (data.get('signin_password') or data.get('password') or '').strip()
         user = get_user_by_username(username)
         if not user:
             if username.lower() == 'user' and password == 'user':
@@ -245,113 +242,62 @@ def login():
                      (username.lower() == 'user' and password == 'user') or
                      (username.lower() == 'admin' and password == 'admin')):
             session['user_id'] = user['id']
-            flash("Secure zero-knowledge session authenticated.", "success")
-            return redirect(url_for('dashboard'))
+            u_dict = dict(user)
+            return jsonify({
+                "status": "success",
+                "message": "Secure zero-knowledge session authenticated.",
+                "user": {
+                    "id": u_dict['id'],
+                    "username": u_dict['username'],
+                    "full_name": u_dict.get('full_name') or u_dict['username'],
+                    "alias_name": u_dict.get('alias_name') or 'Silent-Falcon-9214',
+                    "email": u_dict.get('email') or ''
+                }
+            })
         else:
-            return render_template('login.html', error="Invalid clinical credentials. Please check your username and password.", active_mode="signin")
+            return jsonify({"status": "error", "message": "Invalid clinical credentials. Please check your username and password."}), 401
 
-    return render_template('login.html', active_mode=request.args.get('mode', 'signin'))
+    return jsonify({"status": "success", "message": "GuardianAngel Auth API", "frontend": "http://localhost:3000/login"})
 
 @app.route('/logout')
 def logout():
     session.clear()
-    flash("You have been signed out from your zero-knowledge vault.", "info")
-    return redirect(url_for('login'))
+    return jsonify({"status": "success", "message": "You have been signed out from your zero-knowledge vault."})
 
 # ==================== MAIN VIEW ROUTES ====================
 
 @app.route('/')
 @app.route('/dashboard')
-@login_required
 def dashboard():
-    user_id = session['user_id']
-    user = get_user_by_id(user_id)
-    nodes = get_pedigree_nodes(user_id)
-    profile = get_user_profile(user_id)
-    state = compute_clinical_state(user, nodes, profile)
-    return render_template(
-        'dashboard.html',
-        active_page='dashboard',
-        nodes=nodes,
-        is_fresh_user=state['is_fresh_user'],
-        is_admin=state['is_admin'],
-        state=state,
-        profile=profile
-    )
+    return jsonify({"status": "success", "message": "GuardianAngel Headless API", "frontend": "http://localhost:3000/dashboard"})
 
 @app.route('/pedigree')
-@login_required
 def pedigree():
-    user_id = session['user_id']
-    user = get_user_by_id(user_id)
-    nodes = get_pedigree_nodes(user_id)
-    profile = get_user_profile(user_id)
-    state = compute_clinical_state(user, nodes, profile)
-    
-    # Custom nodes beyond the 11 standard historical seed keys (for admin)
-    standard_keys = {'grandpa_p', 'grandma_p', 'farooq', 'grandma_m', 'walid', 'samira', 'kareem', 'fatima_aunt', 'tariq', 'laila', 'zayd'}
-    custom_nodes = [n for n in nodes if n['node_key'] not in standard_keys]
-    
-    return render_template(
-        'pedigree.html',
-        active_page='pedigree',
-        nodes=nodes,
-        custom_nodes=custom_nodes,
-        is_fresh_user=state['is_fresh_user'],
-        is_admin=state['is_admin'],
-        state=state
-    )
+    return jsonify({"status": "success", "message": "GuardianAngel Pedigree Headless API", "frontend": "http://localhost:3000/pedigree"})
 
 @app.route('/risk-analysis')
-@login_required
 def risk_analysis():
-    user_id = session['user_id']
-    user = get_user_by_id(user_id)
-    nodes = get_pedigree_nodes(user_id)
-    profile = get_user_profile(user_id)
-    state = compute_clinical_state(user, nodes, profile)
-    return render_template('risk_analysis.html', active_page='risk_analysis', nodes=nodes, state=state, is_fresh_user=state['is_fresh_user'], is_admin=state['is_admin'])
+    return jsonify({"status": "success", "message": "GuardianAngel Risk Analysis Headless API", "frontend": "http://localhost:3000/risk-analysis"})
 
 @app.route('/couple-assessment')
-@login_required
 def couple_assessment():
-    user_id = session['user_id']
-    user = get_user_by_id(user_id)
-    nodes = get_pedigree_nodes(user_id)
-    profile = get_user_profile(user_id)
-    state = compute_clinical_state(user, nodes, profile)
-    return render_template('couple_assessment.html', active_page='couple_assessment', state=state, is_fresh_user=state['is_fresh_user'], is_admin=state['is_admin'])
+    return jsonify({"status": "success", "message": "GuardianAngel Couple Assessment Headless API", "frontend": "http://localhost:3000/couple-assessment"})
 
 @app.route('/privacy-security')
-@login_required
 def privacy_security():
-    user_id = session['user_id']
-    delegations = get_privacy_delegations(user_id)
-    return render_template('privacy_security.html', active_page='privacy_security', delegations=delegations)
+    return jsonify({"status": "success", "message": "GuardianAngel Privacy Security Headless API", "frontend": "http://localhost:3000/privacy-security"})
 
 @app.route('/profile', methods=['GET', 'POST'])
-@login_required
 def profile_view():
-    user_id = session['user_id']
+    user_id = session.get('user_id')
     if request.method == 'POST':
-        data = {
-            'full_name': request.form.get('full_name'),
-            'alias_name': request.form.get('alias_name'),
-            'dob': request.form.get('dob'),
-            'blood_type': request.form.get('blood_type'),
-            'phone': request.form.get('phone'),
-            'city': request.form.get('city'),
-            'country': request.form.get('country'),
-            'kinship_degree': request.form.get('kinship_degree'),
-            'phenotypic_notes': request.form.get('phenotypic_notes'),
-            'emergency_contact': request.form.get('emergency_contact')
-        }
-        update_user_profile(user_id, data)
-        flash("Patient clinical details successfully updated.", "success")
-        return redirect(url_for('profile_view'))
+        data = request.get_json(silent=True) or request.form.to_dict()
+        if user_id:
+            update_user_profile(user_id, data)
+        return jsonify({"status": "success", "message": "Patient clinical details successfully updated."})
 
-    profile = get_user_profile(user_id)
-    return render_template('profile.html', active_page='profile', profile=profile)
+    profile = get_user_profile(user_id) if user_id else {}
+    return jsonify({"status": "success", "profile": profile})
 
 # ==================== API ENDPOINTS ====================
 
@@ -423,6 +369,78 @@ def api_gcp_sync_pedigree():
     filename = f"pedigrees/user_{user_id}_pedigree_{int(datetime.now(timezone.utc).timestamp())}.json"
     result = gcp_storage.upload_file(filename, json.dumps(payload, indent=2))
     return jsonify(result)
+
+
+# ==================== MULTI-FAMILY & ADVANCED PEDIGREE CHART APIS ====================
+
+@app.route('/api/families', methods=['GET', 'POST'])
+@login_required
+def api_families():
+    user_id = session['user_id']
+    if request.method == 'POST':
+        data = request.get_json() or {}
+        res = create_family(user_id, data)
+        return jsonify({"status": "success", "family": res}), 201
+    families = get_user_families(user_id)
+    return jsonify({"status": "success", "families": families})
+
+@app.route('/api/families/<family_id>', methods=['GET', 'PUT'])
+@login_required
+def api_family_detail(family_id):
+    fam = get_family_by_id(family_id)
+    if not fam:
+        return jsonify({"status": "error", "message": "Family not found"}), 404
+    return jsonify({"status": "success", "family": fam})
+
+@app.route('/api/families/<family_id>/members', methods=['POST'])
+@login_required
+def api_add_family_member(family_id):
+    user_id = session['user_id']
+    data = request.get_json() or {}
+    data['family_id'] = family_id
+    node_id = add_pedigree_node(user_id, data)
+    return jsonify({"status": "success", "member_id": node_id, "message": "Relative recorded"}), 201
+
+@app.route('/api/families/<family_id>/members/<int:member_id>', methods=['PUT', 'DELETE'])
+@login_required
+def api_modify_family_member(family_id, member_id):
+    user_id = session['user_id']
+    if request.method == 'DELETE':
+        delete_pedigree_node(member_id, user_id)
+        return jsonify({"status": "success", "message": "Relative removed"})
+    data = request.get_json() or {}
+    update_pedigree_node(member_id, user_id, data)
+    return jsonify({"status": "success", "message": "Relative updated"})
+
+@app.route('/api/families/<family_id>/members/<int:member_id>/position', methods=['PATCH', 'POST'])
+@login_required
+def api_update_member_position(family_id, member_id):
+    data = request.get_json() or {}
+    update_node_position(member_id, data.get('custom_x', 0), data.get('custom_y', 0))
+    return jsonify({"status": "success", "message": "Position updated"})
+
+@app.route('/api/families/<family_id>/share', methods=['PATCH', 'POST'])
+@login_required
+def api_family_share(family_id):
+    data = request.get_json() or {}
+    if data.get('regenerate'):
+        new_token = regenerate_family_token(family_id)
+        return jsonify({"status": "success", "share_token": new_token})
+    update_family_share(family_id, data.get('share_enabled', True))
+    return jsonify({"status": "success", "message": "Share settings updated"})
+
+@app.route('/api/conditions', methods=['GET'])
+def api_conditions():
+    catalog = get_conditions_catalog()
+    return jsonify({"status": "success", "conditions": catalog})
+
+@app.route('/pedigree/share/<share_token>')
+@app.route('/api/pedigree/share/<share_token>')
+def view_shared_pedigree(share_token):
+    fam = get_family_by_share_token(share_token)
+    if not fam or fam.get('share_enabled') == 0:
+        return jsonify({"status": "error", "message": "Invalid or revoked share token"}), 404
+    return jsonify({"status": "success", "family": fam})
 
 # ==================== GCP HEALTH CHECK ENDPOINTS ====================
 
