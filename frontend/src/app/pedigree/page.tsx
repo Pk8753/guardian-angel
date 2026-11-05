@@ -50,6 +50,29 @@ export default function PedigreePage() {
   const [editingMember, setEditingMember] = useState<PedigreeMember | null>(null);
   const [initialRelation, setInitialRelation] = useState<string | null>(null);
 
+  // Modal State for Choosing: Continue with Existing vs Create New Pedigree Tree
+  const [isChoiceModalOpen, setIsChoiceModalOpen] = useState<boolean>(false);
+  const [isCreatingNewTree, setIsCreatingNewTree] = useState<boolean>(false);
+  const [nextSequentialId, setNextSequentialId] = useState<string>('FA-000001');
+  const [selectedExistingFamilyId, setSelectedExistingFamilyId] = useState<string>('');
+
+  // Fetch Next Sequential Chart ID (FA-000001, FA-000002, ...)
+  const fetchNextFamilyId = async () => {
+    try {
+      const res = await fetch('/api/families/next-id');
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.next_family_id) {
+          setNextSequentialId(data.next_family_id);
+          return data.next_family_id;
+        }
+      }
+    } catch (e) {
+      console.error('Failed to fetch next family ID:', e);
+    }
+    return 'FA-000001';
+  };
+
   // Load user families from API with resilient active family restoration
   const loadFamilies = useCallback(async (preferredFamilyId?: string) => {
     try {
@@ -117,6 +140,7 @@ export default function PedigreePage() {
               setSelectedMember(null);
             }
           }
+          return list;
         } else {
           setFamilies([]);
           setActiveFamily(null);
@@ -124,14 +148,35 @@ export default function PedigreePage() {
           if (typeof window !== 'undefined') {
             sessionStorage.removeItem('ga_active_family_id');
           }
+          return [];
         }
       }
+      return [];
     } catch (e) {
       console.error('Failed to load families:', e);
+      return [];
     } finally {
       setLoading(false);
     }
   }, [activeFamily?.family_id]);
+
+  // Handle flow when user clicks "Create Family Pedigree"
+  const handleOpenCreateTreeFlow = async () => {
+    setEditingMember(null);
+    setInitialRelation(null);
+    const nextId = await fetchNextFamilyId();
+
+    if (families.length > 0) {
+      // User already has at least one pedigree tree: prompt them!
+      setSelectedExistingFamilyId(activeFamily?.family_id || families[0].family_id);
+      setIsChoiceModalOpen(true);
+    } else {
+      // No trees yet: directly start new tree wizard
+      setIsCreatingNewTree(true);
+      setWizardStep(1);
+      setIsWizardOpen(true);
+    }
+  };
 
   useEffect(() => {
     let requestedCreate = false;
@@ -149,12 +194,19 @@ export default function PedigreePage() {
       initialFamId = params.get('family_id') || undefined;
     }
 
-    loadFamilies(initialFamId).then(() => {
+    loadFamilies(initialFamId).then((loadedFamilies) => {
       if (requestedCreate) {
-        setEditingMember(null);
-        setInitialRelation(null);
-        setWizardStep(1);
-        setIsWizardOpen(true);
+        const familyList = Array.isArray(loadedFamilies) ? loadedFamilies : [];
+        if (familyList.length > 0) {
+          fetchNextFamilyId().then(() => {
+            setSelectedExistingFamilyId(initialFamId || familyList[0].family_id);
+            setIsChoiceModalOpen(true);
+          });
+        } else {
+          setIsCreatingNewTree(true);
+          setWizardStep(1);
+          setIsWizardOpen(true);
+        }
       }
     });
   }, []);
@@ -592,12 +644,7 @@ export default function PedigreePage() {
 
                 <button
                   type="button"
-                  onClick={() => {
-                    setEditingMember(null);
-                    setInitialRelation(null);
-                    setWizardStep(1);
-                    setIsWizardOpen(true);
-                  }}
+                  onClick={handleOpenCreateTreeFlow}
                   className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-teal-800 hover:bg-teal-900 rounded-xl shadow-xs transition"
                 >
                   <Plus className="w-4 h-4" />
@@ -773,11 +820,7 @@ export default function PedigreePage() {
                       </div>
                       <button
                         type="button"
-                        onClick={() => {
-                          setEditingMember(null);
-                          setWizardStep(1);
-                          setIsWizardOpen(true);
-                        }}
+                        onClick={handleOpenCreateTreeFlow}
                         className="inline-flex items-center gap-2 px-6 py-3 text-xs font-bold text-white bg-teal-800 hover:bg-teal-900 rounded-xl shadow-md transition"
                       >
                         <Plus className="w-4 h-4" />
@@ -1074,12 +1117,161 @@ export default function PedigreePage() {
         </div>
 
         {/* ========================================================================= */}
+        {/* Family Tree Choice Modal (Continue Existing vs Create New Tree)           */}
+        {/* ========================================================================= */}
+        {isChoiceModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in">
+            <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-in zoom-in-95">
+              {/* Modal Header */}
+              <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-teal-800 text-white flex items-center justify-center shadow-xs">
+                    <GitBranch className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">
+                      Family Pedigree Tree Options
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      You have {families.length} family tree{families.length === 1 ? '' : 's'} in your records
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsChoiceModalOpen(false)}
+                  className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 space-y-4 text-xs">
+                <p className="text-slate-600 text-xs">
+                  Would you like to continue with an existing pedigree tree or create a new pedigree tree?
+                </p>
+
+                <div className="space-y-3">
+                  {/* Option 1: Continue with Existing Tree */}
+                  <div className="p-4 rounded-2xl border-2 border-slate-200 hover:border-teal-700 bg-white transition space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900 text-sm">
+                            Continue with Existing Tree
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md bg-teal-50 border border-teal-200 text-teal-800 font-mono text-[11px] font-bold">
+                            {selectedExistingFamilyId || activeFamily?.family_id}
+                          </span>
+                        </div>
+                        <p className="text-slate-500 text-[11px] mt-0.5">
+                          Open your existing tree to view connections or add more relatives.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Selector if multiple trees exist */}
+                    {families.length > 1 && (
+                      <div className="pt-1">
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                          Select Tree:
+                        </label>
+                        <select
+                          value={selectedExistingFamilyId || activeFamily?.family_id || ''}
+                          onChange={(e) => setSelectedExistingFamilyId(e.target.value)}
+                          className="w-full px-3 py-2 text-xs font-semibold rounded-xl bg-slate-50 border border-slate-300 text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-700"
+                        >
+                          {families.map((f) => (
+                            <option key={f.family_id} value={f.family_id}>
+                              {f.family_name || f.name} ({f.family_id}) &bull; {f.member_count ?? 1} members
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const targetId = selectedExistingFamilyId || activeFamily?.family_id || families[0].family_id;
+                          handleSelectFamily(targetId);
+                          setIsChoiceModalOpen(false);
+                          setIsCreatingNewTree(false);
+                          setEditingMember(null);
+                          setInitialRelation(null);
+                          setWizardStep(3);
+                          setIsWizardOpen(true);
+                        }}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-bold transition shadow-xs"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add Relatives to this Tree</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const targetId = selectedExistingFamilyId || activeFamily?.family_id || families[0].family_id;
+                          handleSelectFamily(targetId);
+                          setIsChoiceModalOpen(false);
+                        }}
+                        className="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition"
+                      >
+                        View Chart
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Option 2: Create New Tree */}
+                  <div className="p-4 rounded-2xl border-2 border-emerald-200 bg-emerald-50/40 hover:border-emerald-600 transition space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900 text-sm">
+                            Create New Pedigree Tree
+                          </span>
+                          <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 font-mono text-[11px] font-bold border border-emerald-300">
+                            {nextSequentialId}
+                          </span>
+                        </div>
+                        <p className="text-slate-600 text-[11px] mt-0.5">
+                          Start a new pedigree tree with sequential Chart ID <strong className="font-mono text-emerald-900">{nextSequentialId}</strong>.
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsChoiceModalOpen(false);
+                        setIsCreatingNewTree(true);
+                        setEditingMember(null);
+                        setInitialRelation(null);
+                        setWizardStep(1);
+                        setIsWizardOpen(true);
+                      }}
+                      className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition shadow-xs"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Start New Pedigree Tree ({nextSequentialId})</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
         {/* Family Wizard Modal (Step 1 -> Step 2 -> Step 3)                          */}
         {/* ========================================================================= */}
         <FamilyWizardModal
           isOpen={isWizardOpen}
           onClose={() => {
             setIsWizardOpen(false);
+            setIsCreatingNewTree(false);
             setEditingMember(null);
             setInitialRelation(null);
             if (activeFamily?.family_id) {
@@ -1096,10 +1288,11 @@ export default function PedigreePage() {
           onFamilyCreated={handleFamilyCreated}
           onAddMember={handleAddMember}
           onUpdateMember={handleUpdateMember}
-          existingFamily={activeFamily}
+          existingFamily={isCreatingNewTree ? null : activeFamily}
           initialStep={wizardStep}
           editingMember={editingMember}
           initialRelation={initialRelation}
+          newFamilyId={isCreatingNewTree ? nextSequentialId : null}
         />
       </div>
     </AuthGuard>
