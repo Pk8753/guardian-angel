@@ -8,6 +8,7 @@ import os
 import json
 import hashlib
 import hmac
+import base64
 import random
 from werkzeug.security import generate_password_hash, check_password_hash
 from config import Config
@@ -26,11 +27,14 @@ NOUNS = [
     "Finch", "Plover", "Phoenix", "Willow", "Horizon", "Nebula", "Badger"
 ]
 
-def generate_pseudonym(prefix: str = "") -> str:
-    """Generates a random Reddit-style alias (e.g., Curious-Falcon-4921)."""
+def generate_pseudonym(prefix: str = "", name_initials: str = "") -> str:
+    """Generates a random Reddit-style alias (e.g., Curious-Falcon-4921 or Swift-Falcon-Ka-4921)."""
     adj = random.choice(ADJECTIVES)
     noun = random.choice(NOUNS)
     num = random.randint(1000, 9999)
+    if name_initials:
+        clean_init = name_initials.strip().replace('-', '').replace(' ', '')[:2].lower()
+        return f"{adj}-{noun}-{clean_init}-{num}"
     if prefix:
         return f"{prefix}-{noun}-{num}"
     return f"{adj}-{noun}-{num}"
@@ -210,7 +214,30 @@ def init_db():
     );
     """)
 
+    # 9. Scraped & Masked Premarital / Genetic Reports (Zero raw file storage)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS scraped_reports (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        file_name TEXT,
+        panel_name TEXT NOT NULL,
+        masked_data TEXT NOT NULL,
+        gene_locus TEXT,
+        variant TEXT,
+        carrier_status TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+    """)
+
     conn.commit()
+
+    # Additive migration: Ensure file_name column exists in scraped_reports
+    try:
+        cursor.execute("ALTER TABLE scraped_reports ADD COLUMN file_name TEXT;")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
 
     # Migration: Ensure new pedigree columns exist
     pedigree_columns = [
@@ -230,6 +257,7 @@ def init_db():
         ("custom_x", "REAL"),
         ("custom_y", "REAL"),
         ("conditions", "TEXT"),
+        ("location", "TEXT"),
     ]
     for col_name, col_def in pedigree_columns:
         try:
@@ -518,20 +546,21 @@ def add_pedigree_node(user_id: int, data: dict):
     custom_x = data.get('custom_x')
     custom_y = data.get('custom_y')
     raw_conditions = json.dumps(conditions) if isinstance(conditions, list) else str(conditions or '')
+    location = data.get('location', '')
     
     cursor.execute("""
     INSERT INTO pedigree_nodes (
         user_id, node_key, name, generation, sex, relationship, carrier_status,
         condition_locus, birth_year, notes, is_proband, alias_name, family_id,
         father_id, mother_id, partner_id, twin_group_id, twin_type, adoption_status,
-        living_status, affected_status, cause_of_death, custom_x, custom_y, conditions
+        living_status, affected_status, cause_of_death, custom_x, custom_y, conditions, location
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         user_id, node_key, name, data.get('generation', 'gen2'), data.get('sex', 'male'),
         rel, carrier_status, condition_locus, birth_year, notes, is_proband, alias_name,
         family_id, father_id, mother_id, partner_id, twin_group_id, twin_type,
-        adoption_status, living_status, affected_status, cause_of_death, custom_x, custom_y, raw_conditions
+        adoption_status, living_status, affected_status, cause_of_death, custom_x, custom_y, raw_conditions, location
     ))
     node_id = cursor.lastrowid
     
@@ -584,7 +613,8 @@ def update_pedigree_node(node_id: int, user_id: int, data: dict):
         cause_of_death = COALESCE(?, cause_of_death),
         custom_x = COALESCE(?, custom_x),
         custom_y = COALESCE(?, custom_y),
-        conditions = COALESCE(?, conditions)
+        conditions = COALESCE(?, conditions),
+        location = COALESCE(?, location)
     WHERE id = ? AND user_id = ?
     """, (
         data.get('name') or data.get('full_name'),
@@ -604,6 +634,7 @@ def update_pedigree_node(node_id: int, user_id: int, data: dict):
         data.get('custom_x'),
         data.get('custom_y'),
         raw_conditions,
+        data.get('location'),
         node_id,
         user_id
     ))
@@ -826,6 +857,7 @@ def get_family_by_id(family_id: str):
         d['is_proband'] = bool(d.get('is_proband'))
         d['is_deceased'] = d.get('living_status') == 'Deceased'
         d['dob'] = d.get('birth_year') or ''
+        d['location'] = d.get('location') or ''
         d['father_id'] = d.get('father_id')
         d['mother_id'] = d.get('mother_id')
         d['spouse_ids'] = [d['partner_id']] if d.get('partner_id') else []
@@ -914,3 +946,82 @@ def get_conditions_catalog():
         conditions.append(c)
     conn.close()
     return conditions
+
+def encrypt_payload(data: dict, secret: str = None) -> str:
+    """Encrypts payload dictionary before storing in database for AI analysis."""
+    if not secret:
+        secret = Config.SECRET_KEY or "guardian_angel_vault_master_key_2026"
+    try:
+        from cryptography.fernet import Fernet
+        k = base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest())
+        return 'fernet:' + Fernet(k).encrypt(json.dumps(data).encode()).decode()
+    except ImportError:
+        raw = json.dumps(data).encode('utf-8')
+        salt = os.urandom(16)
+        key = hashlib.pbkdf2_hmac('sha256', secret.encode(), salt, 100000, 32)
+        keystream = bytearray()
+        block_num = 0
+        while len(keystream) < len(raw):
+            keystream.extend(hmac.new(key, block_num.to_bytes(4, 'big'), hashlib.sha256).digest())
+            block_num += 1
+        ciphertext = bytes(a ^ b for a, b in zip(raw, keystream[:len(raw)]))
+        tag = hmac.new(key, ciphertext, hashlib.sha256).digest()
+        payload = salt + tag + ciphertext
+        return 'std:' + base64.b64encode(payload).decode('ascii')
+
+def decrypt_payload(enc_str: str, secret: str = None) -> dict:
+    """Decrypts payload dictionary stored in database."""
+    if not secret:
+        secret = Config.SECRET_KEY or "guardian_angel_vault_master_key_2026"
+    try:
+        if enc_str.startswith('fernet:'):
+            from cryptography.fernet import Fernet
+            k = base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest())
+            return json.loads(Fernet(k).decrypt(enc_str[7:].encode()).decode())
+        elif enc_str.startswith('std:'):
+            raw_b = base64.b64decode(enc_str[4:].encode('ascii'))
+            salt, tag, ciphertext = raw_b[:16], raw_b[16:48], raw_b[48:]
+            key = hashlib.pbkdf2_hmac('sha256', secret.encode(), salt, 100000, 32)
+            expected_tag = hmac.new(key, ciphertext, hashlib.sha256).digest()
+            if not hmac.compare_digest(tag, expected_tag):
+                raise ValueError('Invalid MAC')
+            keystream = bytearray()
+            block_num = 0
+            while len(keystream) < len(ciphertext):
+                keystream.extend(hmac.new(key, block_num.to_bytes(4, 'big'), hashlib.sha256).digest())
+                block_num += 1
+            plaintext = bytes(a ^ b for a, b in zip(ciphertext, keystream[:len(ciphertext)]))
+            return json.loads(plaintext.decode('utf-8'))
+        return json.loads(enc_str)
+    except Exception:
+        try:
+            return json.loads(enc_str)
+        except Exception:
+            return {}
+
+def save_scraped_report(user_id: int, file_name: str, panel_name: str, masked_data: dict, gene_locus: str = "", variant: str = "", carrier_status: str = ""):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    # Encrypt the masked data payload before saving to database for secure AI analysis
+    encrypted_payload = encrypt_payload(masked_data)
+    cursor.execute("""
+    INSERT INTO scraped_reports (user_id, file_name, panel_name, masked_data, gene_locus, variant, carrier_status)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (user_id, file_name, panel_name, encrypted_payload, gene_locus, variant, carrier_status))
+    report_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return report_id
+
+def get_user_scraped_reports(user_id: int):
+    conn = get_db_connection()
+    rows = conn.execute("SELECT * FROM scraped_reports WHERE user_id = ? ORDER BY created_at DESC, id DESC", (user_id,)).fetchall()
+    reports = []
+    for r in rows:
+        d = dict(r)
+        d['masked_data'] = decrypt_payload(d['masked_data'])
+        reports.append(d)
+    conn.close()
+    return reports
+
+

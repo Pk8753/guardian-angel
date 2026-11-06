@@ -33,29 +33,29 @@ export default function RiskAnalysisPage() {
 
   return (
     <AuthGuard>
-      <div className="flex h-screen bg-slate-100 overflow-hidden font-sans">
+      <div className="flex h-screen bg-fog overflow-hidden font-sans">
         <Sidebar />
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <Navbar />
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6">
           {/* Educational Decision Support Banner */}
-          <div className="w-full bg-white border border-slate-200/80 rounded-2xl p-3.5 flex items-center justify-between shadow-xs">
+          <div className="w-full bg-white border border-outline-variant/30 rounded-2xl p-3.5 flex items-center justify-between shadow-xs">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-teal-50 flex items-center justify-center text-teal-800 shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-mint/25 flex items-center justify-center text-pine shrink-0">
                 <Info className="w-4 h-4" />
               </div>
               <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                <span className="text-xs uppercase tracking-wider text-teal-900 font-bold">
+                <span className="text-xs uppercase tracking-wider text-pine font-bold">
                   Educational Decision Support
                 </span>
                 <span className="hidden sm:inline text-slate-300 font-bold">&bull;</span>
-                <span className="text-xs text-slate-500 leading-relaxed">
+                <span className="text-xs text-on-surface-variant leading-relaxed">
                   Synthesized under ACMG/AMP guidelines. Intended to guide proactive counseling discussions with certified geneticists.
                 </span>
               </div>
             </div>
-            <span className="text-[11px] text-teal-800 bg-teal-50 px-2.5 py-1 rounded-full font-bold border border-teal-200 shrink-0">
+            <span className="text-[11px] text-pine bg-mint/25 px-2.5 py-1 rounded-full font-bold border border-mint shrink-0">
               CLIA/CAP Synthesized
             </span>
           </div>
@@ -65,60 +65,60 @@ export default function RiskAnalysisPage() {
             <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
               <div className="flex flex-col gap-2 max-w-3xl">
                 <div className="flex items-center gap-3 flex-wrap">
-                  <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-800 tracking-tight">
-                    AI Genetic Risk Intelligence
+                  <h1 className="text-2xl sm:text-3xl font-extrabold text-pine tracking-tight">
+                    AI Genetic Intelligence
                   </h1>
-                  <span className="bg-teal-50 border border-teal-200 text-teal-800 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-teal-600 animate-pulse" />
+                  <span className="bg-mint/25 border border-mint text-pine px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-jungle animate-pulse" />
                     ENGINE: V-GENOMICS 4.2 &bull; 94% RELIABILITY
                   </span>
                 </div>
-                <p className="text-xs sm:text-sm text-slate-500">
+                <p className="text-xs sm:text-sm text-on-surface-variant">
                   Autonomous Bayesian carrier synthesis calculated from {totalMembers} pedigree individuals and documented phenotypes.
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 self-start lg:self-auto bg-white border border-slate-200 px-3.5 py-2 rounded-xl text-slate-700 shadow-xs text-xs">
-                <ShieldCheck className="w-4 h-4 text-teal-700" />
-                <span>Last computed: <strong className="text-slate-800">Real-Time</strong></span>
+              <div className="flex items-center gap-2 self-start lg:self-auto bg-white border border-outline-variant/40 px-3.5 py-2 rounded-xl text-on-surface-variant shadow-xs text-xs">
+                <ShieldCheck className="w-4 h-4 text-jungle" />
+                <span>Last computed: <strong className="text-pine">Real-Time</strong></span>
               </div>
             </div>
 
             {/* Metric Badges Strip */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white rounded-2xl p-5 flex items-center gap-4 shadow-xs border border-slate-200/80">
-                <div className="w-12 h-12 rounded-xl bg-slate-50 flex items-center justify-center text-teal-800">
+              <div className="bg-white rounded-2xl p-5 flex items-center gap-4 shadow-xs border border-outline-variant/30">
+                <div className="w-12 h-12 rounded-xl bg-fog flex items-center justify-center text-pine">
                   <GitBranch className="w-6 h-6" />
                 </div>
                 <div>
-                  <span className="text-2xl font-black text-slate-800 leading-tight">
+                  <span className="text-2xl font-black text-pine leading-tight">
                     {totalMembers || 6}
                   </span>
-                  <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold block">
+                  <span className="text-xs text-on-surface-variant uppercase tracking-wider font-semibold block">
                     Members Analyzed
                   </span>
                 </div>
               </div>
 
-              <div className="bg-white rounded-2xl p-5 flex items-center gap-4 shadow-xs border border-slate-200/80">
-                <div className="w-12 h-12 rounded-xl bg-slate-50 flex items-center justify-center text-teal-800">
+              <div className="bg-white rounded-2xl p-5 flex items-center gap-4 shadow-xs border border-outline-variant/30">
+                <div className="w-12 h-12 rounded-xl bg-fog flex items-center justify-center text-pine">
                   <Activity className="w-6 h-6" />
                 </div>
                 <div>
-                  <span className="text-2xl font-black text-slate-800 leading-tight">3</span>
-                  <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold block">
+                  <span className="text-2xl font-black text-pine leading-tight">3</span>
+                  <span className="text-xs text-on-surface-variant uppercase tracking-wider font-semibold block">
                     Generations Mapped
                   </span>
                 </div>
               </div>
 
-              <div className="bg-white rounded-2xl p-5 flex items-center gap-4 shadow-xs border border-teal-200/70 bg-gradient-to-br from-white to-teal-50/30">
-                <div className="w-12 h-12 rounded-xl bg-teal-800 text-white flex items-center justify-center shadow-xs">
+              <div className="bg-white rounded-2xl p-5 flex items-center gap-4 shadow-xs border border-mint/70 bg-gradient-to-br from-white to-mint/15">
+                <div className="w-12 h-12 rounded-xl bg-pine text-white flex items-center justify-center shadow-xs">
                   <Dna className="w-6 h-6" />
                 </div>
                 <div>
-                  <span className="text-2xl font-black text-slate-800 leading-tight">4</span>
-                  <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold block">
+                  <span className="text-2xl font-black text-pine leading-tight">4</span>
+                  <span className="text-xs text-on-surface-variant uppercase tracking-wider font-semibold block">
                     Screened Clinical Loci
                   </span>
                 </div>

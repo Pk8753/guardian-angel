@@ -34,8 +34,8 @@ export const translations: Translations = {
     ar: 'شجرة العائلة والوراثة'
   },
   nav_risk: {
-    en: 'AI Risk Analysis',
-    ar: 'تحليل المخاطر بالذكاء الاصطناعي'
+    en: 'AI Genetic Intelligence',
+    ar: 'الذكاء الوراثي الاصطناعي'
   },
   nav_couple: {
     en: 'Couple Assessment',
@@ -152,6 +152,10 @@ export const translations: Translations = {
   btn_view_pedigree: {
     en: 'View Pedigree Charts',
     ar: 'عرض مخططات النسب'
+  },
+  btn_upload_screening_report: {
+    en: 'Upload Screening Report',
+    ar: 'رفع تقرير الفحص الجيني'
   },
   priority_diagnostic: {
     en: 'PRIORITY DIAGNOSTIC',

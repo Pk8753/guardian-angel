@@ -211,7 +211,7 @@ export const FamilyWizardModal: React.FC<FamilyWizardModalProps> = ({
   const [profileWeight, setProfileWeight] = useState('65 kg');
   const [profileEmail, setProfileEmail] = useState('');
   const [profilePhone, setProfilePhone] = useState('+91 98765 43210');
-  const [profileLocation, setProfileLocation] = useState('Mumbai, Maharashtra');
+  const [profileLocation, setProfileLocation] = useState('');
   const [profileBloodGroup, setProfileBloodGroup] = useState('B+');
   const [profileKnownTraits, setProfileKnownTraits] = useState<string[]>(['Beta-Thalassemia Minor (Trait)']);
   const [profileTraitSearch, setProfileTraitSearch] = useState('');
@@ -1079,7 +1079,7 @@ export const FamilyWizardModal: React.FC<FamilyWizardModalProps> = ({
                   type="text"
                   value={profileLocation}
                   onChange={(e) => setProfileLocation(e.target.value)}
-                  placeholder="e.g. Mumbai, Maharashtra"
+                  placeholder="e.g. Abu Dhabi, UAE"
                   className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-700 bg-white"
                 />
               </div>

@@ -98,7 +98,7 @@ export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
   return (
     <div
       ref={containerRef}
-      className={`relative w-full bg-slate-50/70 rounded-2xl border border-slate-200/80 overflow-hidden shadow-inner select-none flex flex-col ${className || 'h-[620px]'}`}
+      className={`relative w-full bg-white rounded-2xl border border-outline-variant/30 overflow-hidden shadow-inner select-none flex flex-col ${className || 'h-[620px]'}`}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
     >
@@ -177,7 +177,7 @@ export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
                     markerHeight="6"
                     orient="auto-start-reverse"
                   >
-                    <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#0f766e" />
+                    <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#0c322c" />
                   </marker>
                 </defs>
 
@@ -409,60 +409,60 @@ export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
             </TransformComponent>
 
             {/* Bottom NSGC Standard Legend matching screen.png */}
-            <div className="shrink-0 z-10 bg-white border-t border-slate-200/80 px-4 py-2.5 flex items-center justify-between flex-wrap gap-3 text-[11px] text-slate-600 font-medium">
+            <div className="shrink-0 z-10 bg-white border-t border-outline-variant/30 px-4 py-2.5 flex items-center justify-between flex-wrap gap-3 text-[11px] text-on-surface-variant font-medium">
               <div className="flex items-center gap-4 flex-wrap">
                 {/* Male */}
                 <div className="flex items-center gap-1.5">
-                  <div className="w-3.5 h-3.5 border-2 border-slate-800 bg-white rounded-xs" />
+                  <div className="w-3.5 h-3.5 border-2 border-pine bg-white rounded-xs" />
                   <span>Male</span>
                 </div>
 
                 {/* Female */}
                 <div className="flex items-center gap-1.5">
-                  <div className="w-3.5 h-3.5 border-2 border-slate-800 bg-white rounded-full" />
+                  <div className="w-3.5 h-3.5 border-2 border-pine bg-white rounded-full" />
                   <span>Female</span>
                 </div>
 
                 {/* Affected */}
                 <div className="flex items-center gap-1.5">
-                  <div className="w-3.5 h-3.5 border-2 border-slate-800 bg-teal-800 rounded-xs" />
+                  <div className="w-3.5 h-3.5 border-2 border-pine bg-pine rounded-xs" />
                   <span>Affected</span>
                 </div>
 
                 {/* Carrier */}
                 <div className="flex items-center gap-1.5">
-                  <div className="w-3.5 h-3.5 border-2 border-slate-800 bg-white rounded-full flex items-center justify-center">
-                    <div className="w-1.5 h-1.5 bg-teal-800 rounded-full" />
+                  <div className="w-3.5 h-3.5 border-2 border-pine bg-white rounded-full flex items-center justify-center">
+                    <div className="w-1.5 h-1.5 bg-pine rounded-full" />
                   </div>
                   <span>Carrier</span>
                 </div>
 
                 {/* Deceased */}
                 <div className="flex items-center gap-1.5">
-                  <div className="w-3.5 h-3.5 border-2 border-slate-800 bg-white relative">
-                    <div className="absolute inset-0 border-t border-slate-800 -rotate-45 top-1.5" />
+                  <div className="w-3.5 h-3.5 border-2 border-pine bg-white relative">
+                    <div className="absolute inset-0 border-t border-pine -rotate-45 top-1.5" />
                   </div>
                   <span>Deceased</span>
                 </div>
 
                 {/* Proband */}
                 <div className="flex items-center gap-1.5">
-                  <span className="text-teal-800 font-bold font-mono">↗ [P]</span>
+                  <span className="text-pine font-bold font-mono">↗ [P]</span>
                   <span>Proband</span>
                 </div>
 
                 {/* Consanguineous */}
                 <div className="flex items-center gap-1.5">
                   <div className="flex flex-col gap-0.5">
-                    <div className="w-4 h-0.5 bg-teal-800" />
-                    <div className="w-4 h-0.5 bg-teal-800" />
+                    <div className="w-4 h-0.5 bg-pine" />
+                    <div className="w-4 h-0.5 bg-pine" />
                   </div>
                   <span>Consanguineous</span>
                 </div>
               </div>
 
-              <div className="flex items-center gap-1 text-[10px] text-slate-400">
-                <Shield className="w-3 h-3 text-teal-800" />
+              <div className="flex items-center gap-1 text-[10px] text-on-surface-variant/70">
+                <Shield className="w-3 h-3 text-pine" />
                 <span>NSGC & ACMG Pedigree Standard 2026</span>
               </div>
             </div>

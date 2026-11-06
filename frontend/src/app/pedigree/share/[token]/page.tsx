@@ -30,11 +30,11 @@ export default function SharedPedigreePage() {
   const members: PedigreeMember[] = family?.members || [];
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-fog flex flex-col font-sans">
       {/* Top Clinical Header */}
       <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-teal-800 text-white flex items-center justify-center font-bold">
+          <div className="w-10 h-10 rounded-xl bg-pine text-white flex items-center justify-center font-bold">
             <GitBranch className="w-5 h-5" />
           </div>
           <div>
@@ -54,7 +54,7 @@ export default function SharedPedigreePage() {
 
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
-            <Lock className="w-3.5 h-3.5 text-teal-700" />
+            <Lock className="w-3.5 h-3.5 text-pine" />
             <span>Zero-Knowledge De-Identified</span>
           </div>
 
@@ -95,7 +95,7 @@ export default function SharedPedigreePage() {
                   {family?.is_consanguineous ? 'Present (First-Cousin Union =)' : 'None documented'}
                 </p>
               </div>
-              <span className="text-xs text-teal-800 font-bold bg-teal-50 px-3 py-1 rounded-full border border-teal-200">
+              <span className="text-xs text-pine font-bold bg-mint/25 px-3 py-1 rounded-full border border-mint">
                 NSGC Standard Symbols
               </span>
             </div>

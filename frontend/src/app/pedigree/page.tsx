@@ -352,7 +352,7 @@ export default function PedigreePage() {
         medical_history: memberData.medical_history,
         dob: memberData.dob,
         living_status: memberData.living_status,
-        location: activeFamily.members?.[0]?.location || 'Mumbai, Maharashtra'
+        location: memberData.location || activeFamily.members?.[0]?.location || ''
       };
 
       setActiveFamily((prev) => {
@@ -550,7 +550,7 @@ export default function PedigreePage() {
 
   return (
     <AuthGuard>
-      <div className="flex h-screen bg-slate-100 overflow-hidden font-sans">
+      <div className="flex h-screen bg-fog overflow-hidden font-sans">
         <Sidebar />
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <Navbar />
@@ -561,13 +561,13 @@ export default function PedigreePage() {
             {/* ========================================================================= */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
               <div className="flex items-center gap-3.5">
-                <div className="w-11 h-11 rounded-2xl bg-teal-800 text-white flex items-center justify-center shadow-xs shrink-0">
+                <div className="w-11 h-11 rounded-2xl bg-pine text-white flex items-center justify-center shadow-xs shrink-0">
                   <GitBranch className="w-6 h-6" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span
-                      className="text-xs font-bold text-teal-800 uppercase tracking-wider cursor-help"
+                      className="text-xs font-bold text-pine uppercase tracking-wider cursor-help"
                       title="Medical insights and health pattern guidance for your family tree"
                     >
                       Family Health Guidance
@@ -590,7 +590,7 @@ export default function PedigreePage() {
                     )}
 
                     <span
-                      className="px-2.5 py-0.5 rounded-full bg-teal-50 text-teal-800 text-[11px] font-bold border border-teal-200 cursor-help"
+                      className="px-2.5 py-0.5 rounded-full bg-mint/25 text-pine text-[11px] font-bold border border-mint cursor-help"
                       title="Follows National Society of Genetic Counselors (NSGC) standards for accurate family trees"
                     >
                       Verified Medical Standard
@@ -613,7 +613,7 @@ export default function PedigreePage() {
                     <button
                       type="button"
                       onClick={() => setShowGlossary(!showGlossary)}
-                      className="text-[11px] text-teal-700 hover:text-teal-900 font-semibold underline flex items-center gap-1 ml-1"
+                      className="text-[11px] text-teal-700 hover:text-pine font-semibold underline flex items-center gap-1 ml-1"
                     >
                       <HelpCircle className="w-3.5 h-3.5" />
                       <span>{showGlossary ? 'Hide Guide' : 'What do these terms mean?'}</span>
@@ -645,7 +645,7 @@ export default function PedigreePage() {
                 <button
                   type="button"
                   onClick={handleOpenCreateTreeFlow}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-teal-800 hover:bg-teal-900 rounded-xl shadow-xs transition"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-pine hover:bg-pine-light rounded-xl shadow-xs transition"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Create Family Pedigree</span>
@@ -655,10 +655,10 @@ export default function PedigreePage() {
 
             {/* Expandable Simple Medical Terms Guide for Everyday Users */}
             {showGlossary && (
-              <div className="p-4 bg-white rounded-2xl border border-teal-200 shadow-xs text-xs text-slate-700 space-y-2 animate-in fade-in">
+              <div className="p-4 bg-white rounded-2xl border border-mint shadow-xs text-xs text-slate-700 space-y-2 animate-in fade-in">
                 <div className="flex items-center justify-between font-bold text-slate-900 text-sm">
                   <div className="flex items-center gap-2">
-                    <Info className="w-4 h-4 text-teal-800" />
+                    <Info className="w-4 h-4 text-pine" />
                     <span>Simple Medical &amp; Genetic Terms Guide</span>
                   </div>
                   <button
@@ -671,19 +671,19 @@ export default function PedigreePage() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-[11px] pt-1">
                   <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
-                    <strong className="block text-teal-900 font-bold mb-0.5">OMIM (Gene Catalog):</strong>
+                    <strong className="block text-pine font-bold mb-0.5">OMIM (Gene Catalog):</strong>
                     The official global database of all known human genes and inherited conditions.
                   </div>
                   <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
-                    <strong className="block text-teal-900 font-bold mb-0.5">NSGC:</strong>
+                    <strong className="block text-pine font-bold mb-0.5">NSGC:</strong>
                     National Society of Genetic Counselors — medical professionals who set standards for family pedigree charts.
                   </div>
                   <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
-                    <strong className="block text-teal-900 font-bold mb-0.5">ACMG:</strong>
+                    <strong className="block text-pine font-bold mb-0.5">ACMG:</strong>
                     American College of Medical Genetics — standard clinical guidelines to interpret genetic test results.
                   </div>
                   <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
-                    <strong className="block text-teal-900 font-bold mb-0.5">Proband [P]:</strong>
+                    <strong className="block text-pine font-bold mb-0.5">Proband [P]:</strong>
                     The central person starting the family tree (you!). Relatives are connected around you.
                   </div>
                 </div>
@@ -720,7 +720,7 @@ export default function PedigreePage() {
                     onClick={() => setTierFilter(tier.id as any)}
                     className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition ${
                       tierFilter === tier.id
-                        ? 'bg-teal-800 text-white shadow-xs'
+                        ? 'bg-pine text-white shadow-xs'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                   >
@@ -771,7 +771,7 @@ export default function PedigreePage() {
                           <h2 className="text-sm font-bold text-slate-900">
                             {activeFamily.family_name}
                           </h2>
-                          <span className="px-2 py-0.5 rounded-md bg-teal-50 border border-teal-200 text-teal-800 font-mono text-[11px] font-bold">
+                          <span className="px-2 py-0.5 rounded-md bg-mint/25 border border-mint text-pine font-mono text-[11px] font-bold">
                             Chart ID: {activeFamily.family_id}
                           </span>
                           <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 font-medium">
@@ -807,7 +807,7 @@ export default function PedigreePage() {
                     </>
                   ) : (
                     <div className="h-[520px] flex flex-col items-center justify-center text-center p-8 space-y-4">
-                      <div className="w-16 h-16 rounded-3xl bg-teal-50 border border-teal-200 flex items-center justify-center text-teal-800 shadow-xs">
+                      <div className="w-16 h-16 rounded-3xl bg-mint/25 border border-mint flex items-center justify-center text-pine shadow-xs">
                         <Users className="w-8 h-8" />
                       </div>
                       <div>
@@ -821,7 +821,7 @@ export default function PedigreePage() {
                       <button
                         type="button"
                         onClick={handleOpenCreateTreeFlow}
-                        className="inline-flex items-center gap-2 px-6 py-3 text-xs font-bold text-white bg-teal-800 hover:bg-teal-900 rounded-xl shadow-md transition"
+                        className="inline-flex items-center gap-2 px-6 py-3 text-xs font-bold text-white bg-pine hover:bg-pine-light rounded-xl shadow-md transition"
                       >
                         <Plus className="w-4 h-4" />
                         <span>Create Family Pedigree</span>
@@ -850,7 +850,7 @@ export default function PedigreePage() {
                         </span>
                       )}
                     </div>
-                    <span className="text-[11px] text-teal-800 font-medium block">
+                    <span className="text-[11px] text-pine font-medium block">
                       {isConsanguineousTree ? 'Related Heritage' : 'Standard Outbred Lineage'}
                     </span>
                   </div>
@@ -868,7 +868,7 @@ export default function PedigreePage() {
                         {verifiedVariantsCount > 0 ? `${verifiedVariantsCount} Documented` : 'None Tracked'}
                       </span>
                     </div>
-                    <span className="text-[11px] text-teal-800 font-medium block">
+                    <span className="text-[11px] text-pine font-medium block">
                       Hereditary Disease Catalog
                     </span>
                   </div>
@@ -900,7 +900,7 @@ export default function PedigreePage() {
                     Selected Family Member
                   </h3>
                   {selectedMember && (
-                    <span className="text-teal-800 font-mono text-[11px] font-bold bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200">
+                    <span className="text-pine font-mono text-[11px] font-bold bg-mint/25 px-2 py-0.5 rounded-md border border-mint">
                       ID: {selectedMember.display_label || `PED-${selectedMember.generation || 'II'}-${selectedMember.id}`}
                     </span>
                   )}
@@ -911,7 +911,7 @@ export default function PedigreePage() {
                     {/* Top Identity Card */}
                     <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
                       <div className="flex items-start gap-3">
-                        <div className="w-11 h-11 rounded-2xl bg-white border-2 border-teal-800 flex items-center justify-center text-teal-900 font-bold text-sm shadow-xs shrink-0">
+                        <div className="w-11 h-11 rounded-2xl bg-white border-2 border-teal-800 flex items-center justify-center text-pine font-bold text-sm shadow-xs shrink-0">
                           {selectedMember.sex === 'male' ? 'M' : selectedMember.sex === 'female' ? 'F' : 'U'}
                         </div>
 
@@ -921,15 +921,15 @@ export default function PedigreePage() {
                               {selectedMember.full_name || selectedMember.pseudonym}
                             </span>
                             {selectedMember.is_proband && (
-                              <span className="px-2 py-0.5 rounded-full bg-teal-800 text-white text-[10px] font-mono font-bold">
+                              <span className="px-2 py-0.5 rounded-full bg-pine text-white text-[10px] font-mono font-bold">
                                 STARTING PERSON [P]
                               </span>
                             )}
                           </div>
                           <p className="text-slate-500 text-[11px] mt-0.5 capitalize">
                             {selectedMember.relationship_to_proband.replace(/_/g, ' ')} &bull;{' '}
-                            {selectedMember.dob ? `DOB ${selectedMember.dob}` : 'Adult'} &bull;{' '}
-                            {selectedMember.location || 'Mumbai, Maharashtra'}
+                            {selectedMember.dob ? `DOB ${selectedMember.dob}` : 'DOB Not Specified'} &bull;{' '}
+                            {selectedMember.location || 'Location Not Specified'}
                           </p>
                         </div>
                       </div>
@@ -939,7 +939,7 @@ export default function PedigreePage() {
                         <span
                           className={`px-2.5 py-0.5 rounded-md font-bold text-[10px] border ${
                             selectedMember.is_affected
-                              ? 'bg-teal-100 text-teal-900 border-teal-300'
+                              ? 'bg-teal-100 text-pine border-teal-300'
                               : selectedMember.is_carrier
                               ? 'bg-amber-50 text-amber-900 border-amber-300'
                               : 'bg-emerald-50 text-emerald-800 border-emerald-200'
@@ -963,7 +963,7 @@ export default function PedigreePage() {
                         Identified Health Trait / Gene
                       </span>
                       <div className="space-y-1 text-xs">
-                        <div className="font-mono font-bold text-teal-900 text-xs">
+                        <div className="font-mono font-bold text-pine text-xs">
                           {selectedMember.gene_variant || 'HBB:c.315+1G>A'}
                         </div>
                         <div className="text-[11px] text-slate-600">
@@ -1016,11 +1016,11 @@ export default function PedigreePage() {
                     {/* Attached Report Card */}
                     {selectedMember.medical_report_name && (
                       <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-[11px] flex items-center justify-between">
-                        <div className="flex items-center gap-1.5 text-teal-800 font-semibold">
+                        <div className="flex items-center gap-1.5 text-pine font-semibold">
                           <FileText className="w-4 h-4" />
                           <span>{selectedMember.medical_report_name}</span>
                         </div>
-                        <span className="text-[10px] bg-teal-100 text-teal-800 px-2 py-0.5 rounded font-bold">
+                        <span className="text-[10px] bg-teal-100 text-pine px-2 py-0.5 rounded font-bold">
                           Attached Report
                         </span>
                       </div>
@@ -1035,7 +1035,7 @@ export default function PedigreePage() {
                           setWizardStep(3);
                           setIsWizardOpen(true);
                         }}
-                        className="w-full py-2 px-3 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs"
+                        className="w-full py-2 px-3 bg-pine hover:bg-pine-light text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
                         <span>Edit Details &amp; Health Conditions</span>
@@ -1063,7 +1063,7 @@ export default function PedigreePage() {
                             setWizardStep(3);
                             setIsWizardOpen(true);
                           }}
-                          className="py-1.5 px-3 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1"
+                          className="py-1.5 px-3 bg-mint/25 hover:bg-teal-100 text-pine border border-mint rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1"
                         >
                           <Plus className="w-3.5 h-3.5" />
                           <span>+ Add Relative</span>
@@ -1077,7 +1077,7 @@ export default function PedigreePage() {
                           onClick={() => handleSetProband(selectedMember)}
                           className="w-full py-1.5 px-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1.5"
                         >
-                          <UserCheck className="w-3.5 h-3.5 text-teal-800" />
+                          <UserCheck className="w-3.5 h-3.5 text-pine" />
                           <span>Make this Person the Starting Person [P]</span>
                         </button>
                       )}
@@ -1125,7 +1125,7 @@ export default function PedigreePage() {
               {/* Modal Header */}
               <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-teal-800 text-white flex items-center justify-center shadow-xs">
+                  <div className="w-10 h-10 rounded-2xl bg-pine text-white flex items-center justify-center shadow-xs">
                     <GitBranch className="w-5 h-5" />
                   </div>
                   <div>
@@ -1161,7 +1161,7 @@ export default function PedigreePage() {
                           <span className="font-bold text-slate-900 text-sm">
                             Continue with Existing Tree
                           </span>
-                          <span className="px-2 py-0.5 rounded-md bg-teal-50 border border-teal-200 text-teal-800 font-mono text-[11px] font-bold">
+                          <span className="px-2 py-0.5 rounded-md bg-mint/25 border border-mint text-pine font-mono text-[11px] font-bold">
                             {selectedExistingFamilyId || activeFamily?.family_id}
                           </span>
                         </div>
@@ -1204,7 +1204,7 @@ export default function PedigreePage() {
                           setWizardStep(3);
                           setIsWizardOpen(true);
                         }}
-                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-bold transition shadow-xs"
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-pine hover:bg-pine-light text-white rounded-xl text-xs font-bold transition shadow-xs"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         <span>Add Relatives to this Tree</span>
