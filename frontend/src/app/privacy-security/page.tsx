@@ -29,7 +29,7 @@ export default function PrivacySecurityPage() {
 
   return (
     <AuthGuard>
-      <div className="flex h-screen bg-slate-100 overflow-hidden font-sans">
+      <div className="flex h-screen bg-fog overflow-hidden font-sans">
         <Sidebar />
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <Navbar />
@@ -39,15 +39,15 @@ export default function PrivacySecurityPage() {
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
             <div className="space-y-2 max-w-2xl">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-50 text-teal-800 text-xs font-bold uppercase tracking-wider border border-teal-200">
-                  <span className="w-1.5 h-1.5 rounded-full bg-teal-600 animate-pulse" />
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-mint/25 text-pine text-xs font-bold uppercase tracking-wider border border-mint">
+                  <span className="w-1.5 h-1.5 rounded-full bg-jungle animate-pulse" />
                   End-To-End Zero Knowledge Active
                 </span>
-                <span className="text-xs text-slate-600 font-bold bg-slate-100 px-2.5 py-0.5 rounded-full">
+                <span className="text-xs text-slate-600 font-bold bg-white px-2.5 py-0.5 rounded-full border border-slate-200">
                   Pedigree Node #994-Alpha &bull; Secure Enclave
                 </span>
               </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-800 tracking-tight">
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-pine tracking-tight">
                 Privacy &amp; Security Center
               </h1>
               <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
@@ -56,13 +56,13 @@ export default function PrivacySecurityPage() {
             </div>
 
             <div className="flex items-center gap-4 bg-white p-4 rounded-2xl shadow-xs border border-slate-200/80 max-w-md">
-              <div className="w-12 h-12 rounded-xl bg-teal-50 text-teal-800 flex items-center justify-center shrink-0">
+              <div className="w-12 h-12 rounded-xl bg-mint/25 text-pine flex items-center justify-center shrink-0">
                 <ShieldCheck className="w-6 h-6" />
               </div>
               <div>
                 <div className="flex items-center gap-1.5 font-bold text-xs text-slate-800">
                   <span>HIPAA &amp; DPDP Compliant</span>
-                  <CheckCircle2 className="w-3.5 h-3.5 text-teal-600" />
+                  <CheckCircle2 className="w-3.5 h-3.5 text-jungle" />
                 </div>
                 <p className="text-[11px] text-slate-500 leading-snug mt-0.5">
                   Zero public indexing, client-side zero-knowledge encrypted vault.
@@ -77,13 +77,13 @@ export default function PrivacySecurityPage() {
             <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-5">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-2.5">
-                  <EyeOff className="w-5 h-5 text-teal-800" />
+                  <EyeOff className="w-5 h-5 text-pine" />
                   <h3 className="font-bold text-slate-800 text-sm">
                     Sudo / De-Identification Shield
                   </h3>
                 </div>
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                  isSudoMode ? 'bg-teal-100 text-teal-800' : 'bg-slate-100 text-slate-600'
+                  isSudoMode ? 'bg-mint/30 text-pine border border-mint' : 'bg-slate-100 text-slate-600'
                 }`}>
                   {isSudoMode ? 'ACTIVE' : 'STANDARD'}
                 </span>
@@ -109,7 +109,7 @@ export default function PrivacySecurityPage() {
                   onClick={toggleSudoMode}
                   className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
                     isSudoMode
-                      ? 'bg-teal-800 text-white'
+                      ? 'bg-pine hover:bg-pine-light text-white'
                       : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
                   }`}
                 >
@@ -122,12 +122,12 @@ export default function PrivacySecurityPage() {
             <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-5">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-2.5">
-                  <Key className="w-5 h-5 text-teal-800" />
+                  <Key className="w-5 h-5 text-pine" />
                   <h3 className="font-bold text-slate-800 text-sm">
                     256-bit AES Vault Key Rotation
                   </h3>
                 </div>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
+                <span className="px-2 py-0.5 rounded-full bg-mint/25 text-pine border border-mint text-[10px] font-bold">
                   AES-GCM-256
                 </span>
               </div>
@@ -138,8 +138,8 @@ export default function PrivacySecurityPage() {
               </p>
 
               {rotated && (
-                <div className="p-3 bg-teal-50 border border-teal-200 text-teal-800 rounded-xl text-xs flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-teal-600" />
+                <div className="p-3 bg-mint/25 border border-mint text-pine rounded-xl text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-jungle" />
                   <span>Client-side encryption key successfully rotated and re-salted.</span>
                 </div>
               )}
@@ -153,7 +153,7 @@ export default function PrivacySecurityPage() {
                   onClick={handleRotateKey}
                   className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-xs transition"
                 >
-                  <RefreshCw className="w-3.5 h-3.5 text-teal-800" />
+                  <RefreshCw className="w-3.5 h-3.5 text-pine" />
                   <span>Rotate Vault Keys</span>
                 </button>
               </div>

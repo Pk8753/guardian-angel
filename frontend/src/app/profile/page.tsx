@@ -35,7 +35,7 @@ export default function ProfilePage() {
 
   return (
     <AuthGuard>
-      <div className="flex h-screen bg-slate-100 overflow-hidden font-sans">
+      <div className="flex h-screen bg-fog overflow-hidden font-sans">
         <Sidebar />
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <Navbar />
@@ -44,7 +44,7 @@ export default function ProfilePage() {
           {/* Header Banner */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-3xl bg-white border border-slate-200/80 shadow-xs">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-teal-800 text-white flex items-center justify-center text-xl font-bold shadow-md">
+              <div className="w-14 h-14 rounded-2xl bg-pine text-white flex items-center justify-center text-xl font-bold shadow-md">
                 {fullName.charAt(0)}
               </div>
               <div>
@@ -52,7 +52,7 @@ export default function ProfilePage() {
                 <p className="text-xs text-slate-500">{email} &bull; Proband (Index Patient)</p>
               </div>
             </div>
-            <span className="px-3 py-1 rounded-full bg-teal-50 text-teal-800 text-xs font-bold border border-teal-200 self-start sm:self-auto">
+            <span className="px-3 py-1 rounded-full bg-mint/25 text-pine text-xs font-bold border border-mint self-start sm:self-auto">
               Verified Clinical Dossier
             </span>
           </div>
@@ -68,16 +68,16 @@ export default function ProfilePage() {
                   Keep clinical records current to optimize autosomal recessive carrier calculations.
                 </p>
               </div>
-              <span className="text-xs text-teal-800 font-bold flex items-center gap-1">
-                <Lock className="w-3.5 h-3.5" />
+              <span className="text-xs text-pine font-bold flex items-center gap-1">
+                <Lock className="w-3.5 h-3.5 text-pine" />
                 <span>E2EE Encrypted</span>
               </span>
             </div>
 
             <form onSubmit={handleSave} className="space-y-6">
               {saved && (
-                <div className="p-3 bg-teal-50 border border-teal-200 text-teal-800 rounded-xl text-xs flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-teal-600" />
+                <div className="p-3 bg-mint/25 border border-mint text-pine rounded-xl text-xs flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-jungle" />
                   <span>Clinical profile successfully updated and synchronized to secure enclave.</span>
                 </div>
               )}
@@ -93,7 +93,7 @@ export default function ProfilePage() {
                       type="text"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      className="w-full h-11 pl-10 pr-3 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:ring-2 focus:ring-teal-600 focus:outline-none"
+                      className="w-full h-11 pl-10 pr-3 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:ring-2 focus:ring-pine focus:outline-none"
                     />
                   </div>
                 </div>
@@ -104,19 +104,19 @@ export default function ProfilePage() {
                     <button
                       type="button"
                       onClick={() => setAliasName(generatePseudonym())}
-                      className="text-[10px] font-bold text-teal-700 hover:underline flex items-center gap-0.5"
+                      className="text-[10px] font-bold text-pine hover:text-pine-light hover:underline flex items-center gap-0.5"
                     >
-                      <Sparkles className="w-3 h-3" />
+                      <Sparkles className="w-3 h-3 text-pine" />
                       <span>New Alias</span>
                     </button>
                   </div>
                   <div className="relative flex items-center">
-                    <Shield className="w-4 h-4 text-teal-700 absolute left-3.5" />
+                    <Shield className="w-4 h-4 text-pine absolute left-3.5" />
                     <input
                       type="text"
                       value={aliasName}
                       onChange={(e) => setAliasName(e.target.value)}
-                      className="w-full h-11 pl-10 pr-3 font-mono font-bold text-teal-800 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:ring-2 focus:ring-teal-600 focus:outline-none"
+                      className="w-full h-11 pl-10 pr-3 font-mono font-bold text-pine text-xs rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:ring-2 focus:ring-pine focus:outline-none"
                     />
                   </div>
                 </div>
@@ -146,7 +146,7 @@ export default function ProfilePage() {
                       type="date"
                       value={dob}
                       onChange={(e) => setDob(e.target.value)}
-                      className="w-full h-11 pl-10 pr-3 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:ring-2 focus:ring-teal-600 focus:outline-none"
+                      className="w-full h-11 pl-10 pr-3 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:ring-2 focus:ring-pine focus:outline-none"
                     />
                   </div>
                 </div>
@@ -158,7 +158,7 @@ export default function ProfilePage() {
                     <select
                       value={bloodType}
                       onChange={(e) => setBloodType(e.target.value)}
-                      className="w-full h-11 pl-10 pr-3 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:ring-2 focus:ring-teal-600 focus:outline-none"
+                      className="w-full h-11 pl-10 pr-3 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:ring-2 focus:ring-pine focus:outline-none"
                     >
                       <option value="O+">O+ (Positive)</option>
                       <option value="A+">A+ (Positive)</option>
@@ -176,7 +176,7 @@ export default function ProfilePage() {
               <div className="pt-4 border-t border-slate-100 flex justify-end">
                 <button
                   type="submit"
-                  className="inline-flex items-center gap-1.5 px-6 py-2.5 text-xs font-bold text-white bg-teal-800 hover:bg-teal-900 rounded-xl shadow-xs transition"
+                  className="inline-flex items-center gap-1.5 px-6 py-2.5 text-xs font-bold text-white bg-pine hover:bg-pine-light rounded-xl shadow-xs transition"
                 >
                   <Save className="w-3.5 h-3.5" />
                   <span>Save Clinical Profile</span>

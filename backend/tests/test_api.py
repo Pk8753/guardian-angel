@@ -198,5 +198,188 @@ class GuardianAngelAPITestCase(unittest.TestCase):
         res = self.client.get(f'/api/families/{fam_id}')
         self.assertEqual(res.status_code, 403)
 
+    def test_report_analyze_in_memory_and_pii_masking(self):
+        """Verify zero-storage in-memory report analysis, 2-character name masking, dynamic PII, and encrypted persistence"""
+        import io
+        from database import get_user_scraped_reports, get_db_connection
+        admin_u = get_user_by_username('admin')
+        with self.client.session_transaction() as sess:
+            sess['user_id'] = admin_u['id']
+
+        # 1. Reject invalid file format
+        fake_txt = (io.BytesIO(b"Confidential Report"), "report.txt")
+        res = self.client.post('/api/reports/analyze', data={'file': fake_txt}, content_type='multipart/form-data')
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("Invalid file format", res.get_json()['message'])
+
+        # 2. Accept valid PDF file and return masked data with 2-char name masking, screening findings, and pedigree tree creation
+        pdf_content = b"%PDF-1.4 (Patient Name: Kabir Sharma, Sex: (Male), DOB: 1994-06-15, Location: Dubai, UAE, SSN: 123-45-6789, Emirates ID: 784-1995-1234567-1, Thalassemia carrier) Tj"
+        fake_pdf = (io.BytesIO(pdf_content), "premarital_thalassemia_screen.pdf")
+        res_pdf = self.client.post('/api/reports/analyze', data={'file': fake_pdf}, content_type='multipart/form-data')
+        self.assertEqual(res_pdf.status_code, 200)
+        data = res_pdf.get_json()
+        self.assertEqual(data['status'], 'success')
+        self.assertIn('masked_data', data)
+        self.assertTrue(data['tree_created'])
+        self.assertTrue(data['family_id'].startswith('FA-'))
+        created_fam_id = data['family_id']
+        self.assertEqual(data['sex'], 'male')
+        self.assertEqual(data['dob'], '1994-06-15')
+        self.assertEqual(data['location'], 'Dubai, UAE')
+        # Sudo name format: _____-_____-<2 initials of first name>__number (e.g., Keen-Eagle-ka-8241)
+        self.assertIn('-ka-', data['sudo_name'])
+
+        masked = data['masked_data']
+        self.assertEqual(masked['condition'], 'Beta-Thalassemia Minor / Trait')
+        self.assertIn('HBB', masked['gene_locus'])
+        self.assertIn('Heterozygous Carrier', masked['carrier_status'])
+
+        # Verify 2-character name masking (Ka*** Sh****)
+        self.assertIn('patient_name_masked', masked)
+        self.assertTrue(masked['patient_name_masked'].startswith('Ka'))
+        self.assertIn('*', masked['patient_name_masked'])
+
+        # Verify ONLY present identifiers are in redacted_pii_present
+        present_fields = [item['field'] for item in masked['redacted_pii_present']]
+        self.assertIn('Social Security Number (SSN)', present_fields)
+        self.assertIn('Emirates National ID', present_fields)
+        self.assertIn('Patient Name', present_fields)
+        # Aadhaar was NOT in this PDF, so it must NOT be in the list
+        self.assertNotIn('Aadhaar Card Number', present_fields)
+
+        # Verify screening findings are present with values and clinical meanings
+        findings = masked['screening_findings']
+        self.assertTrue(len(findings) >= 3)
+        hba2_finding = next((f for f in findings if 'HbA2' in f['parameter']), None)
+        self.assertIsNotNone(hba2_finding)
+        self.assertEqual(hba2_finding['value'], '5.4%')
+        self.assertIn('diagnostic', hba2_finding['clinical_meaning'].lower())
+
+        # Verify member was created in pedigree_nodes under this family
+        conn = get_db_connection()
+        node_row = conn.execute("SELECT * FROM pedigree_nodes WHERE family_id = ? AND is_proband = 1", (created_fam_id,)).fetchone()
+        conn.close()
+        self.assertIsNotNone(node_row)
+        self.assertEqual(node_row['sex'], 'male')
+        self.assertEqual(node_row['alias_name'], data['sudo_name'])
+        self.assertEqual(node_row['location'], 'Dubai, UAE')
+
+        # Verify uploading a second report to existing tree with first name initials in sudo name
+        pdf_partner = b"%PDF-1.4 (Patient Name: Fatima Al-Mansoor, Sex: (Female), DOB: 1996-08-20, Location: Abu Dhabi, UAE, Sickle Cell trait carrier) Tj"
+        fake_pdf_partner = (io.BytesIO(pdf_partner), "partner_sickle_screen.pdf")
+        res_partner = self.client.post('/api/reports/analyze', data={
+            'file': fake_pdf_partner,
+            'target_tree': 'existing',
+            'family_id': created_fam_id
+        }, content_type='multipart/form-data')
+        self.assertEqual(res_partner.status_code, 200)
+        data_partner = res_partner.get_json()
+        self.assertFalse(data_partner['tree_created'])
+        self.assertEqual(data_partner['family_id'], created_fam_id)
+        self.assertEqual(data_partner['sex'], 'female')
+        self.assertEqual(data_partner['dob'], '1996-08-20')
+        self.assertEqual(data_partner['location'], 'Abu Dhabi, UAE')
+        self.assertIn('-fa-', data_partner['sudo_name'])
+
+        # Verify database record saved under original file_name and stored in encrypted format
+        conn = get_db_connection()
+        row = conn.execute("SELECT file_name, masked_data FROM scraped_reports WHERE user_id = ? ORDER BY id DESC LIMIT 1", (admin_u['id'],)).fetchone()
+        conn.close()
+        self.assertEqual(row['file_name'], 'partner_sickle_screen.pdf')
+        raw_db_masked_data = row['masked_data']
+        # Must not be raw plaintext JSON in database (encrypted with fernet or std)
+        self.assertTrue(raw_db_masked_data.startswith(('fernet:', 'std:')))
+
+        # Verify helper get_user_scraped_reports decrypts it back
+        reports = get_user_scraped_reports(admin_u['id'])
+        self.assertTrue(len(reports) > 0)
+        latest_report = reports[0]
+        self.assertEqual(latest_report['file_name'], 'partner_sickle_screen.pdf')
+        self.assertEqual(latest_report['masked_data']['condition'], 'Sickle Cell Anemia / Trait')
+
+        # 3. Accept valid JPG file with (Male/Female) gender detection from image
+        jpg_content = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xff\xfe\x00:Patient Name: Alya Al-Zahra, Gender: (Female), DOB: 1998-04-12, Location: Dubai, UAE\xff\xdb\x00C\x00" + b"\x00" * 100
+        fake_jpg = (io.BytesIO(jpg_content), "genetic_test_cftr_female.jpg")
+        res_jpg = self.client.post('/api/reports/analyze', data={'file': fake_jpg}, content_type='multipart/form-data')
+        self.assertEqual(res_jpg.status_code, 200)
+        jpg_data = res_jpg.get_json()
+        self.assertEqual(jpg_data['status'], 'success')
+        self.assertEqual(jpg_data['sex'], 'female')
+        self.assertEqual(jpg_data['dob'], '1998-04-12')
+        self.assertEqual(jpg_data['location'], 'Dubai, UAE')
+        self.assertIn('-al-', jpg_data['sudo_name'])
+
+        # 4. FlateDecode (zlib-compressed) PDF with TJ kerning arrays and non-user candidate name
+        import zlib
+        stream_body = b"""
+        BT
+        /F1 12 Tf
+        [(Candidate Name: ) -10 (Rashid ) 5 (Al Ketbi)] TJ
+        0 -15 Td
+        (Sex: (Male)) Tj
+        0 -15 Td
+        (Date of Birth: 22/11/1991) Tj
+        0 -15 Td
+        (Location: Abu Dhabi, UAE) Tj
+        0 -15 Td
+        (CFTR deltaF508 carrier finding) Tj
+        ET
+        """
+        compressed_stream = zlib.compress(stream_body)
+        pdf_compressed = b"%PDF-1.4\n1 0 obj\n<< /Length 200 /Filter /FlateDecode >>\nstream\r\n" + compressed_stream + b"\r\nendstream\nendobj\n%%EOF"
+        fake_pdf_comp = (io.BytesIO(pdf_compressed), "ADPHC_compressed_screen.pdf")
+        res_comp = self.client.post('/api/reports/analyze', data={'file': fake_pdf_comp}, content_type='multipart/form-data')
+        self.assertEqual(res_comp.status_code, 200)
+        comp_data = res_comp.get_json()
+        self.assertEqual(comp_data['status'], 'success')
+        self.assertEqual(comp_data['sex'], 'male')
+        self.assertEqual(comp_data['dob'], '22/11/1991')
+        self.assertEqual(comp_data['location'], 'Abu Dhabi, UAE')
+        self.assertIn('-ra-', comp_data['sudo_name'])
+        self.assertTrue(comp_data['masked_data']['patient_name_masked'].startswith('Ra'))
+        self.assertNotIn('System', comp_data['masked_data']['patient_name_masked'])
+
+        # 5. Report without candidate name must NOT fall back to logged-in user
+        pdf_anon = b"%PDF-1.4 (G6PD Mediterranean Variant carrier, Sex: (Female), DOB: 1997-03-15) Tj"
+        fake_pdf_anon = (io.BytesIO(pdf_anon), "anon_g6pd_screen.pdf")
+        res_anon = self.client.post('/api/reports/analyze', data={'file': fake_pdf_anon}, content_type='multipart/form-data')
+        self.assertEqual(res_anon.status_code, 200)
+        anon_data = res_anon.get_json()
+        self.assertEqual(anon_data['status'], 'success')
+        self.assertEqual(anon_data['masked_data']['patient_name_masked'], 'Candidate (De-Identified)')
+        self.assertIn('-cn-', anon_data['sudo_name'])
+        anon_pii_fields = [p['field'] for p in anon_data['masked_data']['redacted_pii_present']]
+        self.assertNotIn('Patient Name', anon_pii_fields)
+
+        # 6. Candidate Pankaj Killura with exact DOB preservation and -pa- initials in pseudonym
+        pdf_pankaj = b"""%PDF-1.4
+1 0 obj
+<< /Length 180 /Filter /FlateDecode >>
+stream
+""" + zlib.compress(b"""
+BT
+/F1 12 Tf
+[(Candidate Name\n) -100 (Pankaj ) 50 (Killura)] TJ
+0 -15 Td
+(Date of Birth / \xd8\xaa\xd8\xa7\xd8\xb1\xd9\x8a\xd8\xae \xd8\xa7\xd9\x84\xd9\x85\xd9\x8a\xd9\x84\xd8\xa7\xd8\xaf: 14/08/1995) Tj
+0 -15 Td
+(Sex: Male) Tj
+0 -15 Td
+(Beta-Thalassemia Minor Carrier) Tj
+ET
+""") + b"""
+endstream
+endobj
+%%EOF"""
+        fake_pdf_pk = (io.BytesIO(pdf_pankaj), "ADPHC_pankaj_screen.pdf")
+        res_pk = self.client.post('/api/reports/analyze', data={'file': fake_pdf_pk}, content_type='multipart/form-data')
+        self.assertEqual(res_pk.status_code, 200)
+        pk_data = res_pk.get_json()
+        self.assertEqual(pk_data['status'], 'success')
+        self.assertEqual(pk_data['sex'], 'male')
+        self.assertEqual(pk_data['dob'], '14/08/1995')
+        self.assertIn('-pa-', pk_data['sudo_name'])
+        self.assertTrue(pk_data['masked_data']['patient_name_masked'].startswith('Pa'))
+
 if __name__ == '__main__':
     unittest.main()

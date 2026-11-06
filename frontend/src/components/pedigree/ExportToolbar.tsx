@@ -114,7 +114,7 @@ export const ExportToolbar: React.FC<ExportToolbarProps> = ({
           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/90 rounded-xl shadow-xs transition"
           title="Export vector SVG"
         >
-          <FileCode className="w-3.5 h-3.5 text-teal-700" />
+          <FileCode className="w-3.5 h-3.5 text-pine" />
           <span>SVG</span>
         </button>
 
@@ -125,7 +125,7 @@ export const ExportToolbar: React.FC<ExportToolbarProps> = ({
           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/90 rounded-xl shadow-xs transition disabled:opacity-50"
           title="Export PNG image"
         >
-          <Image className="w-3.5 h-3.5 text-teal-700" />
+          <Image className="w-3.5 h-3.5 text-pine" />
           <span>PNG</span>
         </button>
 
@@ -136,14 +136,14 @@ export const ExportToolbar: React.FC<ExportToolbarProps> = ({
           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/90 rounded-xl shadow-xs transition disabled:opacity-50"
           title="Export PDF Clinical Report"
         >
-          <FileText className="w-3.5 h-3.5 text-teal-700" />
+          <FileText className="w-3.5 h-3.5 text-pine" />
           <span>PDF</span>
         </button>
 
         <button
           type="button"
           onClick={() => setShowShareModal(true)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-teal-700 hover:bg-teal-800 rounded-xl shadow-xs transition"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-pine hover:bg-pine-light rounded-xl shadow-xs transition"
         >
           <Share2 className="w-3.5 h-3.5" />
           <span>Share</span>
@@ -182,7 +182,7 @@ export const ExportToolbar: React.FC<ExportToolbarProps> = ({
               <button
                 type="button"
                 onClick={copyShareLink}
-                className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-teal-700 hover:bg-teal-50 rounded-lg transition"
+                className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-pine hover:bg-mint/20 rounded-lg transition"
               >
                 {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{copied ? 'Copied' : 'Copy'}</span>

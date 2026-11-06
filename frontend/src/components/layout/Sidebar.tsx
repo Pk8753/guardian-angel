@@ -16,9 +16,9 @@ export function Sidebar() {
 
   const navItems = [
     { label: t('nav_dashboard', activeLocale), href: '/dashboard', icon: 'dashboard' },
-    { label: t('nav_pedigree', activeLocale), href: '/pedigree', icon: 'account_tree' },
     { label: t('nav_risk', activeLocale), href: '/risk-analysis', icon: 'genetics' },
     { label: t('nav_couple', activeLocale), href: '/couple-assessment', icon: 'diversity_1' },
+    { label: t('nav_pedigree', activeLocale), href: '/pedigree', icon: 'account_tree' },
     { label: t('nav_privacy', activeLocale), href: '/privacy-security', icon: 'shield_lock' },
     { label: t('nav_profile', activeLocale), href: '/profile', icon: 'person_pin' },
   ];
@@ -48,17 +48,6 @@ export function Sidebar() {
             </span>
           </div>
         </Link>
-
-        {/* Certified Node Badge */}
-        <div className="px-3">
-          <div className="p-3 rounded-xl bg-surface-container-low border border-outline-variant/40 flex items-center gap-3">
-            <span className="material-symbols-outlined text-jungle text-[20px]">verified_user</span>
-            <div className="flex flex-col">
-              <span className="text-xs font-bold text-pine">{t('engine_title', activeLocale)}</span>
-              <span className="text-[11px] text-on-surface-variant">{t('engine_sub', activeLocale)}</span>
-            </div>
-          </div>
-        </div>
 
         {/* Navigation Items */}
         <nav className="flex flex-col gap-1.5 px-1">
