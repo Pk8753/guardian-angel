@@ -55,3 +55,18 @@ class Config:
     ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin')
     ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', 'admin@guardianangel.bio')
 
+    # UAE PASS Configuration (Centralized for Staging & Production)
+    # Set UAEPASS_ENV='production' to switch all endpoints to id.uaepass.ae with zero code changes
+    UAEPASS_ENV = os.environ.get('UAEPASS_ENV', 'staging')
+    UAEPASS_CLIENT_ID = os.environ.get('UAEPASS_CLIENT_ID', 'sandbox_stage')
+    UAEPASS_CLIENT_SECRET = os.environ.get('UAEPASS_CLIENT_SECRET', 'sandbox_stage')
+    UAEPASS_REDIRECT_URI = os.environ.get('UAEPASS_REDIRECT_URI', 'http://localhost:5000/api/uaepass/callback')
+    UAEPASS_SCOPE = os.environ.get('UAEPASS_SCOPE', 'urn:uae:digitalid:profile:general')
+    UAEPASS_ACR_VALUES = os.environ.get('UAEPASS_ACR_VALUES', 'urn:safelayer:tws:policies:authentication:level:low')
+    UAEPASS_BASE_URL = 'https://id.uaepass.ae/idshub' if UAEPASS_ENV.lower() == 'production' else 'https://stg-id.uaepass.ae/idshub'
+    UAEPASS_AUTH_URL = f"{UAEPASS_BASE_URL}/authorize"
+    UAEPASS_TOKEN_URL = f"{UAEPASS_BASE_URL}/token"
+    UAEPASS_USERINFO_URL = f"{UAEPASS_BASE_URL}/userinfo"
+    UAEPASS_LOGOUT_URL = f"{UAEPASS_BASE_URL}/logout"
+    FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+
