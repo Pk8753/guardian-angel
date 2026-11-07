@@ -381,5 +381,105 @@ endobj
         self.assertIn('-pa-', pk_data['sudo_name'])
         self.assertTrue(pk_data['masked_data']['patient_name_masked'].startswith('Pa'))
 
+    def test_uaepass_status_endpoint(self):
+        """Verify /api/uaepass/status returns configured environment and endpoints"""
+        res = self.client.get('/api/uaepass/status')
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertEqual(data['status'], 'success')
+        self.assertEqual(data['environment'], 'staging')
+        self.assertEqual(data['client_id'], 'sandbox_stage')
+        self.assertIn('stg-id.uaepass.ae', data['endpoints']['auth_url'])
+
+    def test_uaepass_login_initiates_oauth(self):
+        """Verify /api/uaepass/login returns proper OAuth authorization URL and sets CSRF state"""
+        # Test JSON format
+        res_json = self.client.get('/api/uaepass/login?format=json')
+        self.assertEqual(res_json.status_code, 200)
+        data = res_json.get_json()
+        self.assertEqual(data['status'], 'success')
+        self.assertIn('stg-id.uaepass.ae/idshub/authorize', data['auth_url'])
+        self.assertIn('client_id=sandbox_stage', data['auth_url'])
+        self.assertIn('response_type=code', data['auth_url'])
+        self.assertIn('state=', data['auth_url'])
+
+        # Test Browser redirect format
+        res_redir = self.client.get('/api/uaepass/login')
+        self.assertEqual(res_redir.status_code, 302)
+        self.assertIn('stg-id.uaepass.ae/idshub/authorize', res_redir.headers['Location'])
+
+    def test_uaepass_sandbox_login_bypass(self):
+        """Verify /api/uaepass/sandbox-login initiates direct session establishment"""
+        res = self.client.get('/api/uaepass/sandbox-login', follow_redirects=True)
+        self.assertEqual(res.status_code, 200)
+        # Verify authenticated session with /api/me
+        res_me = self.client.get('/api/me')
+        self.assertEqual(res_me.status_code, 200)
+        user_data = res_me.get_json()['user']
+        self.assertEqual(user_data['full_name'], 'Fatima Al-Nuaimi')
+
+    def test_uaepass_callback_csrf_rejection(self):
+        """Verify callback rejects requests with missing or invalid CSRF state"""
+        # Missing state
+        res = self.client.get('/api/uaepass/callback?code=mock_sandbox_code')
+        self.assertEqual(res.status_code, 302)
+        self.assertIn('error=', res.headers['Location'])
+
+        # Mismatched state
+        with self.client.session_transaction() as sess:
+            sess['uaepass_state'] = 'correct_state_token'
+        res_mismatch = self.client.get('/api/uaepass/callback?code=mock_sandbox_code&state=wrong_state')
+        self.assertEqual(res_mismatch.status_code, 302)
+        self.assertIn('error=', res_mismatch.headers['Location'])
+
+    def test_uaepass_callback_error_param(self):
+        """Verify callback handles explicit error from provider"""
+        res = self.client.get('/api/uaepass/callback?error=access_denied&error_description=Cancelled+by+user')
+        self.assertEqual(res.status_code, 302)
+        import urllib.parse
+        self.assertIn('Cancelled by user', urllib.parse.unquote(res.headers['Location']))
+
+    def test_uaepass_callback_success_creates_user_and_session(self):
+        """Verify callback exchanges mock staging code, creates user, and logs in session"""
+        state_token = 'valid_secure_state_12345'
+        with self.client.session_transaction() as sess:
+            sess['uaepass_state'] = state_token
+
+        res = self.client.get(f'/api/uaepass/callback?code=mock_sandbox_code&state={state_token}')
+        self.assertEqual(res.status_code, 302)
+        self.assertIn('/dashboard', res.headers['Location'])
+        self.assertIn('ga_auth_session=1', res.headers.get('Set-Cookie', ''))
+
+        # Verify authenticated session with /api/me
+        res_me = self.client.get('/api/me')
+        self.assertEqual(res_me.status_code, 200)
+        user_data = res_me.get_json()['user']
+        self.assertEqual(user_data['full_name'], 'Fatima Al-Nuaimi')
+        self.assertTrue(user_data['alias_name'])
+        self.assertIn('-fa-', user_data['alias_name'])
+
+    def test_uaepass_callback_links_existing_user(self):
+        """Verify callback links an existing user account by email without duplication"""
+        from database import create_user, get_user_by_username
+        create_user(
+            username='fatima_existing',
+            password='Password123!',
+            email='fatima.alnuaimi@uaepass.ae',
+            full_name='Fatima Al-Nuaimi Existing',
+            dob='1992-05-18'
+        )
+
+        state_token = 'state_link_user_789'
+        with self.client.session_transaction() as sess:
+            sess['uaepass_state'] = state_token
+
+        res = self.client.get(f'/api/uaepass/callback?code=mock_sandbox_code&state={state_token}')
+        self.assertEqual(res.status_code, 302)
+
+        # Check existing user was linked
+        user = get_user_by_username('fatima.alnuaimi@uaepass.ae')
+        self.assertIsNotNone(user['uaepass_uuid'])
+        self.assertEqual(user['uaepass_uuid'], 'uaepass-stg-cit-88910-fe2')
+
 if __name__ == '__main__':
     unittest.main()

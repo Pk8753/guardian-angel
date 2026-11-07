@@ -280,6 +280,19 @@ def init_db():
     except sqlite3.OperationalError:
         pass
 
+    # Migration: Ensure uaepass_uuid column exists in users
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN uaepass_uuid TEXT;")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_uaepass_uuid ON users(uaepass_uuid);")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
     # Seed Default Admin Account: admin / admin
     admin_hash = hash_password(Config.ADMIN_PASSWORD)
     cursor.execute("SELECT id, alias_name FROM users WHERE username = ?", (Config.ADMIN_USERNAME,))
@@ -416,6 +429,81 @@ def get_user_by_id(user_id: int):
     user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
     conn.close()
     return user
+
+def get_user_by_uaepass_uuid(uaepass_uuid: str):
+    """Retrieve user record by UAE PASS unique identifier (UUID)."""
+    if not uaepass_uuid:
+        return None
+    conn = get_db_connection()
+    user = conn.execute("SELECT * FROM users WHERE uaepass_uuid = ?", (uaepass_uuid,)).fetchone()
+    conn.close()
+    return user
+
+def link_uaepass_uuid(user_id: int, uaepass_uuid: str):
+    """Link an existing user account with their UAE PASS UUID."""
+    if not user_id or not uaepass_uuid:
+        return False
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET uaepass_uuid = ? WHERE id = ?", (uaepass_uuid, user_id))
+    conn.commit()
+    conn.close()
+    return True
+
+def create_uaepass_user(uaepass_uuid: str, full_name: str, email: str, idn: str = '', dob: str = '', gender: str = '', location: str = 'United Arab Emirates', role: str = 'patient'):
+    """
+    Creates a new user authenticated via UAE PASS with automated pseudonymization
+    and initializes their clinical profile.
+    """
+    import secrets
+    conn = get_db_connection()
+    try:
+        cursor = conn.cursor()
+        pwd_hash = hash_password(secrets.token_urlsafe(32))
+
+        # Generate a unique username from email or full_name
+        base_username = (email.split('@')[0] if email else full_name.lower().replace(' ', '_'))[:20]
+        base_username = "".join(c for c in base_username if c.isalnum() or c in ('_', '-')) or "uaepass_user"
+        username = base_username
+        counter = 1
+        while True:
+            existing = cursor.execute("SELECT id FROM users WHERE LOWER(username) = LOWER(?)", (username,)).fetchone()
+            if not existing:
+                break
+            username = f"{base_username}_{counter}"
+            counter += 1
+
+        # Use first 2 initials for pseudonym
+        parts = [p for p in full_name.replace('-', ' ').split() if p]
+        initials = (parts[0][:2] if parts else 'ua')
+        alias_name = generate_pseudonym(name_initials=initials)
+
+        cursor.execute("""
+        INSERT INTO users (username, password_hash, email, full_name, role, alias_name, uaepass_uuid)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (username, pwd_hash, email or f"{username}@uaepass.verified", full_name, role, alias_name, uaepass_uuid))
+        user_id = cursor.lastrowid
+
+        # Profile for new UAE PASS user
+        cursor.execute("""
+        INSERT INTO user_profiles (user_id, dob, blood_type, phone, city, country, kinship_degree, phenotypic_notes, emergency_contact)
+        VALUES (?, ?, '', '', ?, 'United Arab Emirates', 'Unassessed', 'Authenticated via UAE PASS Digital Identity.', ?)
+        """, (user_id, dob or '', location or 'United Arab Emirates', f"Emirates ID: {idn}" if idn else ''))
+
+        # Default proband pedigree node
+        birth_year = dob.split('-')[0] if '-' in dob else (dob.split('/')[-1] if '/' in dob else '')
+        sex_val = 'female' if gender and gender.lower() in ('female', 'f') else 'male'
+        cursor.execute("""
+        INSERT INTO pedigree_nodes (user_id, node_key, name, generation, sex, relationship, carrier_status, condition_locus, birth_year, notes, is_proband, alias_name, location)
+        VALUES (?, 'proband_node', ?, 'gen3', ?, 'Proband (You)', 'unassessed', 'Unassessed', ?, 'UAE PASS Authenticated Patient Account', 1, ?, ?)
+        """, (user_id, full_name, sex_val, birth_year, alias_name, location or 'United Arab Emirates'))
+
+        conn.commit()
+        return user_id
+    except sqlite3.IntegrityError:
+        return None
+    finally:
+        conn.close()
 
 def create_user(username: str, password: str, email: str, full_name: str, dob: str = '', location: str = '', role: str = 'patient'):
     """
