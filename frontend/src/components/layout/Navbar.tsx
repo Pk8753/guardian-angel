@@ -17,7 +17,9 @@ export function Navbar() {
     setActiveLocale,
     isDarkMode,
     toggleDarkMode,
-    setSettingsModalOpen
+    setSettingsModalOpen,
+    viewMode,
+    setViewMode
   } = useUIStore();
   const { user, logout } = useAuthStore();
   const [isDropdownOpen, setIsDropdownOpen] = React.useState(false);
@@ -70,6 +72,38 @@ export function Navbar() {
             title="UAE Arabic (العربية)"
           >
             العربية
+          </button>
+        </div>
+
+        {/* DUAL-LENS PERSONA TOGGLE (Patient vs Provider View) */}
+        <div className="flex items-center gap-0.5 bg-surface-container-low p-1 rounded-full border border-outline-variant/40 shadow-2xs text-[11px] font-bold">
+          <button
+            type="button"
+            onClick={() => setViewMode('patient')}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-full cursor-pointer transition-all ${
+              viewMode === 'patient'
+                ? 'bg-teal-700 text-white shadow-xs font-extrabold'
+                : 'text-on-surface-variant hover:text-teal-800'
+            }`}
+            title="Switch to Patient / Plain-English View"
+          >
+            <span>👤</span>
+            <span className="hidden md:inline">Patient View</span>
+            <span className="md:hidden">Patient</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('provider')}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-full cursor-pointer transition-all ${
+              viewMode === 'provider'
+                ? 'bg-slate-900 text-white shadow-xs font-extrabold'
+                : 'text-on-surface-variant hover:text-slate-900'
+            }`}
+            title="Switch to Clinical Provider / Genetics Specialist View"
+          >
+            <span>🩺</span>
+            <span className="hidden md:inline">Provider View</span>
+            <span className="md:hidden">Provider</span>
           </button>
         </div>
 

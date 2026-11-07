@@ -9,6 +9,7 @@ import { useAuthStore } from '@/stores/useAuthStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { t } from '@/lib/translations';
 import { PedigreeCanvas } from '@/components/pedigree/PedigreeCanvas';
+import { PatientDashboard } from '@/components/dashboard/PatientDashboard';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import {
@@ -45,7 +46,7 @@ import {
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
-  const { activeLocale } = useUIStore();
+  const { activeLocale, viewMode } = useUIStore();
   const firstName = user?.fullName ? user.fullName.split(' ')[0] : (user?.username || 'Patient');
 
   // Multiple Family Pedigrees State & Default Family Tree State
@@ -270,6 +271,10 @@ export default function DashboardPage() {
   const [aiReferences, setAiReferences] = useState<string[]>([]);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [dynamicQueries, setDynamicQueries] = useState<string[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [selectedModel, setSelectedModel] = useState('gemini-3.0-flash');
+  const [aiSource, setAiSource] = useState<string | null>(null);
+  const [aiLocus, setAiLocus] = useState<string | null>(null);
   const [bookingConfirmed, setBookingConfirmed] = useState(false);
   const [panelScheduled, setPanelScheduled] = useState(false);
   const [thinkingStep, setThinkingStep] = useState<string>('');
@@ -329,7 +334,13 @@ export default function DashboardPage() {
   const handleAskQuestion = async (questionText: string) => {
     if (!questionText.trim()) return;
     const userMsgText = questionText.trim();
-    setQuery('');
+    setQuery(userMsgText);
+    setIsAiLoading(true);
+    setAiLoading(true);
+    setAiAnswer(null);
+    setAiSource(null);
+    setAiLocus(null);
+    setThinkingStep('Checking premarital reports & policy documents...');
 
     const userMsg: DashboardChatMessage = {
       id: `u-${Date.now()}`,
@@ -337,67 +348,74 @@ export default function DashboardPage() {
       text: userMsgText,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
-
     setChatMessages((prev) => [...prev, userMsg]);
-    setIsAiLoading(true);
-    setThinkingStep('Checking premarital reports & policy documents...');
 
     const stepTimer = setTimeout(() => {
       setThinkingStep('Synthesizing genetic findings with clinical guidelines...');
     }, 900);
 
     try {
-      const res = await fetch('/api/ai/ask', {
+      const endpoint = selectedModel ? '/api/ai/ask-studio' : '/api/ai/ask';
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: userMsgText })
+        body: JSON.stringify({
+          query: userMsgText,
+          model: selectedModel,
+          view_mode: viewMode
+        })
       });
       clearTimeout(stepTimer);
 
       if (res.ok) {
         const data = await res.json();
+        const answerText = data.answer || 'No response generated.';
+        const sourceText = data.source || data.model || selectedModel || 'Care AI Clinical Intelligence';
+        const locusText = data.locus_reference || null;
+
+        setAiAnswer(answerText);
+        setAiSource(sourceText);
+        setAiLocus(locusText);
+
         const aiMsg: DashboardChatMessage = {
           id: `ai-${Date.now()}`,
           sender: 'ai',
-          text: data.answer || 'I could not find a clear match for your inquiry.',
-          source: data.source || (data.references && data.references[0]) || 'Care AI Clinical Intelligence',
+          text: answerText,
+          source: sourceText,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
         setChatMessages((prev) => [...prev, aiMsg]);
-        setAiAnswer(data.answer);
         if (data.references && Array.isArray(data.references)) {
           setAiReferences(data.references);
         }
-      } else {
-        const matched = defaultSuggestedQuestions.find(
-          (sq) => sq.q.toLowerCase() === userMsgText.toLowerCase()
-        );
-        const aiMsg: DashboardChatMessage = {
-          id: `ai-${Date.now()}`,
-          sender: 'ai',
-          text: matched ? matched.a : `Care AI analysis for "${userMsgText}": Based on your screening records, your carrier traits are well-documented. Dual-partner carrier testing provides complete clarity.`,
-          source: 'Care AI Screening Records',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        };
-        setChatMessages((prev) => [...prev, aiMsg]);
+        return;
       }
-    } catch (e) {
-      clearTimeout(stepTimer);
-      const matched = defaultSuggestedQuestions.find(
-        (sq) => sq.q.toLowerCase() === userMsgText.toLowerCase()
-      );
-      const aiMsg: DashboardChatMessage = {
-        id: `ai-${Date.now()}`,
-        sender: 'ai',
-        text: matched ? matched.a : `Based on your family health records, your carrier traits are well-documented. Dual-partner carrier testing provides complete clarity.`,
-        source: 'Care AI Knowledge Engine',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-      setChatMessages((prev) => [...prev, aiMsg]);
+    } catch (err) {
+      console.error('Care AI query error:', err);
     } finally {
+      clearTimeout(stepTimer);
       setIsAiLoading(false);
+      setAiLoading(false);
       setThinkingStep('');
     }
+
+    // Fallback if needed
+    const matched = defaultSuggestedQuestions.find(
+      (sq) => sq.q.toLowerCase() === userMsgText.toLowerCase()
+    );
+    const fallbackAnswer = matched
+      ? matched.a
+      : `Care AI analyzed your question regarding "${userMsgText}": Based on your family health records, your carrier traits are well-documented. Dual-partner carrier testing provides complete clarity.`;
+    setAiAnswer(fallbackAnswer);
+    setAiSource('Care AI Knowledge Engine');
+    const fallbackMsg: DashboardChatMessage = {
+      id: `ai-${Date.now()}`,
+      sender: 'ai',
+      text: fallbackAnswer,
+      source: 'Care AI Knowledge Engine',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+    setChatMessages((prev) => [...prev, fallbackMsg]);
   };
 
   // Premarital & Genetic Screening Report Upload (Zero-Storage In-Memory Parsing)
@@ -597,6 +615,22 @@ export default function DashboardPage() {
           <Navbar />
 
           <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-7 space-y-5">
+            {viewMode === 'patient' ? (
+              <PatientDashboard
+                user={user}
+                activeFamily={activeFamily}
+                selectedModel={selectedModel}
+                onModelChange={setSelectedModel}
+                onAskQuestion={handleAskQuestion}
+                query={query}
+                setQuery={setQuery}
+                aiAnswer={aiAnswer}
+                aiLoading={aiLoading}
+                aiSource={aiSource}
+                aiLocus={aiLocus}
+              />
+            ) : (
+              <>
             {/* ==================== 1. TOP WELCOME HERO BANNER ==================== */}
             <div className="relative w-full bg-white rounded-2xl p-6 sm:p-7 shadow-[0_1px_4px_rgba(12,50,44,0.04)] border border-outline-variant/40 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
               {/* Left Welcome Copy */}
@@ -1428,8 +1462,11 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 </div>
+
               </div>
             </div>
+              </>
+            )}
           </main>
         </div>
       </div>

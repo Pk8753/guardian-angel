@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Navbar } from '@/components/layout/Navbar';
 import { AuthGuard } from '@/components/layout/AuthGuard';
+import { PgtSimulator } from '@/components/simulation/PgtSimulator';
 import {
   Heart,
   ShieldCheck,
@@ -603,6 +604,8 @@ export default function CoupleAssessmentPage() {
               </table>
             </div>
           </div>
+          {/* Interactive PGT-M & Offspring Probability Simulator */}
+          <PgtSimulator />
         </main>
       </div>
       </div>

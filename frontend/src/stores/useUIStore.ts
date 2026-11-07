@@ -19,6 +19,8 @@ interface UIState {
   setSelectedMemberForEdit: (member: any | null) => void;
   isSettingsModalOpen: boolean;
   setSettingsModalOpen: (open: boolean) => void;
+  viewMode: 'patient' | 'provider';
+  setViewMode: (mode: 'patient' | 'provider') => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -68,4 +70,6 @@ export const useUIStore = create<UIState>((set) => ({
   setAddMemberModalOpen: (open) => set({ isAddMemberModalOpen: open }),
   selectedMemberForEdit: null,
   setSelectedMemberForEdit: (member) => set({ selectedMemberForEdit: member }),
+  viewMode: 'patient',
+  setViewMode: (mode) => set({ viewMode: mode }),
 }));

@@ -38,6 +38,8 @@ from gcp_services import gcp_storage, vertex_ai
 from local_ai_service import (
     qwen_brain_service, embedding_service, vector_db_service, get_ai_system_status
 )
+from gemini_studio_service import gemini_studio
+from genomic_lookup import genomic_lookup
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -613,6 +615,51 @@ def api_delete_pedigree_member(node_id):
         return jsonify({"status": "success", "message": "Member removed from tree"})
     return jsonify({"status": "error", "message": "Could not delete node"}), 400
 
+@app.route('/api/ai/models', methods=['GET'])
+def api_ai_models():
+    """Returns list of supported Google AI Studio Gemini models (including Gemini 3.x Flash)."""
+    return jsonify({
+        "status": "success",
+        "models": gemini_studio.get_supported_models()
+    })
+
+@app.route('/api/ai/ask-studio', methods=['POST'])
+@login_required
+def api_ai_ask_studio():
+    """Dedicated Google AI Studio Gemini endpoint with model selection & dual-lens persona framing."""
+    data = request.get_json() or {}
+    query = data.get('query', '')
+    if not query:
+        return jsonify({"error": "Query cannot be empty"}), 400
+
+    user_id = session.get('user_id')
+    nodes = get_pedigree_nodes(user_id) if user_id else []
+    model_id = data.get('model', 'gemini-3.0-flash')
+    view_mode = data.get('view_mode', 'patient')
+
+    result = gemini_studio.ask(
+        prompt=query,
+        model_id=model_id,
+        view_mode=view_mode,
+        pedigree_context={"nodes": nodes}
+    )
+    return jsonify(result)
+
+@app.route('/api/genomics/variant-lookup', methods=['GET'])
+def api_genomic_variant_lookup():
+    """Fast ClinVar & dbSNP lookup (<200ms) without loading 1.8GB VCF into memory."""
+    query = request.args.get('query') or request.args.get('rsid') or request.args.get('gene') or ''
+    if not query:
+        return jsonify({"error": "Query parameter 'query' or 'rsid' is required"}), 400
+    res = genomic_lookup.lookup(query)
+    return jsonify({"status": "success", "variant": res})
+
+@app.route('/api/genomics/screening-panel', methods=['GET'])
+def api_genomic_screening_panel():
+    """Returns curated tier 1 carrier screening panel variants."""
+    panel = genomic_lookup.get_common_screening_panel()
+    return jsonify({"status": "success", "panel": panel})
+
 @app.route('/api/ai/ask', methods=['POST'])
 @login_required
 def api_ai_ask():
@@ -620,7 +667,8 @@ def api_ai_ask():
     query = data.get('query', '')
     if not query:
         return jsonify({"error": "Query cannot be empty"}), 400
-
+    model_id = data.get('model')
+    view_mode = data.get('view_mode', 'patient')
     user_id = session.get('user_id')
     user = get_user_by_id(user_id) if user_id else None
     profile = get_user_profile(user_id) if user_id else None
@@ -638,8 +686,17 @@ def api_ai_ask():
         "families": user_families
     }
 
-    # Query Qdrant with BGE-M3 and synthesize answer with Qwen3 (or resilient fallback)
-    result = qwen_brain_service.answer_question(query, user_id=user_id, patient_context=patient_context)
+    # If model specified or GEMINI_API_KEY available, use Gemini Studio service
+    if model_id or Config.GEMINI_API_KEY or os.environ.get('GEMINI_API_KEY'):
+        result = gemini_studio.ask(
+            prompt=query,
+            model_id=model_id or 'gemini-3.0-flash',
+            view_mode=view_mode,
+            pedigree_context={"nodes": nodes, "reports": reports, "families": user_families}
+        )
+    else:
+        # Query Qdrant with BGE-M3 and synthesize answer with Qwen3 (or resilient fallback)
+        result = qwen_brain_service.answer_question(query, user_id=user_id, patient_context=patient_context)
     return jsonify(result)
 
 @app.route('/api/ai/system-status', methods=['GET'])
