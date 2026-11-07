@@ -441,7 +441,8 @@ export default function LoginPage() {
             <nav className="hidden md:flex items-center gap-6 ml-8 text-xs font-semibold text-[#efefef]">
               <a href="#hero" className="hover:text-[#30ba78] transition-colors">Overview</a>
               <a href="#estimator" className="hover:text-[#30ba78] transition-colors">Risk Estimator</a>
-              <a href="#feature-zero-knowledge" className="hover:text-[#30ba78] transition-colors">Zero-Knowledge</a>
+              <a href="#things-worth-remembering" className="hover:text-[#30ba78] transition-colors">Guidance</a>
+              <a href="#screening-centers" className="hover:text-[#30ba78] transition-colors">Screening Centres</a>
               <a href="#feature-genetics" className="hover:text-[#30ba78] transition-colors">Specialists & AI</a>
             </nav>
           </div>
@@ -855,7 +856,7 @@ export default function LoginPage() {
       )}
 
       {/* ==================== 3. HERO (BALANCED WITH TEXTURE & DEEP MIDNIGHT) ==================== */}
-      <section id="hero" className="relative pt-32 pb-20 md:pt-40 md:pb-28 overflow-hidden bg-gradient-to-br from-[#0c322c] via-[#0f2a24] to-[#192072] text-white">
+      <section id="hero" className="relative pt-24 pb-10 md:pt-28 md:pb-12 overflow-hidden bg-gradient-to-br from-[#0c322c] via-[#0f2a24] to-[#192072] text-white">
         
         {/* Subtle SVG Grid & Abstract Hex/Node Network Texture */}
         <svg className="absolute inset-0 w-full h-full opacity-[0.09] pointer-events-none" xmlns="http://www.w3.org/2000/svg">
@@ -874,66 +875,186 @@ export default function LoginPage() {
         <div className="absolute bottom-0 right-1/4 w-80 h-80 rounded-full bg-[#fe7c3f]/10 blur-3xl pointer-events-none"></div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="max-w-3xl space-y-6">
+          
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
 
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.08] text-white">
-              Your Family’s Health History{' '}
-              <span className="text-[#30ba78] underline decoration-[#90ebcd] decoration-wavy decoration-2">
-                Matters.
-              </span>
-            </h1>
+            {/* Left Column: Headline, Subheadline, Actions & 3 Core Principles */}
+            <div className="lg:col-span-7 space-y-4">
 
-            <p className="text-base sm:text-lg text-[#efefef] leading-relaxed max-w-2xl font-normal">
-              Access your clinical pedigree trees, AI-assisted hereditary risk models, and secure pre-marital couple assessments under zero-knowledge encryption.
-            </p>
+              <h1 className="text-3xl sm:text-4xl lg:text-[42px] font-black tracking-tight leading-tight text-white">
+                Your Family’s Health Story{' '}
+                <span className="text-[#30ba78]">
+                  Matters.
+                </span>
+              </h1>
 
-            <div className="flex flex-wrap items-center gap-3.5 pt-2">
-              <a
-                href="#estimator"
-                className="px-6 py-3.5 rounded-xl bg-[#30ba78] hover:bg-[#90ebcd] text-[#0c322c] text-sm font-extrabold flex items-center gap-2 shadow-lg hover:shadow-xl transition-all cursor-pointer"
-              >
-                <span>Calculate Family Health Risk</span>
-                <span className="material-symbols-outlined text-base">expand_more</span>
-              </a>
+              <p className="text-xs sm:text-sm text-[#efefef] leading-relaxed max-w-xl font-normal">
+                Clear, caring guidance to help couples and families understand inherited health risks and make choices that fit their values. Private by design.
+              </p>
 
-              <button
-                type="button"
-                onClick={() => openAuth('signin')}
-                className="px-6 py-3.5 rounded-xl bg-[#192072] hover:bg-[#2453ff] text-white text-sm font-bold flex items-center gap-2 border border-[#90ebcd]/30 shadow-md transition-all cursor-pointer"
-              >
-                <span>Access Health Vault</span>
-                <span className="material-symbols-outlined text-base">arrow_forward</span>
-              </button>
+              <div className="flex items-center gap-2 pt-1 flex-wrap sm:flex-nowrap">
+                <a
+                  href="#estimator"
+                  className="px-3.5 py-2.5 rounded-lg bg-[#30ba78] hover:bg-[#90ebcd] text-[#0c322c] text-xs font-black flex items-center gap-1 shadow-sm flex-shrink-0 cursor-pointer whitespace-nowrap"
+                >
+                  <span>Calculate Family Health Risk</span>
+                  <span className="material-symbols-outlined text-sm">expand_more</span>
+                </a>
 
-              <button
-                type="button"
-                onClick={() => {
-                  window.location.href = '/api/uaepass/login';
-                }}
-                className="px-4 py-3.5 rounded-xl bg-black hover:bg-neutral-900 text-white text-sm font-bold flex items-center gap-2 border border-white/20 transition-all cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-[#30ba78] text-base">fingerprint</span>
-                <span>UAE PASS</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => openAuth('signin')}
+                  className="px-3.5 py-2.5 rounded-lg bg-[#192072] hover:bg-[#2453ff] text-white text-xs font-bold flex items-center gap-1 border border-[#90ebcd]/30 shadow-sm flex-shrink-0 cursor-pointer whitespace-nowrap"
+                >
+                  <span>Access Health Vault</span>
+                  <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.href = '/api/uaepass/login';
+                  }}
+                  className="px-3 py-2.5 rounded-lg bg-black hover:bg-neutral-900 text-white text-xs font-bold flex items-center gap-1 border border-white/20 flex-shrink-0 cursor-pointer whitespace-nowrap"
+                >
+                  <span className="material-symbols-outlined text-[#30ba78] text-sm">fingerprint</span>
+                  <span>UAE PASS</span>
+                </button>
+              </div>
+
+              {/* 3 Core Principles: Editorial Pillars (not button-like) */}
+              <div className="grid grid-cols-3 gap-3 pt-3.5 border-t border-white/10">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-1 text-[#30ba78]">
+                    <span className="material-symbols-outlined text-sm">diversity_1</span>
+                    <span className="text-xs sm:text-sm font-extrabold text-white">Your family</span>
+                  </div>
+                  <p className="text-[10px] sm:text-[11px] text-[#90ebcd]/80 font-normal leading-tight">At the heart of care</p>
+                </div>
+
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-1 text-[#90ebcd]">
+                    <span className="material-symbols-outlined text-sm">favorite</span>
+                    <span className="text-xs sm:text-sm font-extrabold text-white">Your values</span>
+                  </div>
+                  <p className="text-[10px] sm:text-[11px] text-[#90ebcd]/80 font-normal leading-tight">Respected & prioritized</p>
+                </div>
+
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-1 text-[#fe7c3f]">
+                    <span className="material-symbols-outlined text-sm">how_to_reg</span>
+                    <span className="text-xs sm:text-sm font-extrabold text-white">Your informed choice</span>
+                  </div>
+                  <p className="text-[10px] sm:text-[11px] text-[#90ebcd]/80 font-normal leading-tight">Empowered decisions</p>
+                </div>
+              </div>
+
             </div>
 
-            {/* Hero Key Metrics Bar */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-8 border-t border-white/10">
-              <div className="space-y-0.5">
-                <p className="text-2xl font-black text-[#30ba78]">256-bit</p>
-                <p className="text-xs text-[#efefef] font-medium">Zero-Knowledge Keys</p>
-              </div>
-              <div className="space-y-0.5">
-                <p className="text-2xl font-black text-[#90ebcd]">3-Gen</p>
-                <p className="text-xs text-[#efefef] font-medium">Clinical Pedigree Trees</p>
-              </div>
-              <div className="space-y-0.5">
-                <p className="text-2xl font-black text-white">100%</p>
-                <p className="text-xs text-[#efefef] font-medium">De-Identified Sudo Aliases</p>
+            {/* Right Column: The UAE Programme Card */}
+            <div className="lg:col-span-5 relative">
+              <div className="rounded-2xl p-4 sm:p-5 bg-[#192072]/70 backdrop-blur-md border border-[#2453ff]/40 shadow-2xl space-y-3 relative overflow-hidden">
+                
+                {/* Centered UAE Programme with UAE Flag Colors */}
+                <div className="flex justify-center border-b border-white/10 pb-2.5">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-white/10 border border-white/20 shadow-xs">
+                    {/* Authentic UAE Flag: Red vertical bar + Green, White, Black horizontal bars */}
+                    <div className="w-3.5 h-2.5 rounded-xs overflow-hidden flex relative shadow-xs flex-shrink-0">
+                      <div className="w-1/3 h-full bg-[#e52320]"></div>
+                      <div className="w-2/3 h-full flex flex-col">
+                        <div className="h-1/3 bg-[#00732f]"></div>
+                        <div className="h-1/3 bg-[#ffffff]"></div>
+                        <div className="h-1/3 bg-[#000000]"></div>
+                      </div>
+                    </div>
+                    <span className="text-white font-extrabold tracking-wide">The UAE programme</span>
+                  </div>
+                </div>
+
+                <div className="text-center space-y-0.5">
+                  <h3 className="text-sm sm:text-base font-black text-white leading-snug">
+                    Mandatory pre-marital screening
+                  </h3>
+                  <p className="text-[10px] sm:text-[11px] text-[#efefef] leading-relaxed">
+                    Official nationwide protocol required for prospective couples to ensure health clarity and proactive family planning.
+                  </p>
+                </div>
+
+                {/* 4 Square Tiles Grid: Centered, balanced, no blank space */}
+                <div className="grid grid-cols-2 gap-2.5 pt-0.5">
+                  
+                  {/* Square Tile 1: 570 genes */}
+                  <div className="p-2.5 sm:p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors flex flex-col items-center justify-center text-center">
+                    <div className="w-6 h-6 rounded-md bg-[#30ba78]/20 flex items-center justify-center text-[#30ba78] mb-1">
+                      <span className="material-symbols-outlined text-sm">genetics</span>
+                    </div>
+                    <span className="text-xl sm:text-2xl font-black text-white leading-none">570</span>
+                    <span className="text-xs font-bold text-[#90ebcd] tracking-wide mt-0.5">Genes</span>
+                    <p className="text-[9.5px] sm:text-[10px] text-neutral-300 font-medium pt-0.5 leading-tight">
+                      Covered by genetic testing
+                    </p>
+                  </div>
+
+                  {/* Square Tile 2: 845+ conditions */}
+                  <div className="p-2.5 sm:p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors flex flex-col items-center justify-center text-center">
+                    <div className="w-6 h-6 rounded-md bg-[#fe7c3f]/20 flex items-center justify-center text-[#fe7c3f] mb-1">
+                      <span className="material-symbols-outlined text-sm">health_and_safety</span>
+                    </div>
+                    <span className="text-xl sm:text-2xl font-black text-white leading-none">845+</span>
+                    <span className="text-xs font-bold text-[#fe7c3f] tracking-wide mt-0.5">Conditions</span>
+                    <p className="text-[9.5px] sm:text-[10px] text-neutral-300 font-medium pt-0.5 leading-tight">
+                      Preventable genetic conditions addressed
+                    </p>
+                  </div>
+
+                  {/* Square Tile 3: Screening Types */}
+                  <div className="p-2.5 sm:p-3 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors flex flex-col items-center justify-center text-center">
+                    <div className="w-6 h-6 rounded-md bg-[#2453ff]/20 flex items-center justify-center text-[#2453ff] mb-1">
+                      <span className="material-symbols-outlined text-sm">bloodtype</span>
+                    </div>
+                    <span className="text-xs sm:text-sm font-black text-white leading-tight">Screening Types</span>
+                    <p className="text-[9.5px] sm:text-[10px] text-[#90ebcd] font-semibold leading-tight pt-1">
+                      Genetic, infectious disease, and blood disorders
+                    </p>
+                  </div>
+
+                  {/* Square Tile 4: Find a screening centre Button with Building Logo */}
+                  <a
+                    href="#screening-centers"
+                    className="p-2.5 sm:p-3 rounded-xl bg-[#30ba78]/15 hover:bg-[#30ba78]/25 border border-[#30ba78]/40 hover:border-[#30ba78] transition-all flex flex-col items-center justify-center text-center group cursor-pointer"
+                  >
+                    <div className="w-6 h-6 rounded-md bg-[#30ba78] flex items-center justify-center text-[#0c322c] mb-1 group-hover:scale-105 transition-transform">
+                      <span className="material-symbols-outlined text-sm">apartment</span>
+                    </div>
+                    <div className="flex items-center gap-0.5 text-[#30ba78] group-hover:text-[#90ebcd] font-black text-xs sm:text-sm leading-tight">
+                      <span>Find a screening centre</span>
+                      <span className="material-symbols-outlined text-xs">arrow_downward</span>
+                    </div>
+                    <p className="text-[9.5px] sm:text-[10px] text-neutral-300 font-medium pt-0.5 leading-tight">
+                      Official centres in Abu Dhabi, Al Ain & Al Dhafra
+                    </p>
+                  </a>
+
+                </div>
+
               </div>
             </div>
 
           </div>
+
+          {/* ==================== WHY THIS MATTERS (CENTERED AT BOTTOM OF OVERVIEW) ==================== */}
+          <div className="mt-6 pt-5 border-t border-white/10 text-center max-w-3xl mx-auto space-y-1.5">
+            <h2 className="text-lg sm:text-xl font-black text-white tracking-tight">
+              Why this matters
+            </h2>
+            <p className="text-xs sm:text-[13px] text-[#efefef] leading-relaxed font-normal">
+              Family is at the heart of life in the UAE, and marriages within families are a long-standing, respected tradition. Because relatives are more likely to share certain genetic changes, some inherited conditions can be more common in children of related parents. Knowing this early gives families more choices, not fewer.
+            </p>
+            <p className="text-xs sm:text-[13px] text-[#90ebcd] leading-relaxed font-medium">
+              The UAE already requires pre-marital screening. This platform helps you make sense of what comes next: what your results mean, what they don’t mean, and where to get support.
+            </p>
+          </div>
+
         </div>
       </section>
 
@@ -1507,11 +1628,51 @@ export default function LoginPage() {
             )}
           </div>
 
+          {/* ==================== 4C. WHAT DOES MY RESULT MEAN? ==================== */}
+          <div className="mt-8 p-6 sm:p-7 rounded-2xl bg-white border border-neutral-300 shadow-sm space-y-4">
+            <div className="flex items-center gap-2 border-b border-neutral-200 pb-3">
+              <span className="material-symbols-outlined text-[#30ba78] text-xl">help</span>
+              <h3 className="text-base sm:text-lg font-bold text-[#0c322c]">
+                What does my result mean?
+              </h3>
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 space-y-1.5">
+                <b className="text-xs font-bold text-[#0c322c] block">Carrier</b>
+                <p className="text-xs text-neutral-600 leading-relaxed">
+                  You carry a gene change but are usually healthy. Many people are carriers of at least one.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 space-y-1.5">
+                <b className="text-xs font-bold text-[#0c322c] block">Couple-level risk</b>
+                <p className="text-xs text-neutral-600 leading-relaxed">
+                  Whether you and your partner carry changes in the same gene, which affects the chance for a child.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 space-y-1.5">
+                <b className="text-xs font-bold text-[#0c322c] block">Possible child risk</b>
+                <p className="text-xs text-neutral-600 leading-relaxed">
+                  A probability, not a prediction. Many couples with a higher chance have healthy children.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 space-y-1.5">
+                <b className="text-xs font-bold text-[#0c322c] block">Risk vs. diagnosis</b>
+                <p className="text-xs text-neutral-600 leading-relaxed">
+                  Risk describes a chance. A diagnosis means a condition is present.
+                </p>
+              </div>
+            </div>
+          </div>
+
         </div>
       </section>
 
-      {/* ==================== 5. FEATURE 1: ZERO-KNOWLEDGE PRIVATE KEYS (MIDNIGHT / BLUE ABSTRACT) ==================== */}
-      <section id="feature-zero-knowledge" className="py-20 bg-gradient-to-br from-[#192072] via-[#0f2a24] to-[#0c322c] text-white relative overflow-hidden border-t border-[#2453ff]/30">
+      {/* ==================== 5. THINGS WORTH REMEMBERING (DARK TEXTURE BACKGROUND) ==================== */}
+      <section id="things-worth-remembering" className="py-20 bg-gradient-to-br from-[#192072] via-[#0f2a24] to-[#0c322c] text-white relative overflow-hidden border-t border-[#2453ff]/30">
         
         {/* Abstract blueprint grid background */}
         <svg className="absolute inset-0 w-full h-full opacity-[0.06] pointer-events-none" xmlns="http://www.w3.org/2000/svg">
@@ -1523,96 +1684,125 @@ export default function LoginPage() {
           <rect width="100%" height="100%" fill="url(#zk-grid)" />
         </svg>
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 space-y-8">
           
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+          <div className="text-center space-y-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-[#30ba78]/20 text-[#90ebcd] border border-[#30ba78]/30">
+              <span className="material-symbols-outlined text-sm text-[#30ba78]">lightbulb</span>
+              <span>Guidance & Perspective</span>
+            </div>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+              Things worth remembering
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
             
-            <div className="lg:col-span-7 space-y-6">
-              
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-[#2453ff]/20 text-[#90ebcd] border border-[#2453ff]/40">
-                <span className="material-symbols-outlined text-sm">enhanced_encryption</span>
-                <span>Cryptographic Sovereignty</span>
+            <div className="p-5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xs space-y-2.5">
+              <div className="w-8 h-8 rounded-lg bg-[#30ba78]/20 flex items-center justify-center text-[#30ba78]">
+                <span className="material-symbols-outlined text-base">check_circle</span>
               </div>
-
-              <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight leading-tight">
-                Zero-Knowledge Private Keys
-              </h2>
-
-              <p className="text-base text-[#efefef] leading-relaxed">
-                Client-side encryption ensures genomic files remain fully unmasked only by you. Your genetic pedigree nodes, whole-exome sequencing variants, and hereditary risk markers are cryptographically sealed before leaving your browser.
+              <p className="text-sm text-[#efefef] font-medium leading-relaxed">
+                Being a carrier is common. It is not a diagnosis and it is not a fault.
               </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                
-                <div className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-2">
-                  <div className="w-8 h-8 rounded-lg bg-[#2453ff]/30 flex items-center justify-center text-[#90ebcd]">
-                    <span className="material-symbols-outlined text-lg">vpn_key</span>
-                  </div>
-                  <h4 className="text-sm font-bold text-white">Client-Side Key Derivation</h4>
-                  <p className="text-xs text-[#efefef] leading-relaxed">
-                    Private keys are generated locally. Even cloud database administrators cannot decrypt or inspect your DNA sequence coordinates.
-                  </p>
-                </div>
-
-                <div className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-2">
-                  <div className="w-8 h-8 rounded-lg bg-[#30ba78]/20 flex items-center justify-center text-[#30ba78]">
-                    <span className="material-symbols-outlined text-lg">share</span>
-                  </div>
-                  <h4 className="text-sm font-bold text-white">Granular Pedigree Permissions</h4>
-                  <p className="text-xs text-[#efefef] leading-relaxed">
-                    Selectively share hereditary branches with family members or pre-marital candidates, or revoke access instantly at any time.
-                  </p>
-                </div>
-
-              </div>
-
-              <div className="p-4 rounded-xl bg-[#0c322c]/60 border border-[#30ba78]/30 flex items-center gap-3">
-                <span className="material-symbols-outlined text-[#30ba78] text-2xl">verified_user</span>
-                <p className="text-xs text-[#efefef]">
-                  <span className="font-bold text-white">Zero Raw File Storage: </span>
-                  Laboratory VCF reports are masked into anonymized locus coordinates. Personal identifiers never touch persistent cloud logs.
-                </p>
-              </div>
-
             </div>
 
-            <div className="lg:col-span-5 bg-white text-[#0c322c] p-6 sm:p-8 rounded-2xl shadow-2xl border border-[#2453ff]/30 space-y-5">
-              <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-red-400"></div>
-                  <div className="w-3 h-3 rounded-full bg-amber-400"></div>
-                  <div className="w-3 h-3 rounded-full bg-emerald-400"></div>
-                </div>
-                <span className="text-[10px] font-mono text-[#2453ff] font-bold">ZERO_KNOWLEDGE_E2EE</span>
+            <div className="p-5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xs space-y-2.5">
+              <div className="w-8 h-8 rounded-lg bg-[#90ebcd]/20 flex items-center justify-center text-[#90ebcd]">
+                <span className="material-symbols-outlined text-base">info</span>
               </div>
+              <p className="text-sm text-[#efefef] font-medium leading-relaxed">
+                A risk is a possibility, not a certainty.
+              </p>
+            </div>
 
-              <div className="space-y-3 font-mono text-xs">
-                <div className="p-3 rounded bg-[#192072] text-[#90ebcd] space-y-1">
-                  <p className="text-[10px] text-neutral-400">// Patient De-Identification ("Sudo Name")</p>
-                  <p className="font-bold text-white">Alias: Swift-Falcon-ka-4921</p>
-                  <p className="text-[10px] text-[#30ba78]">Status: Protected (Zero Real PII)</p>
-                </div>
-
-                <div className="p-3 rounded bg-neutral-50 text-neutral-700 space-y-1 border border-neutral-200">
-                  <p className="text-[10px] text-neutral-400">// Genomic Ciphertext Block</p>
-                  <p className="text-[11px] truncate text-[#192072]">ENC(HBB:c.92+5G&gt;C): 0x7fa289c41...</p>
-                  <p className="text-[10px] text-neutral-500">Key: Stored only in local browser enclave</p>
-                </div>
+            <div className="p-5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xs space-y-2.5">
+              <div className="w-8 h-8 rounded-lg bg-[#2453ff]/20 flex items-center justify-center text-[#2453ff]">
+                <span className="material-symbols-outlined text-base">balance</span>
               </div>
+              <p className="text-sm text-[#efefef] font-medium leading-relaxed">
+                Every couple&apos;s situation is different, and so is every decision.
+              </p>
+            </div>
 
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={() => openAuth('register')}
-                  className="w-full py-2.5 rounded-lg bg-[#192072] text-white hover:bg-[#2453ff] text-xs font-bold transition-colors cursor-pointer"
-                >
-                  Create Your Zero-Knowledge Vault →
-                </button>
+            <div className="p-5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xs space-y-2.5">
+              <div className="w-8 h-8 rounded-lg bg-[#fe7c3f]/20 flex items-center justify-center text-[#fe7c3f]">
+                <span className="material-symbols-outlined text-base">forum</span>
               </div>
+              <p className="text-sm text-[#efefef] font-medium leading-relaxed">
+                Counselling is a conversation, not a verdict.
+              </p>
+            </div>
+
+            <div className="p-5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-xs space-y-2.5 md:col-span-2 lg:col-span-2">
+              <div className="w-8 h-8 rounded-lg bg-[#30ba78]/20 flex items-center justify-center text-[#30ba78]">
+                <span className="material-symbols-outlined text-base">verified_user</span>
+              </div>
+              <p className="text-sm text-[#efefef] font-medium leading-relaxed">
+                You are in charge of your information and your choices.
+              </p>
             </div>
 
           </div>
 
+        </div>
+      </section>
+
+      {/* ==================== 6. FIND A SCREENING CENTRE IN ABU DHABI ==================== */}
+      <section id="screening-centers" className="py-16 bg-[#efefef] text-[#0c322c] border-t border-b border-neutral-300 scroll-mt-20 relative">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-[#30ba78]/15 text-[#0c322c] border border-[#30ba78]/30 mb-2">
+                <span className="material-symbols-outlined text-sm text-[#30ba78]">pin_drop</span>
+                <span>Official Screening Network</span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-extrabold text-[#0c322c] tracking-tight">
+                Find a screening centre in Abu Dhabi
+              </h2>
+            </div>
+            <p className="text-xs sm:text-sm text-neutral-600 max-w-md leading-relaxed">
+              Official pre-marital screening facilities across Abu Dhabi, Al Ain, and Al Dhafra offering accredited testing packages.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            
+            {/* Abu Dhabi */}
+            <div className="p-6 rounded-2xl bg-white border border-neutral-200 hover:border-[#30ba78] transition-all space-y-3 shadow-xs">
+              <div className="flex items-center gap-2 text-[#30ba78]">
+                <span className="material-symbols-outlined text-xl">apartment</span>
+                <b className="text-base font-bold text-[#0c322c]">Abu Dhabi</b>
+              </div>
+              <p className="text-xs text-neutral-700 leading-relaxed font-normal">
+                Baniyas, Madinat Khalifa, Al Shamkha, Al Maqtaa, Al Bateen and Al Bahia Healthcare Centers.
+              </p>
+            </div>
+
+            {/* Al Ain */}
+            <div className="p-6 rounded-2xl bg-white border border-neutral-200 hover:border-[#2453ff] transition-all space-y-3 shadow-xs">
+              <div className="flex items-center gap-2 text-[#2453ff]">
+                <span className="material-symbols-outlined text-xl">local_hospital</span>
+                <b className="text-base font-bold text-[#0c322c]">Al Ain</b>
+              </div>
+              <p className="text-xs text-neutral-700 leading-relaxed font-normal">
+                Al Muwaiji, Al Maqam, Neima, Al Hayer, Al Quaa, Al Hili and Sweihan Healthcare Centers; Oud Al Touba Diagnostic and Screening Center; Mezyad Healthcare; Al Yahar Healthcare.
+              </p>
+            </div>
+
+            {/* Al Dhafra Region */}
+            <div className="p-6 rounded-2xl bg-white border border-neutral-200 hover:border-[#fe7c3f] transition-all space-y-3 shadow-xs">
+              <div className="flex items-center gap-2 text-[#fe7c3f]">
+                <span className="material-symbols-outlined text-xl">medical_services</span>
+                <b className="text-base font-bold text-[#0c322c]">Al Dhafra Region</b>
+              </div>
+              <p className="text-xs text-neutral-700 leading-relaxed font-normal">
+                Al Dhafra Family Medicine Center; Ghiathy, Marfa, Al Sila, Delma and Liwa Hospitals.
+              </p>
+            </div>
+
+          </div>
         </div>
       </section>
 
@@ -1710,23 +1900,17 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-6 text-xs text-[#efefef]">
-            <a href="#hero" className="hover:text-[#30ba78] transition-colors">Overview</a>
-            <a href="#estimator" className="hover:text-[#30ba78] transition-colors">Risk Estimator</a>
-            <a href="#feature-zero-knowledge" className="hover:text-[#30ba78] transition-colors">Zero-Knowledge</a>
-            <a href="#feature-genetics" className="hover:text-[#30ba78] transition-colors">Clinical Genetics</a>
-            <button
-              type="button"
-              onClick={() => openAuth('signin')}
-              className="font-bold text-[#30ba78] hover:underline"
-            >
-              Sign In to Vault
-            </button>
+          <div className="max-w-3xl space-y-2.5 text-xs text-[#efefef]/90 leading-relaxed pt-2 border-t border-white/10">
+            <p>
+              An initiative by the Pairadox Team to raise awareness of inherited health risks and to help families make informed, confident choices, with respect for every family’s values, culture and privacy.
+            </p>
+            <p className="text-neutral-400 text-[11px]">
+              This app provides general information and does not replace medical advice, diagnosis or genetic counselling. Please speak with a qualified healthcare professional about your results.
+            </p>
+            <p className="text-neutral-400 text-[11px] pt-1">
+              © 2026 Pairadox Team
+            </p>
           </div>
-
-          <p className="text-[11px] text-neutral-400">
-            © 2026 GuardianAngel. All rights reserved.
-          </p>
         </div>
       </footer>
 
