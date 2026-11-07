@@ -21,48 +21,48 @@ const COLORS = {
 // Sourced directly from /Users/pankaj/Downloads/Family Health Risk Estimator.html
 const RELATIONSHIPS: [string, string, string, number][] = [
   ['fc', 'First cousins', 'Your parents are brothers or sisters (children of the same grandparents)', 1 / 16],
+  ['sc', 'Second cousins', 'You share great-grandparents', 1 / 64],
+  ['none', 'Unrelated', 'No known biological or genealogical relationship', 0],
   ['dfc', 'Double first cousins', 'Two brothers married two sisters, so you share both sets of grandparents', 1 / 8],
   ['fc1', 'First cousins once removed', 'For example, your partner is your first cousin’s child', 1 / 32],
-  ['sc', 'Second cousins', 'You share great-grandparents', 1 / 64],
   ['rem', 'Distant relatives (third cousins or beyond)', 'Same tribe or extended family, a more distant link', 1 / 256],
   ['un', 'Uncle and niece, or aunt and nephew', 'Second-degree biological relationship', 1 / 8],
-  ['hs', 'Half siblings', 'Share one biological parent', 1 / 8],
-  ['none', 'Not related', 'No known genealogical relationship', 0]
+  ['hs', 'Half siblings', 'Share one biological parent', 1 / 8]
 ];
 
 const AR_RELATIONSHIPS: Record<string, [string, string]> = {
   fc: ['أبناء عمومة / خؤولة مباشرين', 'الآباء إخوة أو أخوات (أبناء نفس الأجداد)'],
+  sc: ['أبناء عمومة من الدرجة الثانية', 'تشتركون في أجداد الأجداد'],
+  none: ['لا توجد قرابة', 'لا توجد صلة نسب عائلية معروفة'],
   dfc: ['أبناء عمومة مزدوجين', 'أخوان تزوجا أختين، فيشتركون في كلا الجدين'],
   fc1: ['أبناء عمومة من الدرجة الأولى بدرجة إزاحة', 'على سبيل المثال الشريك هو ابن/ابنة ابن عمك'],
-  sc: ['أبناء عمومة من الدرجة الثانية', 'تشتركون في أجداد الأجداد'],
   rem: ['أقارب من مسافة أبعد (درجة ثالثة فأكثر)', 'من نفس القبيلة أو العائلة الممتدة برابط أبعد'],
   un: ['خال/عم وابنة أخت/أخ، أو خالة/عمة وابن أخت/أخ', 'قرابة بيولوجية من الدرجة الثانية'],
-  hs: ['إخوة غير أشقاء', 'يشتركون في أحد الوالدين بيولوجياً'],
-  none: ['لا توجد قرابة', 'لا توجد صلة نسب عائلية معروفة']
+  hs: ['إخوة غير أشقاء', 'يشتركون في أحد الوالدين بيولوجياً']
 };
 
-const EARLIER_GENERATIONS: [string, string, number][] = [
-  ['0', 'No, not that we know', 0],
-  ['1', 'Yes, once or twice (e.g. grandparents were cousins)', 0.0625],
-  ['2', 'Yes, across many generations (multi-generational consanguinity)', 0.125]
+const EARLIER_GENERATIONS: [string, string, string, number][] = [
+  ['no', 'No', 'No known marriage between relatives in earlier generations', 0],
+  ['yes', 'Yes', 'Parents, grandparents or earlier ancestors were also relatives (amplifies generational genetic overlap)', 0.0625],
+  ['unsure', 'Unsure', 'Family history in earlier generations is incomplete or uncertain', 0.03125]
 ];
 
-const AR_EARLIER_GENERATIONS: Record<string, string> = {
-  '0': 'لا، على حد علمنا',
-  '1': 'نعم، مرة أو مرتين (مثلاً الأجداد كانوا أبناء عمومة)',
-  '2': 'نعم، عبر أجيال عديدة (زواج أقارب متوارث عبر الأجيال)'
+const AR_EARLIER_GENERATIONS: Record<string, [string, string]> = {
+  no: ['لا', 'لا يوجد زواج أقارب معروف في الأجيال السابقة'],
+  yes: ['نعم', 'الآباء أو الأجداد أو الأسلاف كانوا أيضاً أقارب (مما يضاعف التداخل الجيني)'],
+  unsure: ['غير متأكد', 'تاريخ العائلة في الأجيال السابقة غير مكتمل أو غير مؤكد']
 };
 
-const FAMILY_HISTORY: [string, string, number][] = [
-  ['1', 'No known condition in either family', 1.0],
-  ['1.2', 'Not sure or family history incomplete', 1.2],
-  ['1.8', 'Yes, in one or both families (e.g. Thalassemia, Sickle Cell, SMA, early child loss)', 1.8]
+const FAMILY_HISTORY: [string, string, string, number][] = [
+  ['no', 'No', 'No known condition in either family', 1.0],
+  ['yes', 'Yes', 'Yes, known history or carrier in either family (e.g. Beta-Thalassemia, Sickle Cell Disease, Cystic Fibrosis, SMA)', 1.8],
+  ['unsure', 'Unsure', 'Not sure or family history incomplete', 1.2]
 ];
 
-const AR_FAMILY_HISTORY: Record<string, string> = {
-  '1': 'لا توجد حالات وراثية معروفة في العائلتين',
-  '1.2': 'غير متأكد أو تاريخ العائلة الطبي غير مكتمل',
-  '1.8': 'نعم، في إحدى العائلتين أو كلتيهما (مثل الثلاسيميا، الأنيميا المنجلية، الضمور العضلي، أو فقدان أطفال)'
+const AR_FAMILY_HISTORY: Record<string, [string, string]> = {
+  no: ['لا', 'لا توجد حالات وراثية معروفة في العائلتين'],
+  yes: ['نعم', 'نعم، تاريخ وراثي معروف أو ناقل لصفة وراثية في إحدى العائلتين (مثل الثلاسيميا، الأنيميا المنجلية، التليف الكيسي، أو الضمور العضلي)'],
+  unsure: ['غير متأكد', 'غير متأكد أو تاريخ العائلة الطبي غير مكتمل']
 };
 
 const PAST_PREGNANCIES: [string, string, number][] = [
@@ -84,6 +84,16 @@ const AR_SCREENING_STATUS: Record<string, string> = {
   '1': 'لم يتم الفحص بعد',
   '0.7': 'تم الفحص ولم تظهر أي مخاوف وراثية (الفحص سليم تماماً)'
 };
+
+const GENDER_OPTIONS: [string, string, string][] = [
+  ['male', 'Male', 'Biological male partner assessment'],
+  ['female', 'Female', 'Biological female partner assessment']
+];
+
+const RELATIONSHIP_STATUS_OPTIONS: [string, string, string][] = [
+  ['planning', 'Planning to marry', 'Prospective couple preparing for premarital screening'],
+  ['married', 'Already married', 'Married couple seeking hereditary and family planning insight']
+];
 
 const K_FACTOR = 0.487;
 
@@ -699,8 +709,10 @@ export default function LoginPage() {
   // Field validation error tracking
   const [fieldErrors, setFieldErrors] = React.useState<{ [key: string]: boolean }>({});
 
-  // ==================== 5-STEP RISK CALCULATOR STATE ====================
+  // ==================== RISK CALCULATOR STATE ====================
   // No answers pre-selected by default
+  const [gender, setGender] = React.useState<'male' | 'female' | null>(null);
+  const [relStatus, setRelStatus] = React.useState<'planning' | 'married' | null>(null);
   const [relIdx, setRelIdx] = React.useState<number | null>(null);
   const [genIdx, setGenIdx] = React.useState<number | null>(null);
   const [histIdx, setHistIdx] = React.useState<number | null>(null);
@@ -712,11 +724,22 @@ export default function LoginPage() {
   const [flippedTiles, setFlippedTiles] = React.useState<{ [key: string]: boolean }>({});
   const [isFormulaExpanded, setIsFormulaExpanded] = React.useState<boolean>(false);
 
+  // ==================== MOBILE ASSESSMENT SLIDESHOW STATE ====================
+  const [isAssessmentActive, setIsAssessmentActive] = React.useState<boolean>(false);
+  const [mobileSlide, setMobileSlide] = React.useState<number>(0);
+  const [slideDirection, setSlideDirection] = React.useState<'next' | 'prev'>('next');
+  const [isMobileCentresOpen, setIsMobileCentresOpen] = React.useState<boolean>(false);
+  const [isMobileFormulaOpen, setIsMobileFormulaOpen] = React.useState<boolean>(false);
+  const touchStartX = React.useRef<number | null>(null);
+  const touchStartY = React.useRef<number | null>(null);
+
   const toggleTile = (key: string) => {
     setFlippedTiles((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const handleResetEstimator = () => {
+    setGender(null);
+    setRelStatus(null);
     setRelIdx(null);
     setGenIdx(null);
     setHistIdx(null);
@@ -724,6 +747,57 @@ export default function LoginPage() {
     setScrIdx(null);
     setSameCarrier(false);
     setFlippedTiles({});
+    setMobileSlide(0);
+  };
+
+  const goToSlide = (n: number) => {
+    if (n < 0 || n > 9) return;
+    setSlideDirection(n >= mobileSlide ? 'next' : 'prev');
+    setMobileSlide(n);
+  };
+
+  const nextSlide = () => {
+    if (mobileSlide < 9) {
+      setSlideDirection('next');
+      setMobileSlide((prev) => prev + 1);
+    }
+  };
+
+  const prevSlide = () => {
+    setSlideDirection('prev');
+    if (mobileSlide > 0) {
+      setMobileSlide((prev) => prev - 1);
+    } else {
+      setIsAssessmentActive(false);
+    }
+  };
+
+  const handleSelectAndAdvance = (setter: () => void, targetSlide?: number) => {
+    setter();
+    setSlideDirection('next');
+    setTimeout(() => {
+      setMobileSlide((prev) => (targetSlide !== undefined ? targetSlide : Math.min(prev + 1, 9)));
+    }, 280);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+    const diffX = touchStartX.current - e.changedTouches[0].clientX;
+    const diffY = touchStartY.current - e.changedTouches[0].clientY;
+    if (Math.abs(diffX) > 40 && Math.abs(diffX) > Math.abs(diffY) * 1.5) {
+      if (diffX > 0) {
+        nextSlide();
+      } else {
+        prevSlide();
+      }
+    }
+    touchStartX.current = null;
+    touchStartY.current = null;
   };
 
   // Scroll animations state
@@ -787,9 +861,9 @@ export default function LoginPage() {
     sI: number | null
   ) => {
     const rVal = rI !== null ? RELATIONSHIPS[rI][3] : 0;
-    const faVal = gI !== null ? EARLIER_GENERATIONS[gI][2] : 0;
+    const faVal = gI !== null ? EARLIER_GENERATIONS[gI][3] : 0;
     const fVal = rVal * (1 + faVal);
-    const histVal = hI !== null ? FAMILY_HISTORY[hI][2] : 1.0;
+    const histVal = hI !== null ? FAMILY_HISTORY[hI][3] : 1.0;
     const pregVal = pI !== null ? PAST_PREGNANCIES[pI][2] : 1.0;
     const scrVal = sI !== null ? SCREENING_STATUS[sI][2] : 1.0;
     let lVal = histVal * pregVal * scrVal;
@@ -798,7 +872,7 @@ export default function LoginPage() {
     return { fVal, lVal, exRisk };
   };
 
-  const isStarted = relIdx !== null || genIdx !== null || histIdx !== null || pregIdx !== null || scrIdx !== null || sameCarrier;
+  const isStarted = gender !== null || relStatus !== null || relIdx !== null || genIdx !== null || histIdx !== null || pregIdx !== null || scrIdx !== null || sameCarrier;
 
   const { fVal: currentF, lVal: currentL, exRisk: currentExtra } = computeEstimate(relIdx, genIdx, histIdx, pregIdx, scrIdx);
   const rangeLo = (1 - Math.exp(-K_FACTOR * currentF * (currentL * 0.6))) * 100;
@@ -1031,108 +1105,7 @@ export default function LoginPage() {
   return (
     <div dir={isAr ? 'rtl' : 'ltr'} className="min-h-screen w-full bg-[#efefef] text-[#0c322c] font-sans selection:bg-[#30ba78] selection:text-[#0c322c] overflow-x-hidden">
 
-      {/* ==================== 1. FIXED HEADER ==================== */}
-      <header
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-          isScrolled
-            ? 'bg-[#0c322c]/95 backdrop-blur-md shadow-xl py-3 border-b border-[#30ba78]/30'
-            : 'bg-[#0c322c] py-4 border-b border-[#192072]/40'
-        }`}
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-          
-          {/* Header Left: Logo and Brand Name */}
-          <div className="flex items-center gap-3">
-            <a href="#hero" className="flex items-center gap-3 group">
-              <div className="w-10 h-10 rounded-xl bg-white p-1 flex items-center justify-center shadow-md border border-[#30ba78]/40 group-hover:scale-105 transition-transform">
-                <img
-                  src="/static/screen/logo.png"
-                  alt="Guardian Angel Logo"
-                  className="w-full h-full object-contain rounded-lg"
-                />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-lg font-black tracking-tight text-white group-hover:text-[#30ba78] transition-colors">
-                  {isAr ? 'جاردين أنجل' : 'Guardian Angel'}
-                </span>
-                <span className="text-[10px] text-[#90ebcd] font-semibold tracking-wider uppercase -mt-0.5">
-                  {isAr ? 'ذكاء الجينوم السريري' : 'Genomics Intelligence'}
-                </span>
-              </div>
-            </a>
-
-            {/* In-page Navigation Links */}
-            <nav className="hidden md:flex items-center gap-6 ml-8 text-xs font-semibold text-[#efefef]">
-              <a href="#hero" className="hover:text-[#30ba78] transition-colors">{isAr ? 'نظرة عامة' : 'Overview'}</a>
-              <a href="#estimator" className="hover:text-[#30ba78] transition-colors">{isAr ? 'حاسبة المخاطر' : 'Risk Estimator'}</a>
-              <a href="#things-worth-remembering" className="hover:text-[#30ba78] transition-colors">{isAr ? 'إرشادات' : 'Guidance'}</a>
-              <a href="#screening-centers" className="hover:text-[#30ba78] transition-colors">{isAr ? 'مراكز الفحص' : 'Screening Centres'}</a>
-              <a href="#feature-genetics" className="hover:text-[#30ba78] transition-colors">{isAr ? 'المختصون والذكاء الاصطناعي' : 'Specialists & AI'}</a>
-            </nav>
-          </div>
-
-          {/* Header Right: Language Switcher + Compact Auth Controls */}
-          <div className="flex items-center gap-2">
-            {/* Language Selector: EN & العربية */}
-            <div className="flex items-center gap-1 bg-white/10 px-2 py-1 rounded-full border border-white/20 text-[11px] font-bold">
-              <button
-                type="button"
-                onClick={() => setActiveLocale('en')}
-                className={`px-2.5 py-0.5 rounded-full cursor-pointer transition-all ${
-                  !isAr
-                    ? 'bg-[#30ba78] text-[#0c322c] shadow-xs'
-                    : 'text-white/80 hover:text-white'
-                }`}
-                title="USA English"
-              >
-                EN
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveLocale('ar')}
-                className={`px-2.5 py-0.5 rounded-full cursor-pointer transition-all ${
-                  isAr
-                    ? 'bg-[#30ba78] text-[#0c322c] shadow-xs'
-                    : 'text-white/80 hover:text-white'
-                }`}
-                title="UAE Arabic (العربية)"
-              >
-                العربية
-              </button>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => openAuth('signin')}
-              className="px-3.5 py-1.5 text-xs font-bold text-white hover:text-[#30ba78] border border-white/20 hover:border-[#30ba78] rounded-lg transition-all cursor-pointer"
-            >
-              {isAr ? 'تسجيل الدخول' : 'Sign In'}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => openAuth('register')}
-              className="px-3.5 py-1.5 text-xs font-bold bg-[#30ba78] text-[#0c322c] hover:bg-[#90ebcd] rounded-lg shadow-sm transition-all cursor-pointer"
-            >
-              {isAr ? 'إنشاء حساب' : 'Create Account'}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                window.location.href = '/api/uaepass/login';
-              }}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-black text-white hover:bg-neutral-900 border border-white/20 rounded-lg transition-all cursor-pointer"
-              title={isAr ? 'تسجيل الدخول بالهوية الرقمية' : 'Sign in with UAE PASS'}
-            >
-              <span className="material-symbols-outlined text-[15px] text-[#30ba78]">fingerprint</span>
-              <span>{isAr ? 'الهوية الرقمية' : 'UAE PASS'}</span>
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* ==================== 2. COMPACT POPUP AUTH DRAWER / MODAL ==================== */}
+      {/* ==================== 2. COMPACT POPUP AUTH DRAWER / MODAL (SHARED) ==================== */}
       {isAuthOpen && (
         <div className="fixed inset-0 z-50 flex items-start justify-end p-4 sm:p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="w-full max-w-md bg-white text-[#0c322c] rounded-2xl shadow-2xl border border-[#30ba78]/30 overflow-hidden mt-16 sm:mt-14 animate-in slide-in-from-top-4 duration-300">
@@ -1509,7 +1482,900 @@ export default function LoginPage() {
         </div>
       )}
 
-      {/* ==================== 3. HERO (BALANCED WITH TEXTURE & DEEP MIDNIGHT) ==================== */}
+      {/* ==================== MOBILE ASSESSMENT SLIDESHOW (100DVH, ORIGINAL THEME) ==================== */}
+      {isAssessmentActive && (
+        <div
+          className="fixed inset-0 z-50 h-[100dvh] max-h-[100dvh] bg-[#efefef] text-[#0c322c] flex flex-col justify-between overflow-hidden select-none animate-in fade-in duration-200"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
+          {/* Top Clean Minimal Navigation Bar */}
+          <div className="px-4 py-3 bg-white border-b border-neutral-200 flex items-center justify-between flex-shrink-0 shadow-xs z-30">
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={prevSlide}
+                className="w-8 h-8 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-[#0c322c] flex items-center justify-center transition-colors cursor-pointer active:scale-95"
+                title="Previous Question"
+              >
+                <span className="material-symbols-outlined text-base">arrow_back</span>
+              </button>
+              <div className="flex flex-col">
+                <span className="text-xs font-black tracking-tight text-[#0c322c]">
+                  Guardian Angel
+                </span>
+                <span className="text-[10px] font-bold text-[#30ba78]">
+                  {mobileSlide === 0
+                    ? '1. Gender'
+                    : mobileSlide === 1
+                    ? '2. Relationship Status'
+                    : mobileSlide === 2
+                    ? '3. Consanguinity'
+                    : mobileSlide === 3
+                    ? 'Genetics Insight'
+                    : mobileSlide === 4
+                    ? '4. Amplified Risk'
+                    : mobileSlide === 5
+                    ? '5. Family History'
+                    : mobileSlide === 6
+                    ? 'Cultural Perspective'
+                    : mobileSlide === 7
+                    ? '6. Past Pregnancies'
+                    : mobileSlide === 8
+                    ? '7. Carrier Screening'
+                    : 'Personalized Results'}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              {isStarted && (
+                <button
+                  type="button"
+                  onClick={handleResetEstimator}
+                  className="px-2 py-1 text-[10px] font-bold text-[#fe7c3f] bg-orange-50 hover:bg-orange-100 rounded-lg border border-orange-200 flex items-center gap-1 transition-colors cursor-pointer"
+                  title="Restart Assessment"
+                >
+                  <span className="material-symbols-outlined text-[13px]">restart_alt</span>
+                  <span>Reset</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setIsAssessmentActive(false)}
+                className="w-8 h-8 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-600 flex items-center justify-center transition-colors cursor-pointer"
+                title="Exit to Overview"
+              >
+                <span className="material-symbols-outlined text-base">close</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Dynamic Assessment Slides (Fits 100dvh, NO Vertical Scrolling on Question Screens) */}
+          <div className="flex-1 min-h-0 flex flex-col justify-between p-4 overflow-y-auto z-20">
+            <div
+              key={mobileSlide}
+              className={`h-full flex flex-col justify-between ${
+                slideDirection === 'next' ? 'story-slide-next' : 'story-slide-prev'
+              }`}
+            >
+              {/* SLIDE 0: QUESTION 1 - GENDER */}
+              {mobileSlide === 0 && (
+                <div className="h-full flex flex-col justify-between py-1">
+                  <div className="space-y-3">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-[#192072]/10 text-[#192072] border border-[#192072]/20">
+                      <span className="material-symbols-outlined text-sm text-[#2453ff]">person</span>
+                      <span>Question 1 of 5</span>
+                    </div>
+
+                    <h2 className="text-xl sm:text-2xl font-black text-[#0c322c] tracking-tight leading-snug">
+                      1. What is your biological sex?
+                    </h2>
+
+                    <p className="text-xs sm:text-sm text-neutral-600 leading-relaxed">
+                      Inherited conditions (such as X-linked traits or G6PD deficiency) depend on biological sex for clinical inheritance modeling.
+                    </p>
+
+                    <div className="space-y-3 pt-2">
+                      {GENDER_OPTIONS.map(([val, label, desc]) => {
+                        const isSelected = gender === val;
+                        return (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => handleSelectAndAdvance(() => setGender(val as 'male' | 'female'))}
+                            className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center justify-between cursor-pointer active:scale-[0.99] ${
+                              isSelected
+                                ? 'bg-[#0c322c] text-white border-[#30ba78] ring-2 ring-[#30ba78]/30 shadow-md'
+                                : 'bg-white text-[#0c322c] border-neutral-200 hover:border-[#30ba78] shadow-xs'
+                            }`}
+                          >
+                            <div className="space-y-0.5">
+                              <span className="text-base font-extrabold leading-tight block">{label}</span>
+                              <p className={`text-xs ${isSelected ? 'text-[#90ebcd]' : 'text-neutral-500'}`}>{desc}</p>
+                            </div>
+                            <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+                              isSelected ? 'bg-[#30ba78] text-[#0c322c]' : 'bg-neutral-100 text-neutral-400'
+                            }`}>
+                              <span className="material-symbols-outlined text-base">
+                                {isSelected ? 'check' : 'arrow_forward'}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-center text-neutral-400 pt-2">
+                    🔒 100% confidential. No answers leave this device.
+                  </p>
+                </div>
+              )}
+
+              {/* SLIDE 1: QUESTION 2 - RELATIONSHIP STATUS */}
+              {mobileSlide === 1 && (
+                <div className="h-full flex flex-col justify-between py-1">
+                  <div className="space-y-3">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-[#192072]/10 text-[#192072] border border-[#192072]/20">
+                      <span className="material-symbols-outlined text-sm text-[#2453ff]">favorite</span>
+                      <span>Question 2 of 5</span>
+                    </div>
+
+                    <h2 className="text-xl sm:text-2xl font-black text-[#0c322c] tracking-tight leading-snug">
+                      2. What is your relationship status?
+                    </h2>
+
+                    <p className="text-xs sm:text-sm text-neutral-600 leading-relaxed">
+                      Helps tailor premarital guidance or proactive family planning pathways.
+                    </p>
+
+                    <div className="space-y-3 pt-2">
+                      {RELATIONSHIP_STATUS_OPTIONS.map(([val, label, desc]) => {
+                        const isSelected = relStatus === val;
+                        return (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => handleSelectAndAdvance(() => setRelStatus(val as 'planning' | 'married'))}
+                            className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center justify-between cursor-pointer active:scale-[0.99] ${
+                              isSelected
+                                ? 'bg-[#0c322c] text-white border-[#30ba78] ring-2 ring-[#30ba78]/30 shadow-md'
+                                : 'bg-white text-[#0c322c] border-neutral-200 hover:border-[#30ba78] shadow-xs'
+                            }`}
+                          >
+                            <div className="space-y-0.5">
+                              <span className="text-base font-extrabold leading-tight block">{label}</span>
+                              <p className={`text-xs ${isSelected ? 'text-[#90ebcd]' : 'text-neutral-500'}`}>{desc}</p>
+                            </div>
+                            <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+                              isSelected ? 'bg-[#30ba78] text-[#0c322c]' : 'bg-neutral-100 text-neutral-400'
+                            }`}>
+                              <span className="material-symbols-outlined text-base">
+                                {isSelected ? 'check' : 'arrow_forward'}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-center text-neutral-400 pt-2">
+                    💡 Pre-marital screening in the UAE is mandatory and comprehensive.
+                  </p>
+                </div>
+              )}
+
+              {/* SLIDE 2: QUESTION 3 - CONSANGUINITY (BIGGER BUTTONS, FULL DESCRIPTIONS, NO PERCENTAGE) */}
+              {mobileSlide === 2 && (
+                <div className="h-full flex flex-col justify-between py-1">
+                  <div className="space-y-2">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-[#30ba78]/20 text-[#0c322c] border border-[#30ba78]/40">
+                      <span className="material-symbols-outlined text-sm text-[#30ba78]">family_restroom</span>
+                      <span>Question 3 of 5 • Consanguinity</span>
+                    </div>
+
+                    <h2 className="text-lg sm:text-xl font-black text-[#0c322c] tracking-tight leading-snug">
+                      3. How are you and your partner related?
+                    </h2>
+
+                    <p className="text-xs text-neutral-600 leading-tight">
+                      Father’s side or mother’s side makes no difference to the calculation.
+                    </p>
+
+                    <div className="space-y-2 pt-1 max-h-[55vh] overflow-y-auto pr-1">
+                      {RELATIONSHIPS.map(([key, title, desc], idx) => {
+                        const isSelected = relIdx === idx;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => handleSelectAndAdvance(() => setRelIdx(idx))}
+                            className={`w-full text-left p-3 sm:p-3.5 rounded-2xl border transition-all flex items-start justify-between cursor-pointer active:scale-[0.99] ${
+                              isSelected
+                                ? 'bg-[#0c322c] text-white border-[#30ba78] ring-2 ring-[#30ba78]/30 shadow-md'
+                                : 'bg-white text-[#0c322c] border-neutral-200 hover:border-[#30ba78] shadow-xs'
+                            }`}
+                          >
+                            <div className="pr-3">
+                              <span className={`text-sm font-extrabold leading-tight block ${isSelected ? 'text-white' : 'text-[#0c322c]'}`}>
+                                {title}
+                              </span>
+                              {desc && (
+                                <p className={`text-xs mt-0.5 leading-relaxed ${isSelected ? 'text-[#90ebcd]' : 'text-neutral-500'}`}>
+                                  {desc}
+                                </p>
+                              )}
+                            </div>
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+                              isSelected ? 'bg-[#30ba78] text-[#0c322c]' : 'bg-neutral-100 text-neutral-400'
+                            }`}>
+                              <span className="material-symbols-outlined text-sm">
+                                {isSelected ? 'check' : 'arrow_forward'}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-center text-neutral-400 pt-1">
+                    Select one option to continue to the next screen.
+                  </p>
+                </div>
+              )}
+
+              {/* SLIDE 3: EDUCATIONAL SNIPPET 1 (BUTTON SAYS "CONTINUE") */}
+              {mobileSlide === 3 && (
+                <div className="h-full flex flex-col justify-between py-2">
+                  <div className="space-y-3">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-[#30ba78]/20 text-[#0c322c] border border-[#30ba78]/40">
+                      <span className="material-symbols-outlined text-sm text-[#30ba78]">lightbulb</span>
+                      <span>Genetics Insight • Did You Know?</span>
+                    </div>
+
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-[#0c322c] flex items-center justify-center border border-[#30ba78]/40 shadow-xs">
+                      <span className="material-symbols-outlined text-2xl text-[#30ba78]">genetics</span>
+                    </div>
+
+                    <h2 className="text-xl sm:text-2xl font-black text-[#0c322c] tracking-tight leading-snug">
+                      Being a carrier is common. It is not a diagnosis.
+                    </h2>
+
+                    <div className="p-4 rounded-2xl bg-white border border-neutral-200 shadow-xs space-y-2.5 text-xs text-neutral-700 leading-relaxed">
+                      <p>
+                        Every human carries between 2 to 5 silent recessive gene variants. Most carriers live completely healthy lives without any symptoms.
+                      </p>
+                      <p className="text-[#0c322c] font-semibold">
+                        When relatives marry, they are more likely to share the same variants. Pre-marital screening identifies these early so you have complete peace of mind and proactive pathways.
+                      </p>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-neutral-100 border border-neutral-200 flex items-center gap-2.5 text-xs text-[#0c322c]">
+                      <span className="material-symbols-outlined text-[#30ba78] text-lg shrink-0">verified_user</span>
+                      <span className="text-[11px] text-neutral-600">
+                        Covered by UAE premarital screening: <strong className="text-[#0c322c]">570 genes & 845+ conditions</strong>.
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="pt-3">
+                    <button
+                      type="button"
+                      onClick={() => goToSlide(4)}
+                      className="w-full py-3.5 bg-[#30ba78] hover:bg-[#90ebcd] text-[#0c322c] text-sm font-black rounded-xl shadow-md flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                    >
+                      <span>Continue</span>
+                      <span className="material-symbols-outlined text-base">arrow_forward</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* SLIDE 4: QUESTION 4 - AMPLIFIED RISK (YES / NO / UNSURE - EXPLAINS GENERATIONAL OVERLAP) */}
+              {mobileSlide === 4 && (
+                <div className="h-full flex flex-col justify-between py-1">
+                  <div className="space-y-3">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-[#192072]/10 text-[#192072] border border-[#192072]/20">
+                      <span className="material-symbols-outlined text-sm text-[#2453ff]">account_tree</span>
+                      <span>Question 4 of 5 • Amplified Risk</span>
+                    </div>
+
+                    <h2 className="text-xl sm:text-2xl font-black text-[#0c322c] tracking-tight leading-snug">
+                      4. Were your parents or your partner’s parents also relatives?
+                    </h2>
+
+                    <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900 leading-relaxed">
+                      <b>Why this matters:</b> This helps assess <b>generational genetic overlap</b> (multi-generational consanguinity), which can slightly increase shared hereditary factors.
+                    </div>
+
+                    <div className="space-y-3 pt-1">
+                      {EARLIER_GENERATIONS.map(([key, label, desc], idx) => {
+                        const isSelected = genIdx === idx;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => handleSelectAndAdvance(() => setGenIdx(idx))}
+                            className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center justify-between cursor-pointer active:scale-[0.99] ${
+                              isSelected
+                                ? 'bg-[#0c322c] text-white border-[#30ba78] ring-2 ring-[#30ba78]/30 shadow-md'
+                                : 'bg-white text-[#0c322c] border-neutral-200 hover:border-[#30ba78] shadow-xs'
+                            }`}
+                          >
+                            <div className="pr-3">
+                              <span className="text-base font-extrabold leading-tight block">{label}</span>
+                              <p className={`text-xs mt-0.5 ${isSelected ? 'text-[#90ebcd]' : 'text-neutral-500'}`}>{desc}</p>
+                            </div>
+                            <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+                              isSelected ? 'bg-[#30ba78] text-[#0c322c]' : 'bg-neutral-100 text-neutral-400'
+                            }`}>
+                              <span className="material-symbols-outlined text-base">
+                                {isSelected ? 'check' : 'arrow_forward'}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-center text-neutral-400 pt-2">
+                    Select one option to continue to the next question.
+                  </p>
+                </div>
+              )}
+
+              {/* SLIDE 5: QUESTION 5 - FAMILY HISTORY (EXPLICIT UAE CONDITIONS LISTED) */}
+              {mobileSlide === 5 && (
+                <div className="h-full flex flex-col justify-between py-1">
+                  <div className="space-y-3">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-[#192072]/10 text-[#192072] border border-[#192072]/20">
+                      <span className="material-symbols-outlined text-sm text-[#2453ff]">health_and_safety</span>
+                      <span>Question 5 of 5 • Family History</span>
+                    </div>
+
+                    <h2 className="text-xl sm:text-2xl font-black text-[#0c322c] tracking-tight leading-snug">
+                      5. Is there any known history of inherited diseases in either family?
+                    </h2>
+
+                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 leading-relaxed space-y-1">
+                      <b className="block font-bold text-amber-950">Common UAE genetic conditions to consider:</b>
+                      <p>
+                        • <b>Beta-Thalassemia</b> &bull; <b>Sickle Cell Disease</b> &bull; <b>Cystic Fibrosis</b> &bull; <b>Spinal Muscular Atrophy (SMA)</b>, or unexplained infant loss.
+                      </p>
+                    </div>
+
+                    <div className="space-y-3 pt-1">
+                      {FAMILY_HISTORY.map(([key, label, desc], idx) => {
+                        const isSelected = histIdx === idx;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => handleSelectAndAdvance(() => setHistIdx(idx))}
+                            className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center justify-between cursor-pointer active:scale-[0.99] ${
+                              isSelected
+                                ? 'bg-[#0c322c] text-white border-[#30ba78] ring-2 ring-[#30ba78]/30 shadow-md'
+                                : 'bg-white text-[#0c322c] border-neutral-200 hover:border-[#30ba78] shadow-xs'
+                            }`}
+                          >
+                            <div className="pr-3">
+                              <span className="text-base font-extrabold leading-tight block">{label}</span>
+                              <p className={`text-xs mt-0.5 ${isSelected ? 'text-[#90ebcd]' : 'text-neutral-500'}`}>{desc}</p>
+                            </div>
+                            <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+                              isSelected ? 'bg-[#30ba78] text-[#0c322c]' : 'bg-neutral-100 text-neutral-400'
+                            }`}>
+                              <span className="material-symbols-outlined text-base">
+                                {isSelected ? 'check' : 'arrow_forward'}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-center text-neutral-400 pt-2">
+                    Select one option to continue to the next screen.
+                  </p>
+                </div>
+              )}
+
+              {/* SLIDE 6: EDUCATIONAL SNIPPET 2 (BUTTON SAYS "CONTINUE") */}
+              {mobileSlide === 6 && (
+                <div className="h-full flex flex-col justify-between py-2">
+                  <div className="space-y-3">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-[#fe7c3f]/20 text-[#fe7c3f] border border-[#fe7c3f]/30">
+                      <span className="material-symbols-outlined text-sm text-[#fe7c3f]">diversity_1</span>
+                      <span>Cultural Heritage & Reassurance</span>
+                    </div>
+
+                    <div className="w-12 h-12 rounded-2xl bg-orange-100 text-[#fe7c3f] flex items-center justify-center border border-[#fe7c3f]/40 shadow-xs">
+                      <span className="material-symbols-outlined text-2xl">favorite</span>
+                    </div>
+
+                    <h2 className="text-xl sm:text-2xl font-black text-[#0c322c] tracking-tight leading-snug">
+                      A risk is a probability, not a certainty.
+                    </h2>
+
+                    <div className="p-4 rounded-2xl bg-white border border-neutral-200 shadow-xs space-y-2.5 text-xs text-neutral-700 leading-relaxed">
+                      <p>
+                        Family is at the heart of life in the UAE, and marriage within families is a long-standing, respected tradition.
+                      </p>
+                      <p className="text-[#0c322c] font-semibold">
+                        The vast majority of children born to cousins are completely healthy! Knowing your genetic picture empowers proactive choices—including genetic counseling, carrier screening, and targeted prenatal scans.
+                      </p>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-neutral-100 border border-neutral-200 flex items-center gap-2.5 text-xs text-[#0c322c]">
+                      <span className="material-symbols-outlined text-[#30ba78] text-lg shrink-0">check_circle</span>
+                      <span className="text-[11px] text-neutral-600">
+                        Counselling is a supportive conversation, not a verdict.
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="pt-3">
+                    <button
+                      type="button"
+                      onClick={() => goToSlide(7)}
+                      className="w-full py-3.5 bg-[#30ba78] hover:bg-[#90ebcd] text-[#0c322c] text-sm font-black rounded-xl shadow-md flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                    >
+                      <span>Continue</span>
+                      <span className="material-symbols-outlined text-base">arrow_forward</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* SLIDE 7: QUESTION 6 - PAST PREGNANCIES */}
+              {mobileSlide === 7 && (
+                <div className="h-full flex flex-col justify-between py-1">
+                  <div className="space-y-3">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-[#192072]/10 text-[#192072] border border-[#192072]/20">
+                      <span className="material-symbols-outlined text-sm text-[#2453ff]">pregnant_woman</span>
+                      <span>Question 6 • Reproductive History</span>
+                    </div>
+
+                    <h2 className="text-xl sm:text-2xl font-black text-[#0c322c] tracking-tight leading-snug">
+                      6. Any past pregnancy complications?
+                    </h2>
+
+                    <p className="text-xs sm:text-sm text-neutral-600 leading-relaxed">
+                      Any history of two or more miscarriages, or a child who was seriously ill without a clear cause.
+                    </p>
+
+                    <div className="space-y-3 pt-2">
+                      {PAST_PREGNANCIES.map(([key, label], idx) => {
+                        const isSelected = pregIdx === idx;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => handleSelectAndAdvance(() => setPregIdx(idx))}
+                            className={`w-full text-left p-4 rounded-2xl border transition-all flex items-center justify-between cursor-pointer active:scale-[0.99] ${
+                              isSelected
+                                ? 'bg-[#0c322c] text-white border-[#30ba78] ring-2 ring-[#30ba78]/30 shadow-md'
+                                : 'bg-white text-[#0c322c] border-neutral-200 hover:border-[#30ba78] shadow-xs'
+                            }`}
+                          >
+                            <span className="text-sm sm:text-base font-extrabold pr-3 leading-snug">{label}</span>
+                            <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+                              isSelected ? 'bg-[#30ba78] text-[#0c322c]' : 'bg-neutral-100 text-neutral-400'
+                            }`}>
+                              <span className="material-symbols-outlined text-base">
+                                {isSelected ? 'check' : 'arrow_forward'}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-center text-neutral-400 pt-2">
+                    Select one option to continue to the final question.
+                  </p>
+                </div>
+              )}
+
+              {/* SLIDE 8: QUESTION 7 - CARRIER SCREENING & RECESSIVE MATCH */}
+              {mobileSlide === 8 && (
+                <div className="h-full flex flex-col justify-between py-1">
+                  <div className="space-y-3">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-[#192072]/10 text-[#192072] border border-[#192072]/20">
+                      <span className="material-symbols-outlined text-sm text-[#2453ff]">biotech</span>
+                      <span>Question 7 • Laboratory Testing</span>
+                    </div>
+
+                    <h2 className="text-xl sm:text-2xl font-black text-[#0c322c] tracking-tight leading-snug">
+                      7. Premarital or carrier screening status
+                    </h2>
+
+                    <p className="text-xs sm:text-sm text-neutral-600 leading-relaxed">
+                      Have both partners completed official genetic carrier panel tests?
+                    </p>
+
+                    <div className="space-y-2.5 pt-1">
+                      {SCREENING_STATUS.map(([key, label], idx) => {
+                        const isSelected = scrIdx === idx;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => setScrIdx(idx)}
+                            className={`w-full text-left p-3.5 rounded-2xl border transition-all flex items-center justify-between cursor-pointer active:scale-[0.99] ${
+                              isSelected
+                                ? 'bg-[#0c322c] text-white border-[#30ba78] ring-2 ring-[#30ba78]/30 shadow-md'
+                                : 'bg-white text-[#0c322c] border-neutral-200 hover:border-[#30ba78] shadow-xs'
+                            }`}
+                          >
+                            <span className="text-xs sm:text-sm font-extrabold pr-3 leading-snug">{label}</span>
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
+                              isSelected ? 'bg-[#30ba78] text-[#0c322c]' : 'bg-neutral-100 text-neutral-400'
+                            }`}>
+                              <span className="material-symbols-outlined text-sm">
+                                {isSelected ? 'check' : 'arrow_forward'}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+
+                      {/* Recessive match toggle card */}
+                      <label className={`flex items-start gap-2.5 p-3 rounded-2xl border cursor-pointer transition-all ${
+                        sameCarrier
+                          ? 'bg-amber-100/70 border-amber-500 text-amber-950 ring-2 ring-amber-400/40 shadow-xs'
+                          : 'bg-white border-neutral-200 text-neutral-700 hover:bg-neutral-50 shadow-xs'
+                      }`}>
+                        <input
+                          type="checkbox"
+                          checked={sameCarrier}
+                          onChange={(e) => setSameCarrier(e.target.checked)}
+                          className="w-4 h-4 mt-0.5 accent-[#fe7c3f] rounded cursor-pointer shrink-0"
+                        />
+                        <span className="text-xs font-semibold leading-snug">
+                          A doctor or lab told us we <b>both carry the same</b> recessive condition (e.g. Beta-Thalassemia, Sickle Cell, SMA).
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => goToSlide(9)}
+                      className="w-full py-3.5 bg-[#30ba78] hover:bg-[#90ebcd] text-[#0c322c] text-sm font-black rounded-xl shadow-md flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                    >
+                      <span>Calculate Clinical Estimate</span>
+                      <span className="material-symbols-outlined text-base">arrow_forward</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* SLIDE 9: RESULTS SCREEN (ORIGINAL THEME, 100 DOTS, METRICS, NEXT STEPS) */}
+              {mobileSlide === 9 && (
+                <div className="h-full flex flex-col justify-between py-1 overflow-y-auto">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
+                        riskBandLevel === 'ok'
+                          ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                          : riskBandLevel === 'mid'
+                          ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                          : 'bg-red-100 text-red-900 border border-red-300'
+                      }`}>
+                        {riskBandTitle}
+                      </span>
+                      <span className="text-[10px] text-neutral-500 font-bold">Personalized Result</span>
+                    </div>
+
+                    {/* Primary Risk Number Card (Clean Original Theme) */}
+                    <div className="p-4 rounded-2xl bg-gradient-to-br from-[#0c322c] to-[#192072] text-white shadow-md text-center space-y-1">
+                      <span className="text-[11px] text-[#90ebcd] font-semibold uppercase tracking-wider block">
+                        Extra chance due to family link
+                      </span>
+                      <div className="text-3xl font-black text-[#30ba78] leading-tight">
+                        {!isStarted
+                          ? '—'
+                          : currentF === 0 && !sameCarrier
+                          ? 'No extra risk'
+                          : sameCarrier
+                          ? '25% chance per pregnancy'
+                          : `about ${formatPct(currentExtra)} extra`}
+                      </div>
+                      {isStarted && currentF > 0 && !sameCarrier && (
+                        <p className="text-[11px] text-neutral-300">
+                          Likely range: {formatPct(rangeLo)} to {formatPct(rangeHi)} extra
+                        </p>
+                      )}
+                    </div>
+
+                    {/* 100 Children Dot Grid */}
+                    <div className="p-3 rounded-2xl bg-white border border-neutral-200 shadow-xs space-y-1.5">
+                      <div className="flex items-center justify-between text-xs text-neutral-700">
+                        <b className="text-[#0c322c]">Out of 100 children:</b>
+                        <span className="text-[10px] text-neutral-500 font-semibold">Population + Added</span>
+                      </div>
+                      <div className="grid grid-cols-10 gap-1.5 max-w-[200px] mx-auto py-1">
+                        {Array.from({ length: 100 }).map((_, i) => {
+                          const isBackground = i < 3;
+                          const isExtra = isStarted && i >= 3 && i < 3 + Math.floor(sameCarrier ? 25 : currentExtra);
+                          let dotBg = 'bg-neutral-200';
+                          if (isBackground) dotBg = 'bg-[#30ba78]';
+                          if (isExtra) dotBg = 'bg-[#fe7c3f]';
+                          return <div key={i} className={`w-2.5 h-2.5 rounded-full ${dotBg}`} />;
+                        })}
+                      </div>
+                      <div className="flex items-center justify-center gap-3 text-[10px] text-neutral-600 pt-0.5">
+                        <span className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-[#30ba78]"></span> Baseline (~3%)
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-[#fe7c3f]"></span> Added link
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="w-2 h-2 rounded-full bg-neutral-200"></span> Healthy
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* 4 Mini Stat Badges */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="p-2.5 rounded-xl bg-white border border-neutral-200 text-center shadow-xs">
+                        <span className="text-sm font-black text-[#0c322c] block">
+                          {!isStarted ? '—' : currentF === 0 ? '0' : (currentF <= 0.005 ? '< 1/200' : `1/${Math.round(1 / currentF)}`)}
+                        </span>
+                        <span className="text-[10px] text-neutral-500 font-semibold">Shared Ancestry (F)</span>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-white border border-neutral-200 text-center shadow-xs">
+                        <span className="text-sm font-black text-[#30ba78] block">
+                          {!isStarted ? '—' : `×${currentL.toFixed(2)}`}
+                        </span>
+                        <span className="text-[10px] text-neutral-500 font-semibold">Multiplier (L)</span>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-white border border-neutral-200 text-center shadow-xs">
+                        <span className="text-sm font-black text-[#0c322c] block">
+                          {!isStarted ? '~3.0%' : `about ${formatPct(totalChance)}`}
+                        </span>
+                        <span className="text-[10px] text-neutral-500 font-semibold">Total Chance</span>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-white border border-neutral-200 text-center shadow-xs">
+                        <span className="text-sm font-black text-[#fe7c3f] block">
+                          {!isStarted ? '1 in 33' : `1 in ${oneInCount}`}
+                        </span>
+                        <span className="text-[10px] text-neutral-500 font-semibold">1 Child in</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 pt-3">
+                    <button
+                      type="button"
+                      onClick={() => openAuth('signin')}
+                      className="w-full py-3 bg-[#30ba78] hover:bg-[#90ebcd] text-[#0c322c] text-xs font-black rounded-xl shadow-md flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                    >
+                      <span className="material-symbols-outlined text-sm">lock</span>
+                      <span>Save Assessment in Clinical Vault</span>
+                    </button>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsMobileCentresOpen(true)}
+                        className="py-2.5 px-3 bg-white hover:bg-neutral-50 text-[#0c322c] rounded-xl border border-neutral-200 text-xs font-bold flex items-center justify-center gap-1 shadow-xs transition-all cursor-pointer active:scale-95"
+                      >
+                        <span className="material-symbols-outlined text-[#30ba78] text-sm">pin_drop</span>
+                        <span>Screening Centres</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setIsAssessmentActive(false)}
+                        className="py-2.5 px-3 bg-white hover:bg-neutral-50 text-[#0c322c] rounded-xl border border-neutral-200 text-xs font-bold flex items-center justify-center gap-1 shadow-xs transition-all cursor-pointer active:scale-95"
+                      >
+                        <span className="material-symbols-outlined text-sm">arrow_back</span>
+                        <span>Done & Return</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ==================== BOTTOM SHEET: SCREENING CENTRES ==================== */}
+          {isMobileCentresOpen && (
+            <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end justify-center animate-in fade-in duration-200">
+              <div className="w-full max-h-[85vh] bg-white text-[#0c322c] rounded-t-3xl p-5 overflow-y-auto space-y-3.5 shadow-2xl animate-in slide-in-from-bottom duration-300">
+                <div className="w-12 h-1.5 rounded-full bg-neutral-300 mx-auto" />
+                <div className="flex items-center justify-between border-b border-neutral-200 pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[#30ba78] text-xl">pin_drop</span>
+                    <b className="text-sm font-extrabold text-[#0c322c]">Screening Centres in Abu Dhabi</b>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileCentresOpen(false)}
+                    className="w-7 h-7 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-600 flex items-center justify-center cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-sm">close</span>
+                  </button>
+                </div>
+
+                <div className="space-y-2.5 text-xs">
+                  <div className="p-3 rounded-xl bg-neutral-50 border border-neutral-200 space-y-1">
+                    <b className="text-[#30ba78] font-bold block">Abu Dhabi</b>
+                    <p className="text-neutral-700 leading-relaxed">
+                      Baniyas, Madinat Khalifa, Al Shamkha, Al Maqtaa, Al Bateen and Al Bahia Healthcare Centers.
+                    </p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-neutral-50 border border-neutral-200 space-y-1">
+                    <b className="text-[#2453ff] font-bold block">Al Ain</b>
+                    <p className="text-neutral-700 leading-relaxed">
+                      Al Muwaiji, Al Maqam, Neima, Al Hayer, Al Quaa, Al Hili and Sweihan Healthcare Centers; Oud Al Touba Diagnostic Center; Mezyad; Al Yahar.
+                    </p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-neutral-50 border border-neutral-200 space-y-1">
+                    <b className="text-[#fe7c3f] font-bold block">Al Dhafra Region</b>
+                    <p className="text-neutral-700 leading-relaxed">
+                      Al Dhafra Family Medicine Center; Ghiathy, Marfa, Al Sila, Delma and Liwa Hospitals.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsMobileCentresOpen(false)}
+                  className="w-full py-2.5 bg-[#0c322c] text-white text-xs font-bold rounded-xl hover:bg-[#30ba78] hover:text-[#0c322c] transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ==================== BOTTOM SHEET: FORMULA & METHODOLOGY ==================== */}
+          {isMobileFormulaOpen && (
+            <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end justify-center animate-in fade-in duration-200">
+              <div className="w-full max-h-[85vh] bg-white text-[#0c322c] rounded-t-3xl p-5 overflow-y-auto space-y-3.5 shadow-2xl animate-in slide-in-from-bottom duration-300">
+                <div className="w-12 h-1.5 rounded-full bg-neutral-300 mx-auto" />
+                <div className="flex items-center justify-between border-b border-neutral-200 pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[#2453ff] text-xl">functions</span>
+                    <b className="text-sm font-extrabold text-[#0c322c]">How This Estimate is Worked Out</b>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileFormulaOpen(false)}
+                    className="w-7 h-7 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-600 flex items-center justify-center cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-sm">close</span>
+                  </button>
+                </div>
+
+                <div className="space-y-2.5 text-xs text-neutral-700 leading-relaxed">
+                  <p>
+                    Built on Wright’s inbreeding coefficient and a standard “lethal equivalents” model.
+                  </p>
+
+                  <div className="space-y-2 pl-3 border-l-2 border-[#30ba78]">
+                    <div>
+                      <b className="text-[#0c322c] block">Step 1: Shared Ancestry (F)</b>
+                      <span className="font-mono bg-neutral-100 px-1 py-0.5 rounded text-[10px] text-[#192072]">
+                        F = Σ (½)<sup>n₁+n₂+1</sup> × (1 + F<sub>A</sub>)
+                      </span>
+                    </div>
+                    <div>
+                      <b className="text-[#0c322c] block">Step 2: Clinical Multiplier (L)</b>
+                      <span className="font-mono bg-neutral-100 px-1 py-0.5 rounded text-[10px] text-[#192072]">
+                        L = history × pregnancies × screening ≤ 3.0
+                      </span>
+                    </div>
+                    <div>
+                      <b className="text-[#0c322c] block">Step 3: Extra Kinship Risk</b>
+                      <span className="font-mono bg-neutral-100 px-1 py-0.5 rounded text-[10px] text-[#192072]">
+                        Extra = 1 − e<sup>−k·F·L</sup> (k = 0.487)
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px]">
+                    <b>Note:</b> If both carry the same recessive condition, the chance is 1 in 4 (25%) per pregnancy.
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsMobileFormulaOpen(false)}
+                  className="w-full py-2.5 bg-[#0c322c] text-white text-xs font-bold rounded-xl hover:bg-[#30ba78] hover:text-[#0c322c] transition-colors cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ==================== 1. FIXED HEADER ==================== */}
+        <header
+          className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+            isScrolled
+              ? 'bg-[#0c322c]/95 backdrop-blur-md shadow-xl py-3 border-b border-[#30ba78]/30'
+              : 'bg-[#0c322c] py-4 border-b border-[#192072]/40'
+          }`}
+        >
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+            {/* Header Left: Logo and Brand Name */}
+            <div className="flex items-center gap-3">
+              <a href="#hero" className="flex items-center gap-3 group">
+                <div className="w-10 h-10 rounded-xl bg-white p-1 flex items-center justify-center shadow-md border border-[#30ba78]/40 group-hover:scale-105 transition-transform">
+                  <img
+                    src="/static/screen/logo.png"
+                    alt="Guardian Angel Logo"
+                    className="w-full h-full object-contain rounded-lg"
+                  />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-lg font-black tracking-tight text-white group-hover:text-[#30ba78] transition-colors">
+                    Guardian Angel
+                  </span>
+                  <span className="text-[10px] text-[#90ebcd] font-semibold tracking-wider uppercase -mt-0.5">
+                    Genomics Intelligence
+                  </span>
+                </div>
+              </a>
+
+              {/* In-page Navigation Links */}
+              <nav className="hidden md:flex items-center gap-6 ml-8 text-xs font-semibold text-[#efefef]">
+                <a href="#hero" className="hover:text-[#30ba78] transition-colors">Overview</a>
+                <a href="#estimator" className="hover:text-[#30ba78] transition-colors">Risk Estimator</a>
+                <a href="#things-worth-remembering" className="hover:text-[#30ba78] transition-colors">Guidance</a>
+                <a href="#screening-centers" className="hover:text-[#30ba78] transition-colors">Screening Centres</a>
+                <a href="#feature-genetics" className="hover:text-[#30ba78] transition-colors">Specialists & AI</a>
+              </nav>
+            </div>
+
+            {/* Header Right: Compact Auth Controls */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => openAuth('signin')}
+                className="px-3.5 py-1.5 text-xs font-bold text-white hover:text-[#30ba78] border border-white/20 hover:border-[#30ba78] rounded-lg transition-all cursor-pointer"
+              >
+                Sign In
+              </button>
+
+              <button
+                type="button"
+                onClick={() => openAuth('register')}
+                className="px-3.5 py-1.5 text-xs font-bold bg-[#30ba78] text-[#0c322c] hover:bg-[#90ebcd] rounded-lg shadow-sm transition-all cursor-pointer"
+              >
+                Create Account
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href = '/api/uaepass/login';
+                }}
+                className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-black text-white hover:bg-neutral-900 border border-white/20 rounded-lg transition-all cursor-pointer"
+                title="Sign in with UAE PASS"
+              >
+                <span className="material-symbols-outlined text-[15px] text-[#30ba78]">fingerprint</span>
+                <span>UAE PASS</span>
+              </button>
+            </div>
+          </div>
+        </header>
       <section id="hero" className="relative pt-24 pb-10 md:pt-28 md:pb-12 overflow-hidden bg-gradient-to-br from-[#0c322c] via-[#0f2a24] to-[#192072] text-white">
         
         {/* Dantora Diagonal Chromosome Fluid DNA & All-Around Circular Bokeh Canvas */}
@@ -1551,14 +2417,19 @@ export default function LoginPage() {
                   : 'Clear, caring guidance to help couples and families understand inherited health risks and make choices that fit their values. Private by design.'}
               </p>
 
-              <div className="flex items-center gap-2 pt-1 flex-wrap sm:flex-nowrap">
-                <a
-                  href="#estimator"
-                  className="px-3.5 py-2.5 rounded-lg bg-[#30ba78] hover:bg-[#90ebcd] text-[#0c322c] text-xs font-black flex items-center gap-1 shadow-sm flex-shrink-0 cursor-pointer whitespace-nowrap"
+              {/* Desktop CTA row - On mobile, CTAs are placed right after Why This Matters */}
+              <div className="hidden lg:flex items-center gap-2 pt-1 flex-wrap sm:flex-nowrap">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAssessmentActive(true);
+                    setMobileSlide(0);
+                  }}
+                  className="px-4 py-2.5 rounded-lg bg-[#30ba78] hover:bg-[#90ebcd] text-[#0c322c] text-xs font-black flex items-center gap-1.5 shadow-sm flex-shrink-0 cursor-pointer whitespace-nowrap active:scale-95 transition-transform"
                 >
-                  <span>{isAr ? 'احسب المخاطر الصحية للعائلة' : 'Calculate Family Health Risk'}</span>
-                  <span className="material-symbols-outlined text-sm">expand_more</span>
-                </a>
+                  <span className="material-symbols-outlined text-sm">tune</span>
+                  <span>{isAr ? 'تقييم سريع' : 'Quick Assessment'}</span>
+                </button>
 
                 <button
                   type="button"
@@ -1718,16 +2589,54 @@ export default function LoginPage() {
                 ? 'تتطلب دولة الإمارات بالفعل إجراء الفحوصات الطبية للمقبلين على الزواج. تساعدك هذه المنصة على فهم الخطوات التالية: ماذا تعني نتائجك، وما لا تعنيه، وأين تجد الدعم.'
                 : 'The UAE already requires pre-marital screening. This platform helps you make sense of what comes next: what your results mean, what they don’t mean, and where to get support.'}
             </p>
+
+            {/* Quick Assessment and other CTAs right after Why This Matters (First Screen Flow for Mobile) */}
+            <div className="pt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAssessmentActive(true);
+                  setMobileSlide(0);
+                }}
+                className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-[#30ba78] hover:bg-[#90ebcd] text-[#0c322c] text-sm font-black flex items-center justify-center gap-2 shadow-lg cursor-pointer whitespace-nowrap active:scale-95 transition-all"
+              >
+                <span className="material-symbols-outlined text-lg">tune</span>
+                <span>Quick Assessment</span>
+                <span className="material-symbols-outlined text-sm">arrow_forward</span>
+              </button>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => openAuth('signin')}
+                  className="flex-1 sm:flex-none px-4 py-3.5 rounded-xl bg-[#192072] hover:bg-[#2453ff] text-white text-xs font-bold flex items-center justify-center gap-1.5 border border-[#90ebcd]/30 shadow-md cursor-pointer whitespace-nowrap transition-colors"
+                >
+                  <span>Access Health Vault</span>
+                  <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.href = '/api/uaepass/login';
+                  }}
+                  className="flex-1 sm:flex-none px-4 py-3.5 rounded-xl bg-black hover:bg-neutral-900 text-white text-xs font-bold flex items-center justify-center gap-1.5 border border-white/20 shadow-md cursor-pointer whitespace-nowrap transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[#30ba78] text-sm">fingerprint</span>
+                  <span>UAE PASS</span>
+                </button>
+              </div>
+            </div>
           </div>
 
         </div>
       </section>
 
-      {/* ==================== 4. NEW FAMILY HEALTH RISK ESTIMATOR (5-STEP INPUTS) ==================== */}
-      <section id="estimator" className="py-20 bg-[#efefef] text-[#0c322c] relative">
+      {/* ==================== 4. FAMILY HEALTH RISK ESTIMATOR ==================== */}
+      <section id="estimator" className="py-16 sm:py-20 bg-[#efefef] text-[#0c322c] relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
-          <div className="text-center max-w-3xl mx-auto space-y-3 mb-12">
+          <div className="text-center max-w-3xl mx-auto space-y-3 mb-10 sm:mb-12">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-[#192072]/10 text-[#192072] border border-[#192072]/20">
               <span className="material-symbols-outlined text-sm text-[#2453ff]">calculate</span>
               <span>{isAr ? 'فاحص سريري تفاعلي' : 'Interactive Clinical Screener'}</span>
@@ -1750,9 +2659,54 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
+          {/* Mobile Dedicated View (block lg:hidden): Launch Interactive Slideshow Assessment */}
+          <div className="block lg:hidden space-y-4 mb-8">
+            <div className="bg-white p-6 sm:p-7 rounded-2xl shadow-md border border-neutral-200 text-center space-y-4">
+              <div className="w-14 h-14 rounded-2xl bg-emerald-100 text-[#0c322c] flex items-center justify-center mx-auto border border-[#30ba78]/40 shadow-xs">
+                <span className="material-symbols-outlined text-3xl text-[#30ba78]">tune</span>
+              </div>
+              <div className="space-y-1.5">
+                <h3 className="text-xl font-black text-[#0c322c]">
+                  Interactive Mobile Screener
+                </h3>
+                <p className="text-xs text-neutral-600 leading-relaxed max-w-sm mx-auto">
+                  A tap-to-select, slide-based clinical screener optimized for your phone. Calculates kinship coefficient and hereditary risks in under 2 minutes.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAssessmentActive(true);
+                  setMobileSlide(0);
+                }}
+                className="w-full py-4 bg-[#30ba78] hover:bg-[#90ebcd] text-[#0c322c] text-sm font-black rounded-xl shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95"
+              >
+                <span className="material-symbols-outlined text-lg">play_arrow</span>
+                <span>{isStarted ? 'Resume / View Assessment' : 'Start Quick Assessment'}</span>
+                <span className="material-symbols-outlined text-sm">arrow_forward</span>
+              </button>
+
+              <div className="flex items-center justify-center gap-4 text-[11px] text-neutral-500 pt-1">
+                <span className="flex items-center gap-1">
+                  <span className="material-symbols-outlined text-xs text-[#30ba78]">lock</span>
+                  <span>100% Private</span>
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="material-symbols-outlined text-xs text-[#2453ff]">speed</span>
+                  <span>Takes ~2 mins</span>
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="material-symbols-outlined text-xs text-[#fe7c3f]">verified</span>
+                  <span>UAE Guidelines</span>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="hidden lg:grid grid-cols-12 gap-8 items-stretch">
             
-            {/* Left Column: 5 Questions seeking input from user - Same height as Results */}
+            {/* Left Column: Questionnaire seeking input from user */}
             <div className="lg:col-span-7 bg-white p-6 sm:p-7 rounded-2xl shadow-md border border-neutral-200 flex flex-col justify-between h-full space-y-6">
               
               <div className="space-y-6">
@@ -1775,7 +2729,56 @@ export default function LoginPage() {
                   </button>
                 </div>
 
-                {/* STEP 1: Title in one line, options two in a row below it */}
+                {/* Demographics & Relationship Status (Questions 1 & 2) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-3 border-b border-neutral-100">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-[#0c322c] flex items-center gap-1">
+                      <span className="material-symbols-outlined text-xs text-[#2453ff]">person</span>
+                      <span>Biological Sex</span>
+                    </label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {GENDER_OPTIONS.map(([val, label]) => (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => setGender(val as 'male' | 'female')}
+                          className={`py-2 px-2.5 rounded-lg border text-xs font-bold text-center transition-all cursor-pointer ${
+                            gender === val
+                              ? 'bg-[#0c322c] text-white border-[#30ba78] ring-1 ring-[#30ba78]'
+                              : 'bg-white text-neutral-700 border-neutral-200 hover:border-[#30ba78]'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-[#0c322c] flex items-center gap-1">
+                      <span className="material-symbols-outlined text-xs text-[#fe7c3f]">favorite</span>
+                      <span>Relationship Status</span>
+                    </label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {RELATIONSHIP_STATUS_OPTIONS.map(([val, label]) => (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => setRelStatus(val as 'planning' | 'married')}
+                          className={`py-2 px-2.5 rounded-lg border text-xs font-bold text-center transition-all cursor-pointer ${
+                            relStatus === val
+                              ? 'bg-[#0c322c] text-white border-[#30ba78] ring-1 ring-[#30ba78]'
+                              : 'bg-white text-neutral-700 border-neutral-200 hover:border-[#30ba78]'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* STEP 1: Consanguinity (Bigger buttons, full description, no percentages) */}
                 <div className="space-y-2">
                   <div className="flex items-baseline justify-between">
                     <h3 className="text-sm font-bold text-[#0c322c]">
@@ -1789,9 +2792,8 @@ export default function LoginPage() {
                       : 'Father’s side or mother’s side makes no difference to the calculation.'}
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                    {RELATIONSHIPS.map(([key, title, desc, rVal], idx) => {
+                    {RELATIONSHIPS.map(([key, title, desc], idx) => {
                       const isSelected = relIdx === idx;
-                      const proj = computeEstimate(idx, genIdx ?? 0, histIdx ?? 0, pregIdx ?? 0, scrIdx ?? 0);
                       const optTitle = isAr && AR_RELATIONSHIPS[key] ? AR_RELATIONSHIPS[key][0] : title;
                       const optDesc = isAr && AR_RELATIONSHIPS[key] ? AR_RELATIONSHIPS[key][1] : desc;
                       return (
@@ -1799,32 +2801,36 @@ export default function LoginPage() {
                           key={key}
                           type="button"
                           onClick={() => setRelIdx(idx)}
-                          className={`w-full text-left p-2.5 rounded-xl border transition-all flex items-center justify-between cursor-pointer ${
+                          className={`w-full text-left p-3.5 rounded-xl border transition-all flex items-start justify-between cursor-pointer ${
                             isSelected
                               ? 'bg-[#0c322c] text-white border-[#30ba78] ring-2 ring-[#30ba78]/30 shadow-xs'
-                              : 'bg-[#efefef]/60 text-[#0c322c] border-neutral-200 hover:border-[#30ba78]'
+                              : 'bg-white text-[#0c322c] border-neutral-200 hover:border-[#30ba78]'
                           }`}
                         >
                           <div className="pr-2 min-w-0">
-                            <p className="text-xs font-bold leading-tight truncate">{optTitle}</p>
+                            <p className={`text-xs sm:text-sm font-bold leading-snug ${isSelected ? 'text-white' : 'text-[#0c322c]'}`}>
+                              {optTitle}
+                            </p>
                             {optDesc && (
-                              <p className={`text-[10px] line-clamp-1 ${isSelected ? 'text-[#90ebcd]' : 'text-neutral-500'}`}>
+                              <p className={`text-[11px] mt-1 leading-relaxed ${isSelected ? 'text-[#90ebcd]' : 'text-neutral-500'}`}>
                                 {optDesc}
                               </p>
                             )}
                           </div>
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${
-                            isSelected ? 'bg-[#30ba78] text-[#0c322c]' : 'bg-white text-[#2453ff] border border-neutral-200'
+                          <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+                            isSelected ? 'bg-[#30ba78] text-[#0c322c]' : 'bg-neutral-100 text-neutral-400'
                           }`}>
-                            → {formatPct(proj.exRisk)}
-                          </span>
+                            <span className="material-symbols-outlined text-xs">
+                              {isSelected ? 'check' : ''}
+                            </span>
+                          </div>
                         </button>
                       );
                     })}
                   </div>
                 </div>
 
-                {/* STEP 2: Title in one line in row below, options two in a row below it */}
+                {/* STEP 2: Amplified Risk / Earlier Generations (Explains generational overlap, no percentages) */}
                 <div className="pt-4 border-t border-neutral-100 space-y-2">
                   <div className="flex items-baseline justify-between">
                     <h3 className="text-sm font-bold text-[#0c322c]">
@@ -1834,40 +2840,43 @@ export default function LoginPage() {
                   </div>
                   <p className="text-[11px] text-neutral-500">
                     {isAr
-                      ? 'على سبيل المثال، هل كان أجدادكم أيضاً أبناء عمومة؟ هذا يرفع نسبة القرابة المشتركة.'
-                      : 'For example, were your grandparents also cousins? This raises the shared-ancestry level.'}
+                      ? 'تقييم التداخل الجيني عبر الأجيال (مثلاً، هل كان الأجداد أيضاً أبناء عمومة؟)، مما قد يضاعف العوامل الوراثية المشتركة.'
+                      : <>Assesses <b>generational genetic overlap</b> (e.g. were your grandparents also cousins?), which can amplify shared hereditary factors.</>}
                   </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                    {EARLIER_GENERATIONS.map(([key, label], idx) => {
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                    {EARLIER_GENERATIONS.map(([key, label, desc], idx) => {
                       const isSelected = genIdx === idx;
-                      const proj = computeEstimate(relIdx ?? 0, idx, histIdx ?? 0, pregIdx ?? 0, scrIdx ?? 0);
-                      const optLabel = isAr && AR_EARLIER_GENERATIONS[key] ? AR_EARLIER_GENERATIONS[key] : label;
+                      const optLabel = isAr && AR_EARLIER_GENERATIONS[key] ? AR_EARLIER_GENERATIONS[key][0] : label;
+                      const optDesc = isAr && AR_EARLIER_GENERATIONS[key] ? AR_EARLIER_GENERATIONS[key][1] : desc;
                       return (
                         <button
                           key={key}
                           type="button"
                           onClick={() => setGenIdx(idx)}
-                          className={`w-full text-left p-2.5 rounded-xl border transition-all flex items-center justify-between cursor-pointer ${
-                            idx === 2 ? 'sm:col-span-2' : ''
-                          } ${
+                          className={`w-full text-left p-3 rounded-xl border transition-all flex flex-col justify-between cursor-pointer ${
                             isSelected
                               ? 'bg-[#0c322c] text-white border-[#30ba78] ring-1 ring-[#30ba78]'
-                              : 'bg-neutral-50 text-[#0c322c] border-neutral-200 hover:border-[#30ba78]'
+                              : 'bg-white text-[#0c322c] border-neutral-200 hover:border-[#30ba78]'
                           }`}
                         >
-                          <span className="text-xs font-semibold pr-2 leading-tight">{optLabel}</span>
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${
-                            isSelected ? 'bg-[#30ba78] text-[#0c322c]' : 'text-neutral-500 bg-white border border-neutral-200'
-                          }`}>
-                            → {formatPct(proj.exRisk)}
-                          </span>
+                          <div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold leading-tight">{optLabel}</span>
+                              {isSelected && (
+                                <span className="material-symbols-outlined text-xs text-[#30ba78]">check_circle</span>
+                              )}
+                            </div>
+                            <p className={`text-[10px] mt-1 leading-tight ${isSelected ? 'text-[#90ebcd]' : 'text-neutral-500'}`}>
+                              {optDesc}
+                            </p>
+                          </div>
                         </button>
                       );
                     })}
                   </div>
                 </div>
 
-                {/* STEP 3: Title in one line in row below, options two in a row below it */}
+                {/* STEP 3: Family History (Explicitly lists UAE conditions, no percentages) */}
                 <div className="pt-4 border-t border-neutral-100 space-y-2">
                   <div className="flex items-baseline justify-between">
                     <h3 className="text-sm font-bold text-[#0c322c]">
@@ -1877,40 +2886,43 @@ export default function LoginPage() {
                   </div>
                   <p className="text-[11px] text-neutral-500">
                     {isAr
-                      ? 'أمثلة: الثلاسيميا، الأنيميا المنجلية، فقدان السمع الوراثي، الضمور العضلي، أو وفيات أطفال غير مفسرة.'
-                      : 'Examples: thalassemia, sickle cell disease, hearing loss from birth, SMA, or child deaths.'}
+                      ? <>حالات وراثية شائعة في دولة الإمارات: <b>الثلاسيميا بيتا</b>، <b>الأنيميا المنجلية</b>، <b>التليف الكيسي</b>، <b>ضمور العضلات الشوكي (SMA)</b>، أو فقدان أطفال غير مفسر.</>
+                      : <>Common UAE genetic conditions to consider: <b>Beta-Thalassemia</b>, <b>Sickle Cell Disease</b>, <b>Cystic Fibrosis</b>, <b>Spinal Muscular Atrophy (SMA)</b>, or unexplained infant loss.</>}
                   </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                    {FAMILY_HISTORY.map(([key, label], idx) => {
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                    {FAMILY_HISTORY.map(([key, label, desc], idx) => {
                       const isSelected = histIdx === idx;
-                      const proj = computeEstimate(relIdx ?? 0, genIdx ?? 0, idx, pregIdx ?? 0, scrIdx ?? 0);
-                      const optLabel = isAr && AR_FAMILY_HISTORY[key] ? AR_FAMILY_HISTORY[key] : label;
+                      const optLabel = isAr && AR_FAMILY_HISTORY[key] ? AR_FAMILY_HISTORY[key][0] : label;
+                      const optDesc = isAr && AR_FAMILY_HISTORY[key] ? AR_FAMILY_HISTORY[key][1] : desc;
                       return (
                         <button
                           key={key}
                           type="button"
                           onClick={() => setHistIdx(idx)}
-                          className={`w-full text-left p-2.5 rounded-xl border transition-all flex items-center justify-between cursor-pointer ${
-                            idx === 2 ? 'sm:col-span-2' : ''
-                          } ${
+                          className={`w-full text-left p-3 rounded-xl border transition-all flex flex-col justify-between cursor-pointer ${
                             isSelected
                               ? 'bg-[#0c322c] text-white border-[#30ba78] ring-1 ring-[#30ba78]'
-                              : 'bg-neutral-50 text-[#0c322c] border-neutral-200 hover:border-[#30ba78]'
+                              : 'bg-white text-[#0c322c] border-neutral-200 hover:border-[#30ba78]'
                           }`}
                         >
-                          <span className="text-xs font-semibold pr-2 leading-tight">{optLabel}</span>
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${
-                            isSelected ? 'bg-[#30ba78] text-[#0c322c]' : 'text-neutral-500 bg-white border border-neutral-200'
-                          }`}>
-                            → {formatPct(proj.exRisk)}
-                          </span>
+                          <div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold leading-tight">{optLabel}</span>
+                              {isSelected && (
+                                <span className="material-symbols-outlined text-xs text-[#30ba78]">check_circle</span>
+                              )}
+                            </div>
+                            <p className={`text-[10px] mt-1 leading-tight ${isSelected ? 'text-[#90ebcd]' : 'text-neutral-500'}`}>
+                              {optDesc}
+                            </p>
+                          </div>
                         </button>
                       );
                     })}
                   </div>
                 </div>
 
-                {/* STEP 4: Title in one line in row below, options two in a row below it */}
+                {/* STEP 4: Past Pregnancies (No percentages) */}
                 <div className="pt-4 border-t border-neutral-100 space-y-2">
                   <div className="flex items-baseline justify-between">
                     <h3 className="text-sm font-bold text-[#0c322c]">
@@ -1926,32 +2938,29 @@ export default function LoginPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                     {PAST_PREGNANCIES.map(([key, label], idx) => {
                       const isSelected = pregIdx === idx;
-                      const proj = computeEstimate(relIdx ?? 0, genIdx ?? 0, histIdx ?? 0, idx, scrIdx ?? 0);
                       const optLabel = isAr && AR_PAST_PREGNANCIES[key] ? AR_PAST_PREGNANCIES[key] : label;
                       return (
                         <button
                           key={key}
                           type="button"
                           onClick={() => setPregIdx(idx)}
-                          className={`w-full text-left p-2.5 rounded-xl border transition-all flex items-center justify-between cursor-pointer ${
+                          className={`w-full text-left p-3 rounded-xl border transition-all flex items-center justify-between cursor-pointer ${
                             isSelected
                               ? 'bg-[#0c322c] text-white border-[#30ba78] ring-1 ring-[#30ba78]'
-                              : 'bg-neutral-50 text-[#0c322c] border-neutral-200 hover:border-[#30ba78]'
+                              : 'bg-white text-[#0c322c] border-neutral-200 hover:border-[#30ba78]'
                           }`}
                         >
                           <span className="text-xs font-semibold pr-2 leading-tight">{optLabel}</span>
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${
-                            isSelected ? 'bg-[#30ba78] text-[#0c322c]' : 'text-neutral-500 bg-white border border-neutral-200'
-                          }`}>
-                            → {formatPct(proj.exRisk)}
-                          </span>
+                          {isSelected && (
+                            <span className="material-symbols-outlined text-xs text-[#30ba78] shrink-0">check_circle</span>
+                          )}
                         </button>
                       );
                     })}
                   </div>
                 </div>
 
-                {/* STEP 5: Title in one line in row below, options two in a row below it */}
+                {/* STEP 5: Premarital or Carrier Screening (No percentages) */}
                 <div className="pt-4 border-t border-neutral-100 space-y-2">
                   <div className="flex items-baseline justify-between">
                     <h3 className="text-sm font-bold text-[#0c322c]">
@@ -1967,25 +2976,22 @@ export default function LoginPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                     {SCREENING_STATUS.map(([key, label], idx) => {
                       const isSelected = scrIdx === idx;
-                      const proj = computeEstimate(relIdx ?? 0, genIdx ?? 0, histIdx ?? 0, pregIdx ?? 0, idx);
                       const optLabel = isAr && AR_SCREENING_STATUS[key] ? AR_SCREENING_STATUS[key] : label;
                       return (
                         <button
                           key={key}
                           type="button"
                           onClick={() => setScrIdx(idx)}
-                          className={`w-full text-left p-2.5 rounded-xl border transition-all flex items-center justify-between cursor-pointer ${
+                          className={`w-full text-left p-3 rounded-xl border transition-all flex items-center justify-between cursor-pointer ${
                             isSelected
                               ? 'bg-[#0c322c] text-white border-[#30ba78] ring-1 ring-[#30ba78]'
-                              : 'bg-neutral-50 text-[#0c322c] border-neutral-200 hover:border-[#30ba78]'
+                              : 'bg-white text-[#0c322c] border-neutral-200 hover:border-[#30ba78]'
                           }`}
                         >
                           <span className="text-xs font-semibold pr-2 leading-tight">{optLabel}</span>
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${
-                            isSelected ? 'bg-[#30ba78] text-[#0c322c]' : 'text-neutral-500 bg-white border border-neutral-200'
-                          }`}>
-                            → {formatPct(proj.exRisk)}
-                          </span>
+                          {isSelected && (
+                            <span className="material-symbols-outlined text-xs text-[#30ba78] shrink-0">check_circle</span>
+                          )}
                         </button>
                       );
                     })}
