@@ -166,19 +166,6 @@ export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
                   <pattern id="pedigree-grid" width="40" height="40" patternUnits="userSpaceOnUse">
                     <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#e2e8f0" strokeWidth="0.8" opacity="0.6" />
                   </pattern>
-
-                  {/* Proband Arrow Marker */}
-                  <marker
-                    id="proband-arrowhead"
-                    viewBox="0 0 10 10"
-                    refX="5"
-                    refY="5"
-                    markerWidth="6"
-                    markerHeight="6"
-                    orient="auto-start-reverse"
-                  >
-                    <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#0c322c" />
-                  </marker>
                 </defs>
 
                 {/* Grid Background */}
@@ -443,12 +430,6 @@ export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
                     <div className="absolute inset-0 border-t border-pine -rotate-45 top-1.5" />
                   </div>
                   <span>Deceased</span>
-                </div>
-
-                {/* Proband */}
-                <div className="flex items-center gap-1.5">
-                  <span className="text-pine font-bold font-mono">↗ [P]</span>
-                  <span>Proband</span>
                 </div>
 
                 {/* Consanguineous */}

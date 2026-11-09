@@ -26,7 +26,8 @@ import {
   Baby,
   UserCheck,
   Search,
-  Upload
+  Upload,
+  Loader2
 } from 'lucide-react';
 
 interface FamilyWizardModalProps {
@@ -36,7 +37,7 @@ interface FamilyWizardModalProps {
   onAddMember: (memberData: any) => Promise<void>;
   onUpdateMember?: (memberId: string | number, memberData: any) => Promise<void>;
   existingFamily?: FamilyRecord | null;
-  initialStep?: 1 | 2 | 3;
+  initialStep?: 1 | 2;
   editingMember?: PedigreeMember | null;
   initialRelation?: string | null;
   newFamilyId?: string | null;
@@ -63,8 +64,9 @@ function generateClientPseudonym(): string {
   return `${adj}-${noun}-${num}`;
 }
 
-// 16 Comprehensive Relationship Card Definitions with Icons & Simple English Labels
+// Comprehensive Relationship Card Definitions with Icons & Simple English Labels
 const RELATION_CARDS = [
+  { id: 'self', label: 'Self', defaultSex: 'female', category: 'self', desc: 'Starting Person / Proband' },
   { id: 'father', label: 'Father', defaultSex: 'male', category: 'parent', desc: 'Biological Father' },
   { id: 'mother', label: 'Mother', defaultSex: 'female', category: 'parent', desc: 'Biological Mother' },
   { id: 'full_sibling', label: 'Full Sibling', defaultSex: 'male', category: 'sibling', desc: 'Full brother or sister' },
@@ -189,8 +191,8 @@ export const FamilyWizardModal: React.FC<FamilyWizardModalProps> = ({
   initialRelation = null,
   newFamilyId = null
 }) => {
-  // Wizard active step: 1 (About Family), 2 (Verify Profile), 3 (Add Members / Form)
-  const [step, setStep] = useState<1 | 2 | 3>(initialStep);
+  // Wizard active step: 1 (About Family), 2 (Add Relatives / Self)
+  const [step, setStep] = useState<1 | 2>(initialStep || 1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recentSavedName, setRecentSavedName] = useState<string | null>(null);
@@ -202,23 +204,14 @@ export const FamilyWizardModal: React.FC<FamilyWizardModalProps> = ({
   const [conditionSearch, setConditionSearch] = useState('');
   const [familyHealthHistory, setFamilyHealthHistory] = useState('');
 
-  // --- Step 2: Profile (Proband) ---
+  // --- Profile data for Auto-filling Self ---
   const [profileFullName, setProfileFullName] = useState('');
   const [profileGender, setProfileGender] = useState<'male' | 'female' | 'other'>('female');
   const [profileDob, setProfileDob] = useState('');
-
-  const [profileHeight, setProfileHeight] = useState('168 cm');
-  const [profileWeight, setProfileWeight] = useState('65 kg');
-  const [profileEmail, setProfileEmail] = useState('');
-  const [profilePhone, setProfilePhone] = useState('+91 98765 43210');
   const [profileLocation, setProfileLocation] = useState('');
-  const [profileBloodGroup, setProfileBloodGroup] = useState('B+');
   const [profileKnownTraits, setProfileKnownTraits] = useState<string[]>(['Beta-Thalassemia Minor (Trait)']);
-  const [profileTraitSearch, setProfileTraitSearch] = useState('');
-  const [profileTestPdf, setProfileTestPdf] = useState<File | null>(null);
-  const [confirmProfileUpdate, setConfirmProfileUpdate] = useState(true);
 
-  // --- Step 3: Add Family Member State ---
+  // --- Step 2: Add Family Member State ---
   const [activeFormRelation, setActiveFormRelation] = useState<string | null>(null);
   const [memberName, setMemberName] = useState('');
   const [memberSudoName, setMemberSudoName] = useState('');
@@ -243,21 +236,29 @@ export const FamilyWizardModal: React.FC<FamilyWizardModalProps> = ({
   const [ageAtDiagnosis, setAgeAtDiagnosis] = useState('');
   const [otherMedicalHistory, setOtherMedicalHistory] = useState('');
 
-  // Medical report upload
-  const [uploadedReportFile, setUploadedReportFile] = useState<File | null>(null);
-  const [reportExtractedData, setReportExtractedData] = useState<{
+  // Screening Report Upload & Analysis State (Dashboard Feature)
+  const [reportFile, setReportFile] = useState<File | null>(null);
+  const [isAnalyzingReport, setIsAnalyzingReport] = useState(false);
+  const [reportAnalysisError, setReportAnalysisError] = useState<string | null>(null);
+  const [analyzedReportMeta, setAnalyzedReportMeta] = useState<{
     fileName: string;
+    condition: string;
     variant: string;
     carrierStatus: string;
-    condition: string;
-    isConfirmed: boolean;
+    patientName: string;
+    sex?: string;
+    dob?: string;
+    location?: string;
+    risk?: string;
+    recs?: string;
+    completeText?: string;
   } | null>(null);
 
   // Previously created members preserved in database (available to link to new tree)
   const [savedUnlinkedNodes, setSavedUnlinkedNodes] = useState<any[]>([]);
 
   useEffect(() => {
-    if (isOpen && step === 3) {
+    if (isOpen && step === 2) {
       fetch('/api/pedigree-nodes')
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => {
@@ -279,11 +280,6 @@ export const FamilyWizardModal: React.FC<FamilyWizardModalProps> = ({
     return COMPREHENSIVE_HEREDITARY_CATALOG.filter((item) => item.toLowerCase().includes(q));
   }, [conditionSearch]);
 
-  const filteredProfileTraitsList = useMemo(() => {
-    if (!profileTraitSearch.trim()) return COMPREHENSIVE_HEREDITARY_CATALOG.slice(0, 10);
-    const q = profileTraitSearch.toLowerCase();
-    return COMPREHENSIVE_HEREDITARY_CATALOG.filter((item) => item.toLowerCase().includes(q));
-  }, [profileTraitSearch]);
 
   // Generate Family Pedigree Chart ID as FA-000001 (Sequential and Unique, no duplicate IDs)
   useEffect(() => {
@@ -316,15 +312,13 @@ export const FamilyWizardModal: React.FC<FamilyWizardModalProps> = ({
           if (data) {
             const p = data.profile || data;
             if (p.full_name) setProfileFullName(p.full_name);
-            if (p.email) setProfileEmail(p.email);
+            if (p.gender && (p.gender === 'male' || p.gender === 'female')) {
+              setProfileGender(p.gender);
+            }
             if (p.dob) setProfileDob(p.dob);
-            if (p.phone) setProfilePhone(p.phone);
             if (p.city || p.country) {
               setProfileLocation([p.city, p.country].filter(Boolean).join(', '));
             }
-            if (p.blood_type) setProfileBloodGroup(p.blood_type);
-            if (p.height) setProfileHeight(p.height);
-            if (p.weight) setProfileWeight(p.weight);
             if (p.known_traits) {
               const traits = Array.isArray(p.known_traits)
                 ? p.known_traits
@@ -341,7 +335,7 @@ export const FamilyWizardModal: React.FC<FamilyWizardModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       if (editingMember) {
-        setStep(3);
+        setStep(2);
         setActiveFormRelation(editingMember.relationship_to_proband || 'relative');
         setMemberName(editingMember.full_name || '');
         setMemberSudoName(editingMember.pseudonym || generateClientPseudonym());
@@ -383,10 +377,10 @@ export const FamilyWizardModal: React.FC<FamilyWizardModalProps> = ({
         setFamilyName(existingFamily.family_name);
         setFamilyId(existingFamily.family_id);
         if (initialRelation) {
-          setStep(3);
+          setStep(2);
           openFormForRelation(initialRelation);
         } else {
-          setStep(initialStep);
+          setStep(initialStep || 2);
         }
       } else {
         setStep(1);
@@ -418,76 +412,126 @@ export const FamilyWizardModal: React.FC<FamilyWizardModalProps> = ({
     setGeneVariant('');
     setAgeAtDiagnosis('');
     setOtherMedicalHistory('');
-    setUploadedReportFile(null);
-    setReportExtractedData(null);
+    setReportFile(null);
+    setReportAnalysisError(null);
+    setAnalyzedReportMeta(null);
     setRecentSavedName(null);
 
     setMemberSudoName(generateClientPseudonym());
     setShowPostSaveChoice(false);
 
-    // Auto-populate default gender
-    const card = RELATION_CARDS.find((c) => c.id === relId);
-    if (card) {
-      setMemberSex(card.defaultSex as any);
-    } else if (relId === 'father' || relId.includes('brother') || relId === 'son' || relId.includes('paternal')) {
-      setMemberSex('male');
-    } else if (relId === 'mother' || relId.includes('sister') || relId === 'daughter' || relId.includes('maternal')) {
-      setMemberSex('female');
-    } else if (relId === 'pregnancy_loss') {
-      setMemberSex('unknown');
+    if (relId === 'self') {
+      const selfSex = (profileGender === 'other' ? 'female' : profileGender) || 'female';
+      setMemberSex(selfSex as any);
+      if (profileFullName) setMemberName(profileFullName);
+      if (profileDob) setMemberDob(profileDob);
+      if (profileKnownTraits.length > 0) {
+        setSelectedInherited(profileKnownTraits);
+        setHasHealthConditions('yes');
+      }
     } else {
-      setMemberSex('male');
+      // Auto-populate default gender
+      const card = RELATION_CARDS.find((c) => c.id === relId);
+      if (card) {
+        setMemberSex(card.defaultSex as any);
+      } else if (relId === 'father' || relId.includes('brother') || relId === 'son' || relId.includes('paternal')) {
+        setMemberSex('male');
+      } else if (relId === 'mother' || relId.includes('sister') || relId === 'daughter' || relId.includes('maternal')) {
+        setMemberSex('female');
+      } else if (relId === 'pregnancy_loss') {
+        setMemberSex('unknown');
+      } else {
+        setMemberSex('male');
+      }
     }
   };
 
-  // Handle Medical Report File Upload
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle Screening Report File Change (from Dashboard functionality)
+  const handleReportFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setUploadedReportFile(file);
+    if (file.size > 10 * 1024 * 1024) {
+      setReportAnalysisError('Report file exceeds the 10 MB maximum size limit.');
+      return;
+    }
 
-    setTimeout(() => {
-      let detectedVariant = 'HBB:c.315+1G>A';
-      let detectedCondition = 'Beta-Thalassemia Major / Minor';
-      let detectedStatus = 'Carrier';
+    setReportFile(file);
+    setReportAnalysisError(null);
+    setAnalyzedReportMeta(null);
+  };
 
-      if (file.name.toLowerCase().includes('sickle')) {
-        detectedVariant = 'HBB:c.20A>T (Glu6Val)';
-        detectedCondition = 'Sickle Cell Anemia / Trait';
-      } else if (file.name.toLowerCase().includes('sma')) {
-        detectedVariant = 'SMN1 Exon 7-8 Deletion';
-        detectedCondition = 'Spinal Muscular Atrophy (SMA)';
-      } else if (file.name.toLowerCase().includes('brca')) {
-        detectedVariant = 'BRCA1:c.5266dupC';
-        detectedCondition = 'Hereditary Breast & Ovarian Cancer (BRCA1/2)';
+  // Handle In-Memory Screening Report Analysis via /api/reports/analyze
+  const handleAnalyzeScreeningReport = async () => {
+    if (!reportFile) return;
+    setIsAnalyzingReport(true);
+    setReportAnalysisError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', reportFile);
+      formData.append('target_tree', 'existing');
+      if (familyId || existingFamily?.family_id) {
+        formData.append('family_id', familyId || existingFamily?.family_id || '');
       }
 
-      setReportExtractedData({
-        fileName: file.name,
-        variant: detectedVariant,
-        carrierStatus: detectedStatus,
-        condition: detectedCondition,
-        isConfirmed: false
+      const res = await fetch('/api/reports/analyze', {
+        method: 'POST',
+        body: formData
       });
-    }, 500);
-  };
 
-  const confirmReportExtraction = () => {
-    if (!reportExtractedData) return;
-    setReportExtractedData({ ...reportExtractedData, isConfirmed: true });
-    setHasHealthConditions('yes');
-    if (!selectedInherited.includes(reportExtractedData.condition)) {
-      setSelectedInherited([...selectedInherited, reportExtractedData.condition]);
+      const data = await res.json();
+      if (!res.ok || data.status === 'error') {
+        throw new Error(data.message || 'Failed to analyze report.');
+      }
+
+      const detectedCond = data.masked_data?.condition || 'Beta-Thalassemia Minor (Trait)';
+      const detectedVar = data.masked_data?.variant || 'HBB:c.92+5G>C (IVS-I-5 G>C)';
+      const rawStatus = data.masked_data?.carrier_status || 'Heterozygous Carrier';
+      const detectedStatus = rawStatus.toLowerCase().includes('non-carrier') ? 'Non-carrier' : 'Carrier';
+      const maskedName = data.patient_name || data.masked_data?.patient_name || '';
+
+      setAnalyzedReportMeta({
+        fileName: reportFile.name,
+        condition: detectedCond,
+        variant: detectedVar,
+        carrierStatus: rawStatus,
+        patientName: maskedName,
+        sex: data.sex,
+        dob: data.dob,
+        location: data.location,
+        risk: data.masked_data?.reproductive_risk,
+        recs: data.masked_data?.clinical_directives,
+        completeText: data.complete_report_text || data.masked_data?.complete_report_text
+      });
+
+      // Automatically auto-fill form fields
+      if (maskedName && (!memberName || memberName.trim() === '')) {
+        setMemberName(maskedName);
+      }
+      if (data.sex && (data.sex === 'male' || data.sex === 'female')) {
+        setMemberSex(data.sex);
+      }
+      if (data.dob && !memberDob) {
+        setMemberDob(data.dob);
+      }
+      setHasHealthConditions('yes');
+      if (!selectedInherited.includes(detectedCond)) {
+        setSelectedInherited((prev) => [...prev, detectedCond]);
+      }
+      setGeneVariant(detectedVar);
+      setCarrierStatus(detectedStatus as any);
+      setTestingStatus('Positive');
+      setTestResults(data.masked_data?.reproductive_risk || `Verified lab finding: ${detectedVar}`);
+      setShowMedicalDetails(true);
+    } catch (err: any) {
+      setReportAnalysisError(err.message || 'Unable to analyze screening report. Please verify connection to backend server.');
+    } finally {
+      setIsAnalyzingReport(false);
     }
-    setGeneVariant(reportExtractedData.variant);
-    setCarrierStatus(reportExtractedData.carrierStatus as any);
-    setTestingStatus('Positive');
-    setTestResults(`Verified lab finding: ${reportExtractedData.variant}`);
-    setShowMedicalDetails(true);
   };
 
-  // Step 1 -> Step 2
+  // Step 1 -> Step 2: Save Family and navigate directly to Add Relatives / Self
   const handleStep1Submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!familyName.trim()) {
@@ -495,76 +539,23 @@ export const FamilyWizardModal: React.FC<FamilyWizardModalProps> = ({
       return;
     }
     setError(null);
-    if (existingFamily) {
-      setStep(3);
-    } else {
-      setStep(2);
-    }
-  };
-
-  // Step 2 -> Step 3: Create Family & Proband in Database with Plain English Errors
-  const handleStep2Submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!profileFullName.trim()) {
-      setError('Please enter your full name to continue.');
-      return;
-    }
-    setError(null);
     setLoading(true);
 
     try {
-      // Optional profile save if user confirmed
-      if (confirmProfileUpdate) {
-        await fetch('/api/profile', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            full_name: profileFullName,
-            dob: profileDob,
-            blood_type: profileBloodGroup,
-            phone: profilePhone,
-            city: profileLocation,
-            height: profileHeight,
-            weight: profileWeight,
-            known_traits: profileKnownTraits.join(', ')
-          })
-        }).catch(() => {});
+      if (!existingFamily) {
+        // Create new family record immediately so family_id is active for adding members
+        const familyPayload = {
+          family_id: familyId || 'FA-000001',
+          family_name: familyName,
+          health_conditions_of_interest: conditionsOfInterest,
+          family_history_description: familyHealthHistory,
+          is_consanguineous: false
+        };
+        await onFamilyCreated(familyPayload as any, null);
       }
-
-      if (existingFamily) {
-        setStep(3);
-        setLoading(false);
-        return;
-      }
-
-      // Create new family record
-      const familyPayload = {
-        family_id: familyId || 'FA-000001',
-        family_name: familyName,
-        proband_name: profileFullName,
-        health_conditions_of_interest: conditionsOfInterest,
-        family_history_description: familyHealthHistory,
-        is_consanguineous: false
-      };
-
-      const probandPayload = {
-        pseudonym: profileFullName,
-        full_name: profileFullName,
-        sex: profileGender === 'other' ? 'unknown' : profileGender,
-        relationship_to_proband: 'self',
-        is_proband: true,
-        dob: profileDob,
-        living_status: 'Alive',
-        location: profileLocation,
-        conditions: [...conditionsOfInterest, ...profileKnownTraits],
-        medical_report_name: profileTestPdf ? profileTestPdf.name : undefined
-      };
-
-      await onFamilyCreated(familyPayload as any, probandPayload);
-      setStep(3);
+      setStep(2);
     } catch (err: any) {
       console.error('Family initialization error:', err);
-      // Plain English user guidance
       if (err?.message?.includes('log in') || err?.message?.includes('401')) {
         setError('Please log in to your GuardianAngel account so we can securely save your family tree.');
       } else {
@@ -575,7 +566,7 @@ export const FamilyWizardModal: React.FC<FamilyWizardModalProps> = ({
     }
   };
 
-  // Step 3: Submit Member Form
+  // Step 2: Submit Member Form
   const handleMemberFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -590,11 +581,13 @@ export const FamilyWizardModal: React.FC<FamilyWizardModalProps> = ({
       const isCarrier = carrierStatus === 'Carrier';
       const autoAlias = memberSudoName || generateClientPseudonym();
       const dispName = memberName.trim() || autoAlias;
+      const isSelf = activeFormRelation === 'self';
 
       const payload: Partial<PedigreeMember> = {
         pseudonym: autoAlias,
         full_name: memberName.trim() || undefined,
         relationship_to_proband: activeFormRelation || 'relative',
+        is_proband: isSelf,
         sex: memberSex,
         dob: memberDob || undefined,
         living_status: memberLivingStatus,
@@ -611,7 +604,7 @@ export const FamilyWizardModal: React.FC<FamilyWizardModalProps> = ({
         gene_variant: geneVariant || undefined,
         age_at_diagnosis: ageAtDiagnosis ? parseInt(ageAtDiagnosis, 10) : undefined,
         medical_history: otherMedicalHistory || undefined,
-        medical_report_name: reportExtractedData?.fileName || uploadedReportFile?.name || undefined
+        medical_report_name: analyzedReportMeta?.fileName || reportFile?.name || undefined
       };
 
       if (editingMember && onUpdateMember) {
@@ -634,6 +627,7 @@ export const FamilyWizardModal: React.FC<FamilyWizardModalProps> = ({
     if (!existingFamily?.members) return 0;
     return existingFamily.members.filter((m) => {
       const r = (m.relationship_to_proband || '').toLowerCase();
+      if (relId === 'self') return m.is_proband || r === 'self' || r === 'proband';
       if (relId === 'husband_wife') return r === 'spouse' || r === 'husband' || r === 'wife' || r === 'partner';
       if (relId === 'grandparents') return r.includes('grandfather') || r.includes('grandmother') || r.includes('grandparent');
       if (relId === 'paternal_uncle_aunt') return r.includes('paternal_uncle') || r.includes('paternal_aunt') || (r.includes('uncle') && !r.includes('maternal')) || (r.includes('aunt') && !r.includes('maternal'));
@@ -691,12 +685,10 @@ export const FamilyWizardModal: React.FC<FamilyWizardModalProps> = ({
             <button
               type="button"
               onClick={() => setStep(1)}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-full transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full transition-all cursor-pointer ${
                 step === 1
                   ? 'bg-teal-800 text-white shadow-xs'
-                  : step > 1
-                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                  : 'bg-white text-slate-500 border border-slate-200'
+                  : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
               }`}
             >
               <span>1</span>
@@ -710,38 +702,19 @@ export const FamilyWizardModal: React.FC<FamilyWizardModalProps> = ({
             <button
               type="button"
               onClick={() => setStep(2)}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-full transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full transition-all cursor-pointer ${
                 step === 2
                   ? 'bg-teal-800 text-white shadow-xs'
-                  : step > 2
-                  ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                   : 'bg-white text-slate-500 border border-slate-200'
               }`}
             >
               <span>2</span>
-              <span>Your Profile</span>
-              {step > 2 && <Check className="w-3.5 h-3.5" />}
-            </button>
-
-            <span className="text-slate-300">&bull;</span>
-
-            {/* Step 3 Pill */}
-            <button
-              type="button"
-              onClick={() => setStep(3)}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-full transition-all ${
-                step === 3
-                  ? 'bg-teal-800 text-white shadow-xs'
-                  : 'bg-white text-slate-500 border border-slate-200'
-              }`}
-            >
-              <span>3</span>
-              <span>Add Relatives</span>
+              <span>Add Relatives / Self</span>
             </button>
           </div>
 
           <span className="text-[11px] font-mono text-slate-400">
-            Step {step} of 3
+            Step {step} of 2
           </span>
         </div>
 
@@ -903,9 +876,10 @@ export const FamilyWizardModal: React.FC<FamilyWizardModalProps> = ({
               <div className="flex items-center justify-end pt-4 border-t border-slate-100">
                 <button
                   type="submit"
-                  className="inline-flex items-center gap-2 px-6 py-2.5 text-xs font-bold text-white bg-teal-800 hover:bg-teal-900 rounded-xl shadow-md transition"
+                  disabled={loading}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 text-xs font-bold text-white bg-teal-800 hover:bg-teal-900 rounded-xl shadow-md transition disabled:opacity-50 cursor-pointer"
                 >
-                  <span>Continue to Add Family Members</span>
+                  <span>Continue to Add Relatives / Self</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
@@ -913,328 +887,9 @@ export const FamilyWizardModal: React.FC<FamilyWizardModalProps> = ({
           )}
 
           {/* ========================================================================= */}
-          {/* STEP 2: VERIFY YOUR PROFILE                                               */}
+          {/* STEP 2: ADD RELATIVES / SELF                                              */}
           {/* ========================================================================= */}
           {step === 2 && (
-            <form onSubmit={handleStep2Submit} className="space-y-5">
-              <div>
-                <h2 className="text-xl font-bold text-slate-900 tracking-tight">
-                  Let's check your information
-                </h2>
-                <p className="text-sm text-slate-600 mt-1">
-                  We've found some information from your GuradinaAngel profile. Please review it and update anything that's missing.
-                </p>
-              </div>
-
-              {/* Friendly Explanation of Starting Person (Proband [P]) in Plain English */}
-              <div className="p-4 bg-teal-50/70 border border-teal-200 rounded-2xl flex items-start gap-3">
-                <Info className="w-5 h-5 text-teal-800 shrink-0 mt-0.5" />
-                <div className="text-xs text-teal-900 space-y-1">
-                  <div className="font-bold text-teal-950">
-                    You are the starting point of this family tree:
-                  </div>
-                  <p className="text-teal-900/90 leading-relaxed">
-                    Since this is your health record, you will be placed at the center of the chart (shown with a special <span className="font-bold text-teal-950">[P]</span> symbol, which doctors call the <em>Starting Person</em> or <em>Proband</em>). All relatives (parents, children, siblings) will be connected around you.
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Full Name */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                      Full Name *
-                    </label>
-                    {!profileFullName && (
-                      <span className="text-[10px] text-amber-600 font-bold px-1.5 py-0.5 bg-amber-50 rounded">
-                        Missing - Required
-                      </span>
-                    )}
-                  </div>
-                  <input
-                    type="text"
-                    value={profileFullName}
-                    onChange={(e) => setProfileFullName(e.target.value)}
-                    placeholder="Enter your full name"
-                    required
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-700 bg-white"
-                  />
-                </div>
-
-                {/* Biological Gender */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Biological Gender *
-                  </label>
-                  <select
-                    value={profileGender}
-                    onChange={(e) => setProfileGender(e.target.value as any)}
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-700 bg-white"
-                  >
-                    <option value="female">Female (Circle Symbol)</option>
-                    <option value="male">Male (Square Symbol)</option>
-                    <option value="other">Other / Unknown (Diamond Symbol)</option>
-                  </select>
-                </div>
-
-                {/* Date of Birth */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                      Date of Birth *
-                    </label>
-                    {!profileDob && (
-                      <span className="text-[10px] text-amber-600 font-bold px-1.5 py-0.5 bg-amber-50 rounded">
-                        Missing
-                      </span>
-                    )}
-                  </div>
-                  <input
-                    type="date"
-                    value={profileDob}
-                    onChange={(e) => setProfileDob(e.target.value)}
-                    required
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-700 bg-white"
-                  />
-                </div>
-
-                {/* Blood Group */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Blood Group (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={profileBloodGroup}
-                    onChange={(e) => setProfileBloodGroup(e.target.value)}
-                    placeholder="e.g. O+, B+, A-, AB+"
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-700 bg-white"
-                  />
-                </div>
-
-                {/* Height (New Field) */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Height
-                  </label>
-                  <input
-                    type="text"
-                    value={profileHeight}
-                    onChange={(e) => setProfileHeight(e.target.value)}
-                    placeholder="e.g. 172 cm or 5 ft 8 in"
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-700 bg-white"
-                  />
-                </div>
-
-                {/* Weight (New Field) */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Weight
-                  </label>
-                  <input
-                    type="text"
-                    value={profileWeight}
-                    onChange={(e) => setProfileWeight(e.target.value)}
-                    placeholder="e.g. 68 kg"
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-700 bg-white"
-                  />
-                </div>
-
-                {/* Email Address */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Email Address
-                  </label>
-                  <input
-                    type="email"
-                    value={profileEmail}
-                    onChange={(e) => setProfileEmail(e.target.value)}
-                    placeholder="your.email@example.com"
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-700 bg-white"
-                  />
-                </div>
-
-                {/* Phone Number */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Phone Number
-                  </label>
-                  <input
-                    type="tel"
-                    value={profilePhone}
-                    onChange={(e) => setProfilePhone(e.target.value)}
-                    placeholder="+91 98765 43210"
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-700 bg-white"
-                  />
-                </div>
-              </div>
-
-              {/* City / Location */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  City & Geographic Location
-                </label>
-                <input
-                  type="text"
-                  value={profileLocation}
-                  onChange={(e) => setProfileLocation(e.target.value)}
-                  placeholder="e.g. Abu Dhabi, UAE"
-                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-700 bg-white"
-                />
-              </div>
-
-              {/* Known Traits & Diseases Search & Add Box (New Requirement) */}
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-1">
-                    Your Current Known Traits &amp; Diseases
-                  </label>
-                  <p className="text-[11px] text-slate-500">
-                    Search and select any health conditions or carrier traits you currently have:
-                  </p>
-                </div>
-
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    value={profileTraitSearch}
-                    onChange={(e) => setProfileTraitSearch(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        if (profileTraitSearch.trim() && !profileKnownTraits.includes(profileTraitSearch.trim())) {
-                          setProfileKnownTraits([...profileKnownTraits, profileTraitSearch.trim()]);
-                          setProfileTraitSearch('');
-                        }
-                      }
-                    }}
-                    placeholder="Search trait or disease (e.g. Thalassemia Minor, High Blood Pressure, Asthma)..."
-                    className="w-full pl-9 pr-3.5 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-teal-700 bg-white"
-                  />
-                </div>
-
-                {/* Selected Personal Traits */}
-                {profileKnownTraits.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {profileKnownTraits.map((t) => (
-                      <span
-                        key={t}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-800 text-white text-xs font-medium"
-                      >
-                        <span>{t}</span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setProfileKnownTraits(profileKnownTraits.filter((x) => x !== t))
-                          }
-                          className="hover:text-red-200"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {/* Quick Add Suggestions */}
-                <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
-                  {filteredProfileTraitsList
-                    .filter((t) => !profileKnownTraits.includes(t))
-                    .map((item) => (
-                      <button
-                        type="button"
-                        key={item}
-                        onClick={() => setProfileKnownTraits([...profileKnownTraits, item])}
-                        className="text-[11px] px-2 py-0.5 rounded-lg bg-white border border-slate-200 text-slate-700 hover:border-teal-700 hover:text-teal-800"
-                      >
-                        + {item}
-                      </button>
-                    ))}
-                </div>
-              </div>
-
-              {/* Upload Test PDF (New Requirement) */}
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2.5">
-                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
-                  Upload Lab Report / Test PDF (Optional)
-                </label>
-                <p className="text-[11px] text-slate-500">
-                  Have a blood test, genetic report, or health document? Attach it to your profile:
-                </p>
-
-                <label className="flex items-center justify-center gap-2 border-2 border-dashed border-slate-300 hover:border-teal-700 rounded-xl p-4 bg-white cursor-pointer transition">
-                  <Upload className="w-4 h-4 text-teal-800" />
-                  <span className="text-xs font-semibold text-slate-700">
-                    {profileTestPdf ? profileTestPdf.name : 'Click to select or upload PDF document'}
-                  </span>
-                  <input
-                    type="file"
-                    accept=".pdf,.png,.jpg,.jpeg"
-                    onChange={(e) => {
-                      if (e.target.files?.[0]) setProfileTestPdf(e.target.files[0]);
-                    }}
-                    className="hidden"
-                  />
-                </label>
-
-                {profileTestPdf && (
-                  <div className="flex items-center justify-between text-xs p-2 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800">
-                    <span className="font-semibold">✓ Attached: {profileTestPdf.name}</span>
-                    <button
-                      type="button"
-                      onClick={() => setProfileTestPdf(null)}
-                      className="text-red-600 hover:text-red-800 text-[11px]"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Save Profile Confirmation Checkbox */}
-              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
-                <label className="flex items-start gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={confirmProfileUpdate}
-                    onChange={(e) => setConfirmProfileUpdate(e.target.checked)}
-                    className="mt-0.5 rounded border-slate-300 text-teal-800 focus:ring-teal-700"
-                  />
-                  <span className="text-xs text-slate-700">
-                    <span className="font-semibold">Save these updates to my profile.</span> Your details are private and securely protected.
-                  </span>
-                </label>
-              </div>
-
-              {/* Step 2 Actions */}
-              <div className="flex items-center justify-between pt-4 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setStep(1)}
-                  className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                  <span>Back</span>
-                </button>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="inline-flex items-center gap-2 px-6 py-2.5 text-xs font-bold text-white bg-teal-800 hover:bg-teal-900 rounded-xl shadow-md transition disabled:opacity-50"
-                >
-                  <span>Continue to Family Members</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* ========================================================================= */}
-          {/* STEP 3: ADD FAMILY MEMBERS                                                */}
-          {/* ========================================================================= */}
-          {step === 3 && (
             <div className="space-y-6">
               {/* Recently saved relative notification banner */}
               {recentSavedName && !activeFormRelation && (
@@ -1427,11 +1082,11 @@ export const FamilyWizardModal: React.FC<FamilyWizardModalProps> = ({
                   <div className="flex items-center justify-between pt-4 border-t border-slate-100">
                     <button
                       type="button"
-                      onClick={() => setStep(2)}
+                      onClick={() => setStep(1)}
                       className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
                     >
                       <ArrowLeft className="w-4 h-4" />
-                      <span>Back to Profile</span>
+                      <span>Back to About Family</span>
                     </button>
 
                     <button
@@ -1873,76 +1528,133 @@ export const FamilyWizardModal: React.FC<FamilyWizardModalProps> = ({
                     )}
                   </div>
 
-                  {/* Section C: Medical Report Upload */}
+                  {/* Section C: Upload Screening Report (Dashboard Feature) */}
                   <div className="p-4 bg-teal-50/50 border border-teal-200/80 rounded-2xl space-y-3">
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-teal-800 text-white flex items-center justify-center shrink-0">
-                        <UploadCloud className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-teal-900">
-                          Medical report upload
-                        </h4>
-                        <p className="text-xs text-teal-800/80 mt-0.5">
-                          Have a medical or genetic report? Upload it and we'll help fill in the information.
-                        </p>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-teal-800 text-white flex items-center justify-center shrink-0 shadow-xs">
+                          <UploadCloud className="w-4 h-4 text-white" />
+                        </div>
+                        <div>
+                          <h4 className="text-xs font-bold text-teal-900">
+                            Upload Screening Report
+                          </h4>
+                          <p className="text-xs text-teal-800/80 mt-0.5">
+                            Upload official premarital or genetic screening report (PDF or JPG). In-memory scraping auto-extracts genetic parameters and fills these details.
+                          </p>
+                        </div>
                       </div>
                     </div>
 
-                    <label className="flex flex-col items-center justify-center border-2 border-dashed border-teal-300 hover:border-teal-700 rounded-xl p-4 bg-white cursor-pointer transition">
-                      <FileText className="w-6 h-6 text-teal-700 mb-1" />
-                      <span className="text-xs font-semibold text-teal-900">
-                        Click or drag report to upload
-                      </span>
-                      <span className="text-[10px] text-slate-400 mt-0.5">
-                        Supports PDF, JPG, and PNG files
-                      </span>
+                    {/* Drag-and-drop / Select Area */}
+                    <label className={`flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-4 transition cursor-pointer text-center ${
+                      reportFile
+                        ? 'border-emerald-600 bg-emerald-50/50'
+                        : reportAnalysisError
+                          ? 'border-red-400 bg-red-50/40'
+                          : 'border-teal-300 hover:border-teal-700 bg-white'
+                    }`}>
                       <input
                         type="file"
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        onChange={handleFileUpload}
+                        accept=".pdf,.jpg,.jpeg"
+                        onChange={handleReportFileChange}
                         className="hidden"
                       />
+
+                      {reportFile ? (
+                        <div className="space-y-1.5 py-1">
+                          <div className="w-9 h-9 rounded-xl bg-white border border-emerald-300 flex items-center justify-center mx-auto text-teal-800 shadow-xs">
+                            <FileText className="w-5 h-5 text-teal-800" />
+                          </div>
+                          <p className="text-xs font-bold text-teal-900 max-w-xs truncate">{reportFile.name}</p>
+                          <p className="text-[11px] text-slate-500 font-mono">
+                            {(reportFile.size / (1024 * 1024)).toFixed(2)} MB &bull; Ready to analyze
+                          </p>
+                          <span className="inline-block text-[10px] font-bold text-teal-700 hover:underline pt-0.5">
+                            Click to choose a different file
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="space-y-1 py-1">
+                          <FileText className="w-6 h-6 text-teal-700 mx-auto mb-1" />
+                          <span className="text-xs font-semibold text-teal-900 block">
+                            Click or drag screening report to upload
+                          </span>
+                          <span className="text-[10px] text-slate-400 block">
+                            Supports PDF, JPG, and JPEG files &bull; Max 10 MB
+                          </span>
+                        </div>
+                      )}
                     </label>
 
-                    {/* Report Review & Confirm Box */}
-                    {reportExtractedData && (
-                      <div className="p-3 bg-white rounded-xl border border-teal-300 space-y-2">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-bold text-teal-900">
-                            Extracted Finding from {reportExtractedData.fileName}:
+                    {/* Error display */}
+                    {reportAnalysisError && (
+                      <div className="p-2.5 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-xs text-red-800">
+                        <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                        <span>{reportAnalysisError}</span>
+                      </div>
+                    )}
+
+                    {/* Action Button: Upload & Analyze */}
+                    {reportFile && !analyzedReportMeta && (
+                      <button
+                        type="button"
+                        onClick={handleAnalyzeScreeningReport}
+                        disabled={isAnalyzingReport}
+                        className="w-full py-2.5 px-4 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-xs disabled:opacity-50 cursor-pointer"
+                      >
+                        {isAnalyzingReport ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin text-teal-200" />
+                            <span>Analyzing genetic markers... Zero-storage scraping</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4 text-mint" />
+                            <span>Upload &amp; Analyze Screening Report</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+
+                    {/* Analysis Completed Card */}
+                    {analyzedReportMeta && (
+                      <div className="p-3.5 bg-white rounded-xl border border-emerald-300 space-y-2.5 animate-in fade-in">
+                        <div className="flex items-center justify-between text-xs pb-1.5 border-b border-slate-100">
+                          <div className="flex items-center gap-1.5 font-bold text-emerald-800">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                            <span>Screening Findings Auto-Filled</span>
+                          </div>
+                          <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded text-[10px]">
+                            Verified
                           </span>
-                          {reportExtractedData.isConfirmed ? (
-                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded text-[10px]">
-                              Confirmed
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 bg-amber-100 text-amber-800 font-bold rounded text-[10px]">
-                              Review Required
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-xs text-slate-700 space-y-1">
-                          <div>
-                            Condition: <span className="font-bold">{reportExtractedData.condition}</span>
-                          </div>
-                          <div>
-                            Variant: <span className="font-mono font-bold text-teal-800">{reportExtractedData.variant}</span>
-                          </div>
-                          <div>
-                            Status: <span className="font-bold">{reportExtractedData.carrierStatus}</span>
-                          </div>
                         </div>
 
-                        {!reportExtractedData.isConfirmed && (
-                          <button
-                            type="button"
-                            onClick={confirmReportExtraction}
-                            className="w-full py-2 bg-teal-800 text-white rounded-lg text-xs font-bold hover:bg-teal-900 transition flex items-center justify-center gap-1.5"
-                          >
-                            <Check className="w-3.5 h-3.5" />
-                            <span>Confirm &amp; Auto-fill Medical Details</span>
-                          </button>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-700">
+                          <div className="p-2 bg-slate-50 rounded-lg">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Condition</span>
+                            <span className="font-bold text-slate-900">{analyzedReportMeta.condition}</span>
+                          </div>
+                          <div className="p-2 bg-slate-50 rounded-lg">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Variant Detected</span>
+                            <span className="font-mono font-bold text-teal-800">{analyzedReportMeta.variant}</span>
+                          </div>
+                          <div className="p-2 bg-slate-50 rounded-lg">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Carrier Status</span>
+                            <span className="font-bold text-slate-900">{analyzedReportMeta.carrierStatus}</span>
+                          </div>
+                          {analyzedReportMeta.patientName && (
+                            <div className="p-2 bg-slate-50 rounded-lg">
+                              <span className="text-[10px] text-slate-400 font-bold uppercase block">Masked Patient</span>
+                              <span className="font-mono font-bold text-emerald-700">{analyzedReportMeta.patientName}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {analyzedReportMeta.risk && (
+                          <div className="p-2 bg-teal-50/60 rounded-lg text-[11px] text-teal-900">
+                            <strong>Reproductive Risk:</strong> {analyzedReportMeta.risk}
+                          </div>
                         )}
                       </div>
                     )}

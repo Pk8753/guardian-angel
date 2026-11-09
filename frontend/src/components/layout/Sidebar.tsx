@@ -34,8 +34,12 @@ export function Sidebar() {
       <div className="flex flex-col gap-6">
         {/* Brand Header */}
         <Link href="/dashboard" className="flex items-center gap-3 px-3 group">
-          <div className="w-10 h-10 rounded-xl bg-pine flex items-center justify-center text-white shadow-[0_4px_12px_rgba(12,50,44,0.25)] group-hover:bg-pine-light transition-colors">
-            <span className="material-symbols-outlined text-[24px] text-jungle">biotech</span>
+          <div className="w-10 h-10 rounded-xl bg-white p-1 flex items-center justify-center shadow-md border border-[#30ba78]/40 group-hover:scale-105 transition-transform">
+            <img
+              src="/static/screen/logo.png"
+              alt="Guardian Angel Logo"
+              className="w-full h-full object-contain rounded-lg"
+            />
           </div>
           <div className="flex flex-col">
             <div className="flex items-center gap-1.5">

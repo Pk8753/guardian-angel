@@ -39,7 +39,8 @@ import {
   Check,
   Copy,
   Download,
-  FileCheck
+  FileCheck,
+  AlertTriangle
 } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -96,6 +97,15 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadFamilies();
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('upload') === 'true') {
+        setIsUploadModalOpen(true);
+        const url = new URL(window.location.href);
+        url.searchParams.delete('upload');
+        window.history.replaceState({}, '', url.pathname + (url.search ? url.search : ''));
+      }
+    }
   }, []);
 
   // Compute real metrics from active family members
@@ -188,23 +198,61 @@ export default function DashboardPage() {
     }
   };
 
-  const handleDeleteFamily = async (familyId: string, familyName?: string) => {
-    if (!confirm(`Are you sure you want to delete family chart "${familyName || familyId}"? The chart will be removed, but all family members will be preserved in your database.`)) {
+  // Delete Tree Modal State
+  const [deleteTreeModalOpen, setDeleteTreeModalOpen] = useState(false);
+  const [targetFamilyToDelete, setTargetFamilyToDelete] = useState<string | null>(null);
+  const [targetFamilyNameToDelete, setTargetFamilyNameToDelete] = useState<string>('');
+  const [deleteWithMembers, setDeleteWithMembers] = useState(false);
+  const [treeConfirmInput, setTreeConfirmInput] = useState('');
+  const [isDeletingTree, setIsDeletingTree] = useState(false);
+  const [deleteTreeError, setDeleteTreeError] = useState<string | null>(null);
+
+  const openDeleteTreeModal = (familyId: string, familyName?: string) => {
+    setTargetFamilyToDelete(familyId);
+    setTargetFamilyNameToDelete(familyName || familyId);
+    setDeleteWithMembers(false);
+    setTreeConfirmInput('');
+    setDeleteTreeError(null);
+    setDeleteTreeModalOpen(true);
+  };
+
+  const closeDeleteTreeModal = () => {
+    if (isDeletingTree) return;
+    setDeleteTreeModalOpen(false);
+    setTargetFamilyToDelete(null);
+    setTreeConfirmInput('');
+    setDeleteTreeError(null);
+  };
+
+  const handleConfirmDeleteTree = async () => {
+    if (!targetFamilyToDelete) return;
+    if (treeConfirmInput.trim().toLowerCase() !== 'confirm') {
+      setDeleteTreeError('You must type "confirm" to proceed.');
       return;
     }
 
+    setIsDeletingTree(true);
+    setDeleteTreeError(null);
+
     try {
-      const res = await fetch(`/api/families/${familyId}`, {
-        method: 'DELETE'
+      const res = await fetch(`/api/families/${targetFamilyToDelete}?delete_members=${deleteWithMembers ? 'true' : 'false'}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ delete_members: deleteWithMembers }),
       });
+
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.message || 'Failed to delete family chart.');
       }
-      setFamilies((prev) => prev.filter((f) => f.family_id !== familyId));
+
+      setFamilies((prev) => prev.filter((f) => f.family_id !== targetFamilyToDelete));
+      closeDeleteTreeModal();
     } catch (e: any) {
       console.error('Delete chart error:', e);
-      alert(e.message || 'Failed to delete chart. Please try again.');
+      setDeleteTreeError(e.message || 'Failed to delete chart. Please try again.');
+    } finally {
+      setIsDeletingTree(false);
     }
   };
 
@@ -250,6 +298,8 @@ export default function DashboardPage() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analyzedReportData, setAnalyzedReportData] = useState<any | null>(null);
   const [copiedAudit, setCopiedAudit] = useState(false);
+  const [copiedReportText, setCopiedReportText] = useState(false);
+  const [reportViewTab, setReportViewTab] = useState<'both' | 'report' | 'analysis'>('both');
 
   // Pedigree Tree Linkage & "Upload Another Report" State
   const [uploadTreeDestination, setUploadTreeDestination] = useState<'new' | 'existing'>('new');
@@ -320,16 +370,37 @@ export default function DashboardPage() {
         throw new Error(data.message || 'Failed to analyze report.');
       }
 
-      setAnalyzedReportData(data.masked_data);
+      const completeText = data.complete_report_text || data.masked_data?.complete_report_text || '';
+      const patientName = data.patient_name || data.masked_data?.patient_name || '';
+
+      const enrichedData = {
+        ...data.masked_data,
+        complete_report_text: completeText,
+        patient_name: patientName,
+        sudo_name: data.sudo_name || data.masked_data?.sudo_name,
+        family_id: data.family_id || data.masked_data?.family_id,
+        family_name: data.family_name || data.masked_data?.family_name,
+        tree_created: data.tree_created ?? data.masked_data?.tree_created,
+        sex: data.sex || data.masked_data?.sex,
+        dob: data.dob || data.masked_data?.dob,
+        location: data.location || data.masked_data?.location,
+        already_exists: !!data.already_exists,
+        updated: !!data.updated,
+        analysis_message: data.message || '',
+      };
+
+      setAnalyzedReportData(enrichedData);
       const meta = {
         family_id: data.family_id,
         family_name: data.family_name,
         tree_created: data.tree_created,
         member_id: data.member_id,
         sudo_name: data.sudo_name,
+        patient_name: patientName,
         sex: data.sex,
         dob: data.dob,
-        location: data.location || data.masked_data?.location || ''
+        location: data.location || data.masked_data?.location || '',
+        complete_report_text: completeText
       };
       setLatestUploadMeta(meta);
 
@@ -358,6 +429,8 @@ export default function DashboardPage() {
     setReportFile(null);
     setFileError(null);
     setAnalyzedReportData(null);
+    setReportViewTab('both');
+    setCopiedReportText(false);
     setIsChoosingDestination(false);
     setUploadTreeDestination('new');
     setUploadGender('auto');
@@ -369,6 +442,14 @@ export default function DashboardPage() {
   const handleCloseUploadModal = () => {
     setIsUploadModalOpen(false);
     handleResetUpload();
+  };
+
+  const handleCopyReportText = () => {
+    const text = analyzedReportData?.complete_report_text || latestUploadMeta?.complete_report_text || '';
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedReportText(true);
+    setTimeout(() => setCopiedReportText(false), 2500);
   };
 
   const handleCopyMaskedJson = () => {
@@ -743,7 +824,7 @@ export default function DashboardPage() {
                     <tr className="border-b border-outline-variant/30 text-on-surface-variant text-[11px] uppercase tracking-wider bg-fog/60">
                       <th className="py-3 px-4 font-bold rounded-l-xl">Family ID</th>
                       <th className="py-3 px-4 font-bold">Chart Title</th>
-                      <th className="py-3 px-4 font-bold">Proband (Starting Person)</th>
+                      <th className="py-3 px-4 font-bold">Key Member</th>
                       <th className="py-3 px-4 font-bold">Member Count</th>
                       <th className="py-3 px-4 font-bold">Last Updated</th>
                       <th className="py-3 px-4 font-bold">Share Status</th>
@@ -764,15 +845,8 @@ export default function DashboardPage() {
                             <GitBranch className="w-8 h-8 text-outline-variant" />
                             <p className="font-semibold text-pine">No Family Pedigrees Created Yet</p>
                             <p className="text-[11px] text-on-surface-variant max-w-sm">
-                              Click "Create Family Pedigree" to build your first standard clinical health tree with automatic genetic links.
+                              Click &quot;Create Family Pedigree&quot; or upload report to build your first standard clinical health tree with automatic genetic links.
                             </p>
-                            <Link
-                              href="/pedigree?create=true"
-                              className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 bg-pine hover:bg-pine-light text-white rounded-xl text-xs font-bold transition shadow-xs"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                              <span>Create Family Pedigree</span>
-                            </Link>
                           </div>
                         </td>
                       </tr>
@@ -838,9 +912,9 @@ export default function DashboardPage() {
                               )}
                               <button
                                 type="button"
-                                onClick={() => handleDeleteFamily(fam.family_id, fam.family_name || fam.name)}
-                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
-                                title="Delete Chart (Preserves Members in Database)"
+                                onClick={() => openDeleteTreeModal(fam.family_id, fam.family_name || fam.name)}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                                title="Delete Chart"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -916,16 +990,14 @@ export default function DashboardPage() {
                     <div className="w-full h-[400px] bg-fog rounded-2xl border border-outline-variant/40 flex flex-col items-center justify-center text-center p-6 space-y-3">
                       <GitBranch className="w-10 h-10 text-outline-variant" />
                       <h3 className="text-sm font-bold text-pine">No Relatives in Default Tree</h3>
-                      <p className="text-xs text-on-surface-variant max-w-sm">
-                        Open the full interactive editor to add parents, siblings, children, and partners to your pedigree chart.
-                      </p>
-                      <Link
-                        href="/pedigree"
-                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-pine hover:bg-pine-light text-white rounded-xl text-xs font-bold transition shadow-xs"
+                      <button
+                        type="button"
+                        onClick={() => setIsUploadModalOpen(true)}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-pine hover:bg-pine-light text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
                       >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Add Relatives in Editor</span>
-                      </Link>
+                        <UploadCloud className="w-4 h-4" />
+                        <span>Upload Screening Report</span>
+                      </button>
                     </div>
                   )}
 
@@ -1183,7 +1255,7 @@ export default function DashboardPage() {
       {/* ==================== PREMARITAL & GENETIC REPORT UPLOAD MODAL ==================== */}
       {isUploadModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
-          <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-outline-variant/40 overflow-hidden my-8">
+          <div className={`w-full ${analyzedReportData ? 'max-w-4xl' : 'max-w-2xl'} bg-white rounded-3xl shadow-2xl border border-outline-variant/40 overflow-hidden my-8 transition-all duration-300`}>
             {/* Modal Header */}
             <div className="p-6 pb-4 border-b border-outline-variant/20 flex items-center justify-between gap-4 bg-fog/30">
               <h3 className="text-lg sm:text-xl font-extrabold text-pine tracking-tight">
@@ -1315,55 +1387,6 @@ export default function DashboardPage() {
                     </button>
                   </div>
 
-                  {/* Individual Gender (Male/Female) Selector */}
-                  <div className="flex items-center justify-between px-3.5 py-2 bg-surface-container-low rounded-xl border border-outline-variant/40 text-xs">
-                    <span className="text-slate-600 font-medium">Individual Gender:</span>
-                    <div className="flex items-center gap-1.5">
-                      {(['auto', 'male', 'female'] as const).map((g) => (
-                        <button
-                          key={g}
-                          type="button"
-                          onClick={() => setUploadGender(g)}
-                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
-                            uploadGender === g
-                              ? 'bg-pine text-white shadow-xs'
-                              : 'bg-white text-slate-600 hover:bg-slate-100 border border-outline-variant/30'
-                          }`}
-                        >
-                          {g === 'auto' ? 'Auto-Detect' : g === 'male' ? 'Male (XY)' : 'Female (XX)'}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Optional Candidate Name & DOB inputs (for photo uploads or custom confirmation) */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                        Candidate Name (Optional)
-                      </label>
-                      <input
-                        type="text"
-                        value={uploadCandidateName}
-                        onChange={(e) => setUploadCandidateName(e.target.value)}
-                        placeholder="Auto-detected from document"
-                        className="w-full px-3 py-1.5 text-xs rounded-xl border border-outline-variant/40 bg-surface-container-low text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-pine"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                        Date of Birth (Optional)
-                      </label>
-                      <input
-                        type="text"
-                        value={uploadDob}
-                        onChange={(e) => setUploadDob(e.target.value)}
-                        placeholder="e.g. DD/MM/YYYY or YYYY-MM-DD"
-                        className="w-full px-3 py-1.5 text-xs rounded-xl border border-outline-variant/40 bg-surface-container-low text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-pine"
-                      />
-                    </div>
-                  </div>
-
                   {/* Drag-and-drop / File Select Box */}
                   <label className={`flex flex-col items-center justify-center border-2 border-dashed rounded-2xl p-8 transition cursor-pointer text-center ${
                     reportFile
@@ -1460,181 +1483,304 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 /* ==================== STATE 2: MEANINGFUL CLINICAL ANALYSIS RESULTS ==================== */
-                <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
-                  {/* Clean Analysis Status Header with 2-character masked patient name */}
-                  <div className="p-3.5 bg-mint/20 border border-mint rounded-2xl flex items-center justify-between gap-3 shadow-xs">
-                    <div className="flex items-center gap-2.5">
-                      <CheckCircle2 className="w-5 h-5 text-jungle shrink-0" />
-                      <div>
-                        <div className="flex items-center gap-2">
+                <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-1">
+                  {/* Clean Analysis Status Header with masked patient name and tree linkage */}
+                  <div className="p-4 bg-mint/20 border border-mint rounded-2xl space-y-2.5 shadow-xs">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <div className="flex items-center gap-2.5">
+                        <CheckCircle2 className="w-5 h-5 text-jungle shrink-0" />
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs font-bold text-pine">
                             Report Analysis Complete
                           </span>
-                          {analyzedReportData.patient_name_masked && (
+                          {(analyzedReportData.patient_name || analyzedReportData.patient_name_masked) && (
                             <span className="px-2 py-0.5 bg-white text-pine font-mono text-[10px] font-bold rounded border border-mint">
-                              Patient: {analyzedReportData.patient_name_masked}
+                              Patient: {analyzedReportData.patient_name || analyzedReportData.patient_name_masked}
                             </span>
                           )}
                         </div>
-                        <span className="text-[11px] text-slate-600">
-                          {analyzedReportData.file_metadata?.original_filename} &bull; Verified finding
-                        </span>
                       </div>
-                    </div>
-                    <span className="px-2.5 py-1 bg-white text-jungle font-semibold text-[11px] rounded-full border border-mint">
-                      De-Identified &bull; Private
-                    </span>
-                  </div>
-
-                  {/* Pedigree Tree & Sudo Member Integration Card */}
-                  <div className="p-3.5 bg-surface-container-low border border-outline-variant/40 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-                    <div className="flex items-start gap-2.5">
-                      <GitBranch className="w-4 h-4 text-pine mt-0.5 shrink-0" />
-                      <div className="space-y-0.5">
+                      {analyzedReportData.family_id && (
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-xs font-bold text-pine">
-                            Pedigree Chart: {latestUploadMeta?.family_id || analyzedReportData.family_id}
+                          <span className="px-2.5 py-0.5 bg-white text-pine font-mono text-[11px] font-bold rounded-lg border border-mint">
+                            Pedigree Chart: {analyzedReportData.family_id}
                           </span>
-                          <span className="px-2 py-0.5 bg-mint/30 text-pine font-bold text-[10px] rounded border border-mint">
-                            {latestUploadMeta?.tree_created || analyzedReportData.tree_created ? 'New Tree Created' : 'Added to Existing Tree'}
+                          <span className="px-2 py-0.5 bg-pine text-white text-[10px] font-bold rounded-md">
+                            {analyzedReportData.tree_created ? 'New Tree Created' : 'Linked to Existing Tree'}
                           </span>
                         </div>
-                        <p className="text-[11px] text-slate-600">
-                          <strong className="text-slate-800">Sudo Member:</strong> {latestUploadMeta?.sudo_name || analyzedReportData.sudo_name} &bull; <strong className="text-slate-800">Sex:</strong> {latestUploadMeta?.sex || analyzedReportData.sex} &bull; <strong className="text-slate-800">DOB:</strong> {latestUploadMeta?.dob || analyzedReportData.dob || 'Not Documented'}
-                          {(latestUploadMeta?.location || analyzedReportData.location) && (
-                            <> &bull; <strong className="text-slate-800">Location:</strong> {latestUploadMeta?.location || analyzedReportData.location}</>
-                          )}
-                        </p>
-                      </div>
+                      )}
                     </div>
-                    <Link
-                      href={`/pedigree?family_id=${latestUploadMeta?.family_id || analyzedReportData.family_id}`}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pine hover:bg-pine-light text-white text-[11px] font-bold transition shrink-0"
-                    >
-                      <span>View in Canvas</span>
-                      <ArrowRight className="w-3 h-3" />
-                    </Link>
+
+                    <div className="pt-2 border-t border-mint/40 flex items-center justify-between text-xs text-slate-700 flex-wrap gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-pine">Sudo Member:</span>
+                        <span className="font-mono font-bold text-slate-900 bg-white px-1.5 py-0.5 rounded border border-mint/50">
+                          {analyzedReportData.sudo_name}
+                        </span>
+                        <span>&bull;</span>
+                        <span>Sex: <strong className="capitalize">{analyzedReportData.sex || 'female'}</strong></span>
+                        <span>&bull;</span>
+                        <span>DOB: <strong>{analyzedReportData.dob || 'Not Documented'}</strong></span>
+                        <span>&bull;</span>
+                        <span>Location: <strong>{analyzedReportData.location || 'Abu Dhabi'}</strong></span>
+                      </div>
+                      {analyzedReportData.file_metadata?.original_filename && (
+                        <span className="text-[11px] text-slate-500">
+                          {analyzedReportData.file_metadata.original_filename}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
-                  {/* Genetic Finding Overview Card */}
-                  <div className="p-4 bg-white rounded-2xl border border-outline-variant/40 space-y-3 shadow-xs">
-                    <div className="flex items-center justify-between border-b border-outline-variant/20 pb-2">
-                      <div className="flex items-center gap-2">
-                        <Dna className="w-4 h-4 text-pine" />
-                        <h4 className="text-xs font-bold text-pine uppercase tracking-wider">
-                          Identified Genetic Finding
-                        </h4>
-                      </div>
-                      <span className="text-[10px] bg-fog px-2.5 py-0.5 rounded text-slate-600 font-mono font-bold">
-                        {analyzedReportData.gene_locus}
+                  {/* Duplicate Upload Re-Identification Banner */}
+                  {analyzedReportData.already_exists && (
+                    <div className="px-3.5 py-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2.5 text-xs text-amber-900 font-medium shadow-xs">
+                      <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>
+                        user already exist &lt;{analyzedReportData.sudo_name}&gt; : updating its information
                       </span>
                     </div>
+                  )}
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                      <div className="p-3 bg-fog rounded-xl border border-outline-variant/20 space-y-0.5">
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Condition Name</span>
-                        <span className="font-bold text-pine text-sm">{analyzedReportData.condition}</span>
-                        <p className="text-[11px] text-slate-500 mt-1">Single-gene carrier trait. Carriers live full, active, healthy lives.</p>
-                      </div>
-
-                      <div className="p-3 bg-fog rounded-xl border border-outline-variant/20 space-y-0.5">
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Carrier Variant Details</span>
-                        <span className="font-bold text-pine text-sm font-mono">{analyzedReportData.variant}</span>
-                        <p className="text-[11px] text-slate-500 mt-1">{analyzedReportData.carrier_status}</p>
-                      </div>
-                    </div>
+                  {/* View Segmented Tabs */}
+                  <div className="flex items-center gap-1.5 p-1 bg-fog rounded-xl border border-outline-variant/30 text-xs font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setReportViewTab('both')}
+                      className={`flex-1 py-1.5 px-3 rounded-lg transition text-center cursor-pointer ${
+                        reportViewTab === 'both'
+                          ? 'bg-white text-pine shadow-xs border border-outline-variant/40'
+                          : 'text-slate-600 hover:text-pine'
+                      }`}
+                    >
+                      Complete Report &amp; Analysis
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReportViewTab('report')}
+                      className={`flex-1 py-1.5 px-3 rounded-lg transition text-center cursor-pointer ${
+                        reportViewTab === 'report'
+                          ? 'bg-white text-pine shadow-xs border border-outline-variant/40'
+                          : 'text-slate-600 hover:text-pine'
+                      }`}
+                    >
+                      Complete PDF Report ({analyzedReportData.complete_report_text ? `${analyzedReportData.complete_report_text.split('\n').filter(Boolean).length} lines` : 'Text'})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReportViewTab('analysis')}
+                      className={`flex-1 py-1.5 px-3 rounded-lg transition text-center cursor-pointer ${
+                        reportViewTab === 'analysis'
+                          ? 'bg-white text-pine shadow-xs border border-outline-variant/40'
+                          : 'text-slate-600 hover:text-pine'
+                      }`}
+                    >
+                      Clinical Analysis
+                    </button>
                   </div>
 
-                  {/* SCREENING FINDINGS WITH LAB VALUES & CLINICAL MEANINGS */}
-                  {analyzedReportData.screening_findings && analyzedReportData.screening_findings.length > 0 && (
-                    <div className="p-4 bg-white rounded-2xl border border-outline-variant/40 space-y-3 shadow-xs">
-                      <div className="flex items-center justify-between border-b border-outline-variant/20 pb-2">
+                  {/* COMPLETE EXTRACTED REPORT CARD (PyMuPDF) */}
+                  {(reportViewTab === 'both' || reportViewTab === 'report') && (
+                    <div className="p-4 bg-slate-900 rounded-2xl border border-slate-800 space-y-3 shadow-md text-white">
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-2.5 flex-wrap gap-2">
                         <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-pine" />
-                          <h4 className="text-xs font-bold text-pine uppercase tracking-wider">
-                            Screening Findings &amp; Clinical Values
-                          </h4>
-                        </div>
-                        <span className="text-[10px] text-slate-400 font-mono">
-                          {analyzedReportData.screening_findings.length} Parameters Evaluated
-                        </span>
-                      </div>
-
-                      <div className="space-y-2.5">
-                        {analyzedReportData.screening_findings.map((finding: any, idx: number) => (
-                          <div key={idx} className="p-3 bg-fog/60 rounded-xl border border-outline-variant/20 text-xs space-y-1.5">
-                            <div className="flex items-center justify-between flex-wrap gap-1.5">
-                              <span className="font-bold text-pine text-xs">{finding.parameter}</span>
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono font-bold text-pine bg-white px-2 py-0.5 rounded border border-outline-variant/30">
-                                  {finding.value}
-                                </span>
-                                <span className="text-[10px] text-slate-500 font-mono">
-                                  Ref: {finding.reference_range}
-                                </span>
-                                <span className="px-2 py-0.5 bg-mint/30 text-pine font-bold text-[10px] rounded-full border border-mint">
-                                  {finding.status}
-                                </span>
-                              </div>
-                            </div>
-                            <p className="text-[11px] text-slate-600 leading-relaxed pt-0.5">
-                              <strong className="text-slate-700">What this means:</strong> {finding.clinical_meaning}
+                          <FileText className="w-4 h-4 text-emerald-400" />
+                          <div>
+                            <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                              Complete Report Content (PyMuPDF)
+                            </h4>
+                            <p className="text-[10px] text-slate-400">
+                              Full document text extracted in-memory with PyMuPDF &bull; Unredacted for testing
                             </p>
                           </div>
-                        ))}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleCopyReportText}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] font-semibold text-emerald-300 border border-slate-700 transition cursor-pointer"
+                            title="Copy extracted report text"
+                          >
+                            {copiedReportText ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-emerald-400" />}
+                            <span>{copiedReportText ? 'Copied' : 'Copy Full Text'}</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Monospace Full Text Container */}
+                      <div className="bg-slate-950/90 rounded-xl p-3.5 border border-slate-800/80 max-h-60 overflow-y-auto">
+                        <pre className="text-xs font-mono text-emerald-300/90 whitespace-pre-wrap break-words leading-relaxed select-text selection:bg-emerald-500 selection:text-black">
+                          {analyzedReportData.complete_report_text || 'No text extracted from document.'}
+                        </pre>
                       </div>
                     </div>
                   )}
 
-                  {/* Meaningful Couple & Family Planning Guidance Card */}
-                  <div className="p-4 bg-white rounded-2xl border border-outline-variant/40 space-y-3 shadow-xs">
-                    <div className="flex items-center gap-2 border-b border-outline-variant/20 pb-2">
-                      <Users className="w-4 h-4 text-pine" />
-                      <h4 className="text-xs font-bold text-pine uppercase tracking-wider">
-                        Family Planning &amp; Child Health Guidance
-                      </h4>
-                    </div>
-
-                    <div className="space-y-2.5 text-xs">
-                      <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-amber-900 text-xs">Offspring Reproductive Risk</span>
-                          <span className="px-2 py-0.5 bg-amber-200/60 text-amber-900 font-mono text-[10px] font-bold rounded">
-                            {analyzedReportData.inheritance_pattern}
-                          </span>
+                  {/* CLINICAL ANALYSIS CARDS */}
+                  {(reportViewTab === 'both' || reportViewTab === 'analysis') && (
+                    <>
+                      {/* Pedigree Tree & Sudo Member Integration Card */}
+                      <div className="p-3.5 bg-surface-container-low border border-outline-variant/40 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                        <div className="flex items-start gap-2.5">
+                          <GitBranch className="w-4 h-4 text-pine mt-0.5 shrink-0" />
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-bold text-pine">
+                                Pedigree Chart: {latestUploadMeta?.family_id || analyzedReportData.family_id}
+                              </span>
+                              <span className="px-2 py-0.5 bg-mint/30 text-pine font-bold text-[10px] rounded border border-mint">
+                                {latestUploadMeta?.tree_created || analyzedReportData.tree_created ? 'New Tree Created' : 'Added to Existing Tree'}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-600">
+                              <strong className="text-slate-800">Sudo Member:</strong> {latestUploadMeta?.sudo_name || analyzedReportData.sudo_name} &bull; <strong className="text-slate-800">Sex:</strong> {latestUploadMeta?.sex || analyzedReportData.sex} &bull; <strong className="text-slate-800">DOB:</strong> {latestUploadMeta?.dob || analyzedReportData.dob || 'Not Documented'}
+                              {(latestUploadMeta?.location || analyzedReportData.location) && (
+                                <> &bull; <strong className="text-slate-800">Location:</strong> {latestUploadMeta?.location || analyzedReportData.location}</>
+                              )}
+                            </p>
+                          </div>
                         </div>
-                        <p className="text-[11px] text-amber-800 leading-relaxed">
-                          {analyzedReportData.reproductive_risk}
-                        </p>
+                        <Link
+                          href={`/pedigree?family_id=${latestUploadMeta?.family_id || analyzedReportData.family_id}`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pine hover:bg-pine-light text-white text-[11px] font-bold transition shrink-0"
+                        >
+                          <span>View in Canvas</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </Link>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        <div className="p-3 bg-mint/15 rounded-xl border border-mint/40 space-y-1">
-                          <span className="font-bold text-pine text-[11px] flex items-center gap-1.5">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-jungle shrink-0" />
-                            If Your Partner is a Non-Carrier
+                      {/* Genetic Finding Overview Card */}
+                      <div className="p-4 bg-white rounded-2xl border border-outline-variant/40 space-y-3 shadow-xs">
+                        <div className="flex items-center justify-between border-b border-outline-variant/20 pb-2">
+                          <div className="flex items-center gap-2">
+                            <Dna className="w-4 h-4 text-pine" />
+                            <h4 className="text-xs font-bold text-pine uppercase tracking-wider">
+                              Identified Genetic Finding
+                            </h4>
+                          </div>
+                          <span className="text-[10px] bg-fog px-2.5 py-0.5 rounded text-slate-600 font-mono font-bold">
+                            {analyzedReportData.gene_locus}
                           </span>
-                          <p className="text-[11px] text-slate-600 leading-snug">
-                            Your children will be <strong>100% free of condition symptoms</strong>. About 50% will simply inherit healthy carrier status like you.
-                          </p>
                         </div>
 
-                        <div className="p-3 bg-fog rounded-xl border border-outline-variant/30 space-y-1">
-                          <span className="font-bold text-pine text-[11px] flex items-center gap-1.5">
-                            <Info className="w-3.5 h-3.5 text-waterhole shrink-0" />
-                            If Both Partners are Carriers
-                          </span>
-                          <p className="text-[11px] text-slate-600 leading-snug">
-                            There is a 25% chance of major condition in each pregnancy. Modern medical counseling and pre-conception screening protect this journey.
-                          </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                          <div className="p-3 bg-fog rounded-xl border border-outline-variant/20 space-y-0.5">
+                            <span className="text-[10px] uppercase font-bold text-slate-400 block">Condition Name</span>
+                            <span className="font-bold text-pine text-sm">{analyzedReportData.condition}</span>
+                            <p className="text-[11px] text-slate-500 mt-1">Single-gene carrier trait. Carriers live full, active, healthy lives.</p>
+                          </div>
+
+                          <div className="p-3 bg-fog rounded-xl border border-outline-variant/20 space-y-0.5">
+                            <span className="text-[10px] uppercase font-bold text-slate-400 block">Carrier Variant Details</span>
+                            <span className="font-bold text-pine text-sm font-mono">{analyzedReportData.variant}</span>
+                            <p className="text-[11px] text-slate-500 mt-1">{analyzedReportData.carrier_status}</p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
+
+                      {/* SCREENING FINDINGS WITH LAB VALUES & CLINICAL MEANINGS */}
+                      {analyzedReportData.screening_findings && analyzedReportData.screening_findings.length > 0 && (
+                        <div className="p-4 bg-white rounded-2xl border border-outline-variant/40 space-y-3 shadow-xs">
+                          <div className="flex items-center justify-between border-b border-outline-variant/20 pb-2">
+                            <div className="flex items-center gap-2">
+                              <FileText className="w-4 h-4 text-pine" />
+                              <h4 className="text-xs font-bold text-pine uppercase tracking-wider">
+                                Screening Findings &amp; Clinical Values
+                              </h4>
+                            </div>
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              {analyzedReportData.screening_findings.length} Parameters Evaluated
+                            </span>
+                          </div>
+
+                          <div className="space-y-2.5">
+                            {analyzedReportData.screening_findings.map((finding: any, idx: number) => (
+                              <div key={idx} className="p-3 bg-fog/60 rounded-xl border border-outline-variant/20 text-xs space-y-1.5">
+                                <div className="flex items-center justify-between flex-wrap gap-1.5">
+                                  <span className="font-bold text-pine text-xs">{finding.parameter}</span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono font-bold text-pine bg-white px-2 py-0.5 rounded border border-outline-variant/30">
+                                      {finding.value}
+                                    </span>
+                                    <span className="text-[10px] text-slate-500 font-mono">
+                                      Ref: {finding.reference_range}
+                                    </span>
+                                    <span className="px-2 py-0.5 bg-mint/30 text-pine font-bold text-[10px] rounded-full border border-mint">
+                                      {finding.status}
+                                    </span>
+                                  </div>
+                                </div>
+                                <p className="text-[11px] text-slate-600 leading-relaxed pt-0.5">
+                                  <strong className="text-slate-700">What this means:</strong> {finding.clinical_meaning}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Meaningful Couple & Family Planning Guidance Card */}
+                      <div className="p-4 bg-white rounded-2xl border border-outline-variant/40 space-y-3 shadow-xs">
+                        <div className="flex items-center gap-2 border-b border-outline-variant/20 pb-2">
+                          <Users className="w-4 h-4 text-pine" />
+                          <h4 className="text-xs font-bold text-pine uppercase tracking-wider">
+                            Family Planning &amp; Child Health Guidance
+                          </h4>
+                        </div>
+
+                        <div className="space-y-2.5 text-xs">
+                          <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-amber-900 text-xs">Offspring Reproductive Risk</span>
+                              <span className="px-2 py-0.5 bg-amber-200/60 text-amber-900 font-mono text-[10px] font-bold rounded">
+                                {analyzedReportData.inheritance_pattern}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-amber-800 leading-relaxed">
+                              {analyzedReportData.reproductive_risk}
+                            </p>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            <div className="p-3 bg-mint/15 rounded-xl border border-mint/40 space-y-1">
+                              <span className="font-bold text-pine text-[11px] flex items-center gap-1.5">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-jungle shrink-0" />
+                                If Your Partner is a Non-Carrier
+                              </span>
+                              <p className="text-[11px] text-slate-600 leading-snug">
+                                Your children will be <strong>100% free of condition symptoms</strong>. About 50% will simply inherit healthy carrier status like you.
+                              </p>
+                            </div>
+
+                            <div className="p-3 bg-fog rounded-xl border border-outline-variant/30 space-y-1">
+                              <span className="font-bold text-pine text-[11px] flex items-center gap-1.5">
+                                <Info className="w-3.5 h-3.5 text-waterhole shrink-0" />
+                                If Both Partners are Carriers
+                              </span>
+                              <p className="text-[11px] text-slate-600 leading-snug">
+                                There is a 25% chance of major condition in each pregnancy. Modern medical counseling and pre-conception screening protect this journey.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
 
                   {/* Results Action Buttons */}
                   <div className="flex items-center justify-between pt-3 border-t border-outline-variant/20 flex-wrap gap-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={handleCopyReportText}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fog hover:bg-fog-dark border border-outline-variant/40 text-xs font-bold text-pine transition cursor-pointer"
+                        title="Copy Complete Report Text to clipboard"
+                      >
+                        {copiedReportText ? <Check className="w-3.5 h-3.5 text-jungle" /> : <FileText className="w-3.5 h-3.5 text-pine" />}
+                        <span>{copiedReportText ? 'Copied Text' : 'Copy Report Text'}</span>
+                      </button>
+
                       <button
                         type="button"
                         onClick={handleCopyMaskedJson}
@@ -1664,6 +1810,151 @@ export default function DashboardPage() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== DELETE TREE CONFIRMATION MODAL ==================== */}
+      {deleteTreeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-slate-200 space-y-5">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-base font-bold text-slate-900">
+                    Delete Family Chart
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5 truncate">
+                    {targetFamilyNameToDelete || 'Selected Tree'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeDeleteTreeModal}
+                disabled={isDeletingTree}
+                className="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Scope Choice Options */}
+            <div className="space-y-3">
+              <label className="block text-xs font-bold text-slate-700">
+                Choose deletion scope:
+              </label>
+
+              <div className="grid grid-cols-1 gap-2.5">
+                {/* Option 1: Delete Tree Only */}
+                <label
+                  onClick={() => setDeleteWithMembers(false)}
+                  className={`flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition select-none ${
+                    !deleteWithMembers
+                      ? 'border-pine bg-mint/10 ring-1 ring-pine'
+                      : 'border-slate-200 bg-white hover:bg-slate-50'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="dashboardDeleteTreeScope"
+                    checked={!deleteWithMembers}
+                    onChange={() => setDeleteWithMembers(false)}
+                    className="mt-0.5 text-pine focus:ring-pine"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-slate-900 block">
+                      Delete only tree
+                    </span>
+                    <span className="text-[11px] text-slate-500 leading-relaxed block mt-0.5">
+                      Removes this pedigree chart. All members and their health dossiers will be preserved in your database and profile.
+                    </span>
+                  </div>
+                </label>
+
+                {/* Option 2: Delete Tree + Users */}
+                <label
+                  onClick={() => setDeleteWithMembers(true)}
+                  className={`flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition select-none ${
+                    deleteWithMembers
+                      ? 'border-rose-500 bg-rose-50/70 ring-1 ring-rose-500'
+                      : 'border-slate-200 bg-white hover:bg-slate-50'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="dashboardDeleteTreeScope"
+                    checked={deleteWithMembers}
+                    onChange={() => setDeleteWithMembers(true)}
+                    className="mt-0.5 text-rose-600 focus:ring-rose-500"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-rose-900 block">
+                      Delete tree and users in this tree
+                    </span>
+                    <span className="text-[11px] text-rose-700 leading-relaxed block mt-0.5">
+                      Permanently removes this chart AND deletes all users/members in this tree from your account, including from the Patient Profile &amp; Details page.
+                    </span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* Confirmation Input Prompt */}
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-800">
+                To confirm deletion, type <span className="font-mono font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">confirm</span> below:
+              </label>
+              <input
+                type="text"
+                value={treeConfirmInput}
+                onChange={(e) => setTreeConfirmInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && treeConfirmInput.trim().toLowerCase() === 'confirm' && !isDeletingTree) {
+                    handleConfirmDeleteTree();
+                  }
+                }}
+                placeholder='type "confirm"'
+                autoFocus
+                className="w-full h-11 px-3.5 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:ring-2 focus:ring-rose-500 focus:border-rose-500 focus:outline-none font-mono"
+              />
+            </div>
+
+            {/* Error message */}
+            {deleteTreeError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs">
+                {deleteTreeError}
+              </div>
+            )}
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={closeDeleteTreeModal}
+                disabled={isDeletingTree}
+                className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteTree}
+                disabled={treeConfirmInput.trim().toLowerCase() !== 'confirm' || isDeletingTree}
+                className="inline-flex items-center gap-1.5 px-5 py-2.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl shadow-xs transition cursor-pointer"
+              >
+                {isDeletingTree ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Trash2 className="w-3.5 h-3.5" />
+                )}
+                <span>{isDeletingTree ? 'Deleting...' : (deleteWithMembers ? 'Delete Tree & Users' : 'Delete Tree Only')}</span>
+              </button>
             </div>
           </div>
         </div>

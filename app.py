@@ -28,7 +28,8 @@ from database import (
     generate_pseudonym, create_family, get_user_families, get_family_by_id,
     get_family_by_share_token, update_family_share, regenerate_family_token,
     get_conditions_catalog, update_node_position, get_db_connection, get_next_family_id,
-    delete_family, save_scraped_report, get_user_scraped_reports,
+    delete_family, save_scraped_report, update_scraped_report, get_user_scraped_reports,
+    delete_scraped_report, delete_scraped_reports_bulk,
     get_user_by_uaepass_uuid, link_uaepass_uuid, create_uaepass_user
 )
 from clinical_engine import compute_clinical_state
@@ -645,7 +646,13 @@ def api_families():
 def api_family_detail(family_id):
     user_id = session['user_id']
     if request.method == 'DELETE':
-        success, msg = delete_family(family_id, user_id)
+        delete_members = False
+        if request.args.get('delete_members', '').lower() in ['true', '1']:
+            delete_members = True
+        elif request.is_json:
+            req_data = request.get_json(silent=True) or {}
+            delete_members = bool(req_data.get('delete_members', False))
+        success, msg = delete_family(family_id, user_id, delete_members=delete_members)
         if not success:
             code = 404 if "not found" in msg.lower() else 403
             return jsonify({"status": "error", "message": msg}), code
@@ -739,11 +746,30 @@ def view_shared_pedigree(share_token):
 
 def extract_pdf_full(raw_bytes: bytes) -> str:
     """
-    Robust in-memory text extraction from PDF documents.
-    Handles FlateDecode (zlib) streams, object dictionary /Length markers,
-    TJ kerning arrays with word spacing, octal escapes, CMap /ToUnicode translations,
-    UTF-16BE / UTF-8 string decodings, and embedded JPEG metadata.
+    Robust in-memory text extraction from PDF documents using PyMuPDF (MuPDF) with stream fallback.
+    Extracts complete text across all pages preserving structure, words, and clinical fields.
     """
+    # 1. High-fidelity text extraction with PyMuPDF (MuPDF)
+    try:
+        try:
+            import pymupdf as fitz
+        except ImportError:
+            import fitz
+        doc = fitz.open(stream=raw_bytes, filetype="pdf")
+        page_texts = []
+        for page in doc:
+            pt = page.get_text()
+            if pt and pt.strip():
+                page_texts.append(pt.strip())
+        doc.close()
+        if page_texts:
+            full_pdf_text = "\n\n".join(page_texts).strip()
+            full_pdf_text = full_pdf_text.replace('\x00', '').replace('\ufeff', '')
+            if len(full_pdf_text) >= 10:
+                return full_pdf_text
+    except Exception as e:
+        logger.debug(f"PyMuPDF stream extraction bypassed or failed: {e}")
+
     extracted_text_blocks = []
     global_cmap = {}
 
@@ -1006,18 +1032,29 @@ def extract_candidate_name_from_report(text: str) -> str:
                 return clean
     return ""
 
+def mask_patient_name(name_str: str) -> str:
+    """
+    Masks patient name by keeping the first two letters and last two letters,
+    replacing everything in between with 'XXXX'.
+    Example: 'FATIMA SALEM AL-KETB' -> 'FAXXXXTB'
+    """
+    if not name_str or name_str.strip().lower() in ['candidate', 'deidentified', 'patient', 'none', '']:
+        return "CAXXXXTE"
+    letters = re.findall(r'[A-Za-z\u0600-\u06FF]', name_str)
+    if len(letters) >= 4:
+        first_two = "".join(letters[:2]).upper()
+        last_two = "".join(letters[-2:]).upper()
+        return f"{first_two}XXXX{last_two}"
+    elif len(letters) >= 2:
+        first_two = "".join(letters[:2]).upper()
+        last_two = "".join(letters[-2:]).upper()
+        return f"{first_two}XXXX{last_two}"
+    else:
+        return "PAXXXXNT"
+
 def redact_name_first_two(name_str: str) -> str:
-    """Masks name while showing the first two characters of each word/token (e.g., Kabir Sharma -> Ka*** Sh****)."""
-    if not name_str:
-        return "Pa*****"
-    words = name_str.strip().split()
-    redacted = []
-    for w in words:
-        if len(w) <= 2:
-            redacted.append(w + "**")
-        else:
-            redacted.append(w[:2] + ("*" * (len(w) - 2)))
-    return " ".join(redacted)
+    """Legacy alias redirecting to mask_patient_name."""
+    return mask_patient_name(name_str)
 
 def extract_sex_from_report(text: str) -> str:
     """
@@ -1422,42 +1459,70 @@ def api_analyze_report():
 
     masked_patient_name = None
     if extracted_name:
-        masked_patient_name = redact_name_first_two(extracted_name)
+        masked_patient_name = mask_patient_name(extracted_name)
         redacted_pii.append({
             "field": "Patient Name",
-            "status": "Redacted (First 2 chars shown)",
+            "status": "Redacted (First 2 & Last 2 Shown)",
             "redacted_value": masked_patient_name
         })
+        # Replace occurrences of raw extracted name in text_content
+        text_content = re.sub(re.escape(extracted_name.strip()), masked_patient_name, text_content, flags=re.IGNORECASE)
     else:
         # Strictly avoid falling back to logged-in user name
-        masked_patient_name = "Candidate (De-Identified)"
+        masked_patient_name = "CAXXXXTE"
 
-    # Check for SSN in document
-    ssn_match = re.search(r'\b\d{3}[- ]?\d{2}[- ]?\d{4}\b', text_content)
-    if ssn_match:
-        redacted_pii.append({
-            "field": "Social Security Number (SSN)",
-            "status": "Redacted",
-            "redacted_value": "XXX-XX-XXXX"
-        })
-
-    # Check for Emirates National ID in document
-    eid_match = re.search(r'\b784[- ]?\d{4}[- ]?\d{7}[- ]?\d{1}\b', text_content)
+    # Check for Emirates National ID in document (e.g. 784-1998-1234384-1)
+    eid_match = re.search(r'\b(784)[- ]?(\d{4})[- ]?(\d{7})[- ]?(\d{1})\b', text_content)
     if eid_match:
+        raw_eid = eid_match.group(0)
+        # Show last 4 digits plus check digit (e.g. XXX-XXXX-XXXX384-1)
+        last_part = raw_eid[-5:] if '-' in raw_eid[-5:] else (raw_eid[-4:] if len(raw_eid) >= 4 else raw_eid)
+        masked_eid = f"XXX-XXXX-XXXX{last_part}"
         redacted_pii.append({
             "field": "Emirates National ID",
-            "status": "Redacted",
-            "redacted_value": "784-XXXX-XXXXXXX-X"
+            "status": "Redacted (Last 4 shown)",
+            "redacted_value": masked_eid
         })
+        text_content = text_content.replace(raw_eid, masked_eid)
+
+    # Check for SSN in document
+    ssn_match = re.search(r'\b(\d{3})[- ]?(\d{2})[- ]?(\d{4})\b', text_content)
+    if ssn_match:
+        raw_ssn = ssn_match.group(0)
+        last4 = raw_ssn[-4:]
+        masked_ssn = f"XXX-XX-{last4}"
+        redacted_pii.append({
+            "field": "Social Security Number (SSN)",
+            "status": "Redacted (Last 4 shown)",
+            "redacted_value": masked_ssn
+        })
+        text_content = text_content.replace(raw_ssn, masked_ssn)
 
     # Check for Aadhaar Card Number in document
-    aadhaar_match = re.search(r'\b\d{4}[- ]?\d{4}[- ]?\d{4}\b', text_content)
+    aadhaar_match = re.search(r'\b(\d{4})[- ]?(\d{4})[- ]?(\d{4})\b', text_content)
     if aadhaar_match:
+        raw_adh = aadhaar_match.group(0)
+        last4 = raw_adh[-4:]
+        masked_adh = f"XXXX-XXXX-{last4}"
         redacted_pii.append({
             "field": "Aadhaar Card Number",
-            "status": "Redacted",
-            "redacted_value": "XXXX-XXXX-XXXX"
+            "status": "Redacted (Last 4 shown)",
+            "redacted_value": masked_adh
         })
+        text_content = text_content.replace(raw_adh, masked_adh)
+
+    # Check for Driver License / Passport / ID in document
+    dl_match = re.search(r'\b(?:license|dl|passport|id\s*no|national\s*id)[\s#:]*([A-Za-z0-9\-_]{6,15})\b', text_content, re.IGNORECASE)
+    if dl_match:
+        raw_id = dl_match.group(1).strip()
+        last4 = raw_id[-4:]
+        masked_dl = f"XXX-XXXX-{last4}"
+        redacted_pii.append({
+            "field": "Driver License / ID Number",
+            "status": "Redacted (Last 4 shown)",
+            "redacted_value": masked_dl
+        })
+        text_content = text_content.replace(raw_id, masked_dl)
 
     # Check for Email Address in document
     email_match = re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', text_content)
@@ -1504,150 +1569,314 @@ def api_analyze_report():
     detected_dob = form_dob or extract_dob_from_report(text_content) or ""
     detected_location = form_location or extract_location_from_report(text_content) or ""
 
-    # Extract first two initials of candidate's first name (e.g. pankaj -> pa, fatima -> fa, or cn if de-identified)
-    if extracted_name:
-        first_token = extracted_name.strip().split()[0]
-        clean_letters = re.sub(r'[^A-Za-z]', '', first_token)
-        first_two_initials = clean_letters[:2].lower() if len(clean_letters) >= 2 else "cn"
-    else:
-        first_two_initials = "cn"
+    # Check if a report for this person already exists for this user (deduplication by name, sex, location, and dob)
+    existing_reports = get_user_scraped_reports(user_id) if user_id else []
+    matched_existing_report = None
 
-    # Generate sudo name with format _____-_____-<2 initials of first name>__number (e.g. Swift-Falcon-Fa-4921)
-    sudo_name = generate_pseudonym(name_initials=first_two_initials)
+    def _norm(s: str) -> str:
+        return re.sub(r'[^a-z0-9\u0600-\u06FF]', '', (s or '').lower())
 
-    # Build Masked Data Structure with Structured Screening Findings
-    masked_payload = {
-        "analysis_timestamp": datetime.now(timezone.utc).isoformat(),
-        "screening_category": "Premarital Screening & Hereditary Risk Panel",
-        "laboratory_name": "Accredited Medical Genetics Enclave (CAP & CLIA Certified)",
-        "test_methodology": "Targeted Exon Sequencing (NGS) + Sanger Confirmatory Trace",
-        "specimen_type": "Peripheral Blood / Genomic DNA",
-        "patient_name_masked": masked_patient_name or "Candidate (De-Identified)",
-        "sudo_name": sudo_name,
-        "sex": detected_sex,
-        "dob": detected_dob or "Not Documented",
-        "location": detected_location or "Not Documented",
-        "condition": condition,
-        "gene_locus": gene,
-        "variant": variant,
-        "carrier_status": carrier_status,
-        "inheritance_pattern": "Autosomal Recessive",
-        "reproductive_risk": risk,
-        "clinical_directives": recs,
-        "screening_findings": screening_findings,
-        "redacted_pii_present": redacted_pii,
-        "file_metadata": {
-            "original_filename": filename,
-            "file_type": "PDF Document" if filename.lower().endswith('.pdf') else "JPG Image",
-            "file_size_kb": round(file_size / 1024, 1),
-            "storage_status": "PURGED_FROM_MEMORY (Zero bytes saved to disk)"
-        }
-    }
+    cand_masked_name = mask_patient_name(extracted_name) if extracted_name else ""
+    cand_norm_name = _norm(extracted_name)
+    cand_norm_masked = _norm(cand_masked_name)
+    cand_norm_dob = _norm(detected_dob)
+    cand_norm_loc = _norm(detected_location)
+    cand_norm_sex = detected_sex.lower().strip()
 
-    report_id = None
-    family_id = None
-    family_name = None
-    tree_created = False
-    member_id = None
+    for r in existing_reports:
+        m_data = r.get('masked_data') or {}
+        r_name = m_data.get('patient_name', '')
+        r_norm_name = _norm(r_name)
+        r_dob = m_data.get('dob', '')
+        r_norm_dob = _norm(r_dob)
+        r_loc = m_data.get('location', '')
+        r_norm_loc = _norm(r_loc)
+        r_sex = m_data.get('sex', '').lower().strip()
+        r_text = m_data.get('complete_report_text', '')
 
-    if user_id:
-        # 1. Determine whether to link into existing family tree or create a new tree
-        if target_tree == 'existing' and target_family_id:
-            existing_fam = get_family_by_id(target_family_id)
-            user_rec = get_user_by_id(user_id)
-            is_admin = user_rec and user_rec['username'].lower() == 'admin'
-            if existing_fam and (existing_fam.get('user_id') == user_id or is_admin):
-                family_id = target_family_id
-                family_name = existing_fam.get('family_name') or existing_fam.get('name')
-                tree_created = False
+        # Match Condition 1: Same candidate name or masked name (non-empty & not generic) and compatible sex/dob/location
+        name_matched = False
+        if cand_norm_name and cand_norm_name not in ['candidate', 'deidentified', 'patient', 'caxxxxte']:
+            if cand_norm_name == r_norm_name or (cand_norm_masked and cand_norm_masked == r_norm_name):
+                name_matched = True
+        elif cand_norm_masked and cand_norm_masked not in ['caxxxxte'] and cand_norm_masked == r_norm_name:
+            name_matched = True
 
-        if not family_id:
-            new_fam_data = {
-                "family_name": f"{condition} Screening Chart",
-                "trait_or_disorder_name": condition
+        if name_matched:
+            if cand_norm_sex and r_sex and cand_norm_sex != r_sex:
+                continue
+            if cand_norm_dob and r_norm_dob and 'notdocumented' not in cand_norm_dob and 'notdocumented' not in r_norm_dob and cand_norm_dob != r_norm_dob:
+                continue
+            matched_existing_report = r
+            break
+
+        # Match Condition 2: If candidate name is missing or generic on either, match by sex + DOB + location
+        if cand_norm_sex and r_sex and cand_norm_sex == r_sex:
+            if cand_norm_dob and r_norm_dob and 'notdocumented' not in cand_norm_dob and cand_norm_dob == r_norm_dob:
+                if cand_norm_loc and r_norm_loc and 'notdocumented' not in cand_norm_loc and cand_norm_loc == r_norm_loc:
+                    matched_existing_report = r
+                    break
+
+        # Match Condition 3: Exact document text match for this user
+        if text_content and r_text and text_content.strip() == r_text.strip():
+            matched_existing_report = r
+            break
+
+    if matched_existing_report:
+        already_exists = True
+        existing_m = matched_existing_report.get('masked_data') or {}
+        report_id = matched_existing_report['id']
+        sudo_name = existing_m.get('sudo_name')
+        family_id = existing_m.get('family_id')
+        family_name = existing_m.get('family_name')
+        member_id = existing_m.get('member_id')
+        tree_created = False
+
+        if not sudo_name:
+            first_two = "cn"
+            if extracted_name:
+                ft = re.sub(r'[^A-Za-z]', '', extracted_name.strip().split()[0])
+                first_two = ft[:2].lower() if len(ft) >= 2 else "cn"
+            sudo_name = generate_pseudonym(name_initials=first_two)
+
+        # Check if there is something new in the report
+        has_new_info = False
+        if condition and condition != existing_m.get('condition'):
+            has_new_info = True
+        if variant and variant != existing_m.get('variant'):
+            has_new_info = True
+        if detected_dob and detected_dob != 'Not Documented' and existing_m.get('dob') in ['', 'Not Documented', None]:
+            has_new_info = True
+        if detected_location and detected_location != 'Not Documented' and existing_m.get('location') in ['', 'Not Documented', None]:
+            has_new_info = True
+        if extracted_name and existing_m.get('patient_name') in ['', 'Candidate', 'Candidate (De-Identified)', None]:
+            has_new_info = True
+        if text_content and len(text_content.strip()) > len(existing_m.get('complete_report_text', '').strip()):
+            has_new_info = True
+
+        effective_dob = detected_dob if (detected_dob and detected_dob != 'Not Documented') else existing_m.get('dob', 'Not Documented')
+        effective_loc = detected_location if (detected_location and detected_location != 'Not Documented') else existing_m.get('location', 'Not Documented')
+        effective_name = mask_patient_name(extracted_name or existing_m.get('patient_name') or form_candidate_name)
+
+        masked_payload = {
+            **existing_m,
+            "analysis_timestamp": datetime.now(timezone.utc).isoformat(),
+            "screening_category": "Premarital Screening & Hereditary Risk Panel",
+            "laboratory_name": "Accredited Medical Genetics Enclave (CAP & CLIA Certified)",
+            "test_methodology": "Targeted Exon Sequencing (NGS) + Sanger Confirmatory Trace",
+            "specimen_type": "Peripheral Blood / Genomic DNA",
+            "patient_name_masked": effective_name,
+            "patient_name": effective_name,
+            "complete_report_text": text_content or existing_m.get('complete_report_text', ''),
+            "sudo_name": sudo_name,
+            "sex": detected_sex or existing_m.get('sex', 'male'),
+            "dob": effective_dob,
+            "location": effective_loc,
+            "condition": condition or existing_m.get('condition'),
+            "gene_locus": gene or existing_m.get('gene_locus'),
+            "variant": variant or existing_m.get('variant'),
+            "carrier_status": carrier_status or existing_m.get('carrier_status'),
+            "inheritance_pattern": "Autosomal Recessive",
+            "reproductive_risk": risk or existing_m.get('reproductive_risk'),
+            "clinical_directives": recs or existing_m.get('clinical_directives'),
+            "screening_findings": screening_findings if screening_findings else existing_m.get('screening_findings', []),
+            "redacted_pii_present": redacted_pii if redacted_pii else existing_m.get('redacted_pii_present', []),
+            "family_id": family_id,
+            "family_name": family_name,
+            "member_id": member_id,
+            "tree_created": False,
+            "file_metadata": {
+                "original_filename": filename,
+                "file_type": "PDF Document" if filename.lower().endswith('.pdf') else "JPG Image",
+                "file_size_kb": round(file_size / 1024, 1),
+                "storage_status": "PURGED_FROM_MEMORY (Zero bytes saved to disk)"
             }
-            new_fam = create_family(user_id, new_fam_data)
-            family_id = new_fam['family_id']
-            family_name = new_fam['name']
-            tree_created = True
-
-        # 2. Check for existing proband in this tree
-        conn = get_db_connection()
-        existing_proband = conn.execute(
-            "SELECT id, sex FROM pedigree_nodes WHERE family_id = ? AND is_proband = 1 LIMIT 1",
-            (family_id,)
-        ).fetchone()
-        conn.close()
-
-        is_proband_node = 1 if (tree_created or not existing_proband) else 0
-        node_relationship = 'proband' if is_proband_node else 'partner'
-        partner_id = str(existing_proband['id']) if (not is_proband_node and existing_proband) else None
-
-        findings_summary = "; ".join([f"{f['parameter']}: {f['value']}" for f in screening_findings])
-
-        member_node_data = {
-            'family_id': family_id,
-            'full_name': sudo_name,
-            'name': sudo_name,
-            'alias_name': sudo_name,
-            'pseudonym': sudo_name,
-            'sex': detected_sex,
-            'dob': detected_dob,
-            'birth_year': detected_dob,
-            'location': detected_location,
-            'conditions': [condition],
-            'condition_locus': gene,
-            'carrier_status': carrier_status,
-            'is_carrier': 1 if 'carrier' in carrier_status.lower() else 0,
-            'is_affected': 1 if 'affected' in carrier_status.lower() else 0,
-            'notes': f"Premarital Screening Findings ({variant}). {findings_summary}",
-            'relationship': node_relationship,
-            'relationship_to_proband': node_relationship,
-            'is_proband': is_proband_node,
-            'generation': 'gen2',
-            'partner_id': partner_id
         }
-        member_id = add_pedigree_node(user_id, member_node_data)
 
-        # Bi-directional couple relationship link if adding partner to existing proband
-        if partner_id:
-            conn = get_db_connection()
-            conn.execute(
-                "UPDATE pedigree_nodes SET partner_id = ? WHERE id = ? AND partner_id IS NULL",
-                (str(member_id), int(partner_id))
+        if has_new_info:
+            update_scraped_report(
+                report_id=report_id,
+                user_id=user_id,
+                file_name=filename,
+                panel_name=f"Premarital {condition} Screen",
+                masked_data=masked_payload,
+                gene_locus=gene,
+                variant=variant,
+                carrier_status=carrier_status
             )
-            conn.commit()
+            if member_id:
+                findings_summary = "; ".join([f"{f['parameter']}: {f['value']}" for f in screening_findings])
+                update_pedigree_node(member_id, user_id, {
+                    'conditions': [condition],
+                    'condition_locus': gene,
+                    'carrier_status': carrier_status,
+                    'notes': f"Premarital Screening Findings ({variant}). {findings_summary}",
+                    'birth_year': effective_dob,
+                    'location': effective_loc,
+                    'sex': detected_sex
+                })
+            analysis_msg = f"user already exist <{sudo_name}> : updating its information"
+        else:
+            analysis_msg = f"user already exist <{sudo_name}> : updating its information"
+
+    else:
+        already_exists = False
+        has_new_info = True
+
+        # Extract first two initials of candidate's first name (e.g. pankaj -> pa, fatima -> fa, or cn if de-identified)
+        if extracted_name:
+            first_token = extracted_name.strip().split()[0]
+            clean_letters = re.sub(r'[^A-Za-z]', '', first_token)
+            first_two_initials = clean_letters[:2].lower() if len(clean_letters) >= 2 else "cn"
+        else:
+            first_two_initials = "cn"
+
+        # Generate sudo name with format _____-_____-<2 initials of first name>__number (e.g. Swift-Falcon-Fa-4921)
+        sudo_name = generate_pseudonym(name_initials=first_two_initials)
+
+        # Build Masked Data Structure with Structured Screening Findings
+        masked_payload = {
+            "analysis_timestamp": datetime.now(timezone.utc).isoformat(),
+            "screening_category": "Premarital Screening & Hereditary Risk Panel",
+            "laboratory_name": "Accredited Medical Genetics Enclave (CAP & CLIA Certified)",
+            "test_methodology": "Targeted Exon Sequencing (NGS) + Sanger Confirmatory Trace",
+            "specimen_type": "Peripheral Blood / Genomic DNA",
+            "patient_name_masked": masked_patient_name,
+            "patient_name": masked_patient_name,
+            "complete_report_text": text_content,
+            "sudo_name": sudo_name,
+            "sex": detected_sex,
+            "dob": detected_dob or "Not Documented",
+            "location": detected_location or "Not Documented",
+            "condition": condition,
+            "gene_locus": gene,
+            "variant": variant,
+            "carrier_status": carrier_status,
+            "inheritance_pattern": "Autosomal Recessive",
+            "reproductive_risk": risk,
+            "clinical_directives": recs,
+            "screening_findings": screening_findings,
+            "redacted_pii_present": redacted_pii,
+            "file_metadata": {
+                "original_filename": filename,
+                "file_type": "PDF Document" if filename.lower().endswith('.pdf') else "JPG Image",
+                "file_size_kb": round(file_size / 1024, 1),
+                "storage_status": "PURGED_FROM_MEMORY (Zero bytes saved to disk)"
+            }
+        }
+
+        report_id = None
+        family_id = None
+        family_name = None
+        tree_created = False
+        member_id = None
+
+        if user_id:
+            # 1. Determine whether to link into existing family tree or create a new tree
+            if target_tree == 'existing' and target_family_id:
+                existing_fam = get_family_by_id(target_family_id)
+                user_rec = get_user_by_id(user_id)
+                is_admin = user_rec and user_rec['username'].lower() == 'admin'
+                if existing_fam and (existing_fam.get('user_id') == user_id or is_admin):
+                    family_id = target_family_id
+                    family_name = existing_fam.get('family_name') or existing_fam.get('name')
+                    tree_created = False
+
+            if not family_id:
+                new_fam_data = {
+                    "family_name": f"{condition} Screening Chart",
+                    "trait_or_disorder_name": condition
+                }
+                new_fam = create_family(user_id, new_fam_data)
+                family_id = new_fam['family_id']
+                family_name = new_fam['name']
+                tree_created = True
+
+            # 2. Add as family member (not required to be proband or starting person)
+            conn = get_db_connection()
+            existing_node = conn.execute(
+                "SELECT id, sex FROM pedigree_nodes WHERE family_id = ? LIMIT 1",
+                (family_id,)
+            ).fetchone()
             conn.close()
 
-        # Update masked payload with tree linkage
-        masked_payload["family_id"] = family_id
-        masked_payload["family_name"] = family_name
-        masked_payload["member_id"] = member_id
-        masked_payload["tree_created"] = tree_created
+            is_proband_node = 0
+            node_relationship = 'self' if tree_created else 'partner'
+            partner_id = str(existing_node['id']) if (not tree_created and existing_node) else None
 
-        # 3. Encrypted persistence of de-identified scraped findings under original filename
-        report_id = save_scraped_report(
-            user_id=user_id,
-            file_name=filename,
-            panel_name=f"Premarital {condition} Screen",
-            masked_data=masked_payload,
-            gene_locus=gene,
-            variant=variant,
-            carrier_status=carrier_status
-        )
+            findings_summary = "; ".join([f"{f['parameter']}: {f['value']}" for f in screening_findings])
+
+            member_node_data = {
+                'family_id': family_id,
+                'full_name': sudo_name,
+                'name': sudo_name,
+                'alias_name': sudo_name,
+                'pseudonym': sudo_name,
+                'sex': detected_sex,
+                'dob': detected_dob,
+                'birth_year': detected_dob,
+                'location': detected_location,
+                'conditions': [condition],
+                'condition_locus': gene,
+                'carrier_status': carrier_status,
+                'is_carrier': 1 if 'carrier' in carrier_status.lower() else 0,
+                'is_affected': 1 if 'affected' in carrier_status.lower() else 0,
+                'notes': f"Premarital Screening Findings ({variant}). {findings_summary}",
+                'relationship': node_relationship,
+                'relationship_to_proband': node_relationship,
+                'is_proband': 0,
+                'generation': 'gen2',
+                'partner_id': partner_id
+            }
+            member_id = add_pedigree_node(user_id, member_node_data)
+
+            # Bi-directional couple relationship link if adding partner to existing member
+            if partner_id:
+                conn = get_db_connection()
+                conn.execute(
+                    "UPDATE pedigree_nodes SET partner_id = ? WHERE id = ? AND partner_id IS NULL",
+                    (str(member_id), int(partner_id))
+                )
+                conn.commit()
+                conn.close()
+
+            # Update masked payload with tree linkage
+            masked_payload["family_id"] = family_id
+            masked_payload["family_name"] = family_name
+            masked_payload["member_id"] = member_id
+            masked_payload["tree_created"] = tree_created
+
+            # 3. Encrypted persistence of de-identified scraped findings under original filename
+            report_id = save_scraped_report(
+                user_id=user_id,
+                file_name=filename,
+                panel_name=f"Premarital {condition} Screen",
+                masked_data=masked_payload,
+                gene_locus=gene,
+                variant=variant,
+                carrier_status=carrier_status
+            )
+
+        analysis_msg = "Report successfully parsed in-memory with PyMuPDF. Analysis complete."
+
+    effective_cand_name = masked_patient_name or (matched_existing_report and matched_existing_report.get('masked_data', {}).get('patient_name')) or "CAXXXXTE"
 
     return jsonify({
         "status": "success",
-        "message": "Report successfully parsed in-memory. Pedigree chart updated with de-identified member.",
+        "already_exists": already_exists,
+        "updated": has_new_info,
+        "message": analysis_msg,
         "report_id": report_id,
         "family_id": family_id,
         "family_name": family_name,
         "tree_created": tree_created,
         "member_id": member_id,
         "sudo_name": sudo_name,
+        "patient_name": effective_cand_name,
         "sex": detected_sex,
-        "dob": detected_dob,
-        "location": detected_location,
+        "dob": masked_payload.get('dob', detected_dob),
+        "location": masked_payload.get('location', detected_location),
+        "complete_report_text": text_content,
         "masked_data": masked_payload
     })
 
@@ -1657,6 +1886,31 @@ def api_get_scraped_reports():
     user_id = session['user_id']
     reports = get_user_scraped_reports(user_id)
     return jsonify({"status": "success", "reports": reports})
+
+@app.route('/api/reports/scraped/<int:report_id>', methods=['DELETE'])
+@login_required
+def api_delete_scraped_report(report_id):
+    user_id = session['user_id']
+    success = delete_scraped_report(report_id, user_id)
+    if success:
+        return jsonify({"status": "success", "message": "Patient report dossier successfully deleted."})
+    return jsonify({"status": "error", "message": "Report not found or unauthorized."}), 404
+
+@app.route('/api/reports/scraped/bulk-delete', methods=['POST'])
+@login_required
+def api_bulk_delete_scraped_reports():
+    user_id = session['user_id']
+    data = request.get_json(silent=True) or {}
+    report_ids = data.get('report_ids', [])
+    if not isinstance(report_ids, list) or not report_ids:
+        return jsonify({"status": "error", "message": "No reports selected for deletion."}), 400
+    
+    count = delete_scraped_reports_bulk(report_ids, user_id)
+    return jsonify({
+        "status": "success",
+        "message": f"Successfully deleted {count} patient dossier(s).",
+        "deleted_count": count
+    })
 
 # ==================== GCP HEALTH CHECK ENDPOINTS ====================
 
