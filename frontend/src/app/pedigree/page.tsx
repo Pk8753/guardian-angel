@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import Link from 'next/link';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Navbar } from '@/components/layout/Navbar';
 import { AuthGuard } from '@/components/layout/AuthGuard';
@@ -26,10 +27,9 @@ import {
   Activity,
   AlertTriangle,
   Upload,
-  UserCheck,
   HeartPulse,
   ExternalLink,
-  HelpCircle,
+  UploadCloud,
   X
 } from 'lucide-react';
 
@@ -46,7 +46,7 @@ export default function PedigreePage() {
 
   // Wizard Modal State
   const [isWizardOpen, setIsWizardOpen] = useState(false);
-  const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
+  const [wizardStep, setWizardStep] = useState<1 | 2>(1);
   const [editingMember, setEditingMember] = useState<PedigreeMember | null>(null);
   const [initialRelation, setInitialRelation] = useState<string | null>(null);
 
@@ -55,6 +55,15 @@ export default function PedigreePage() {
   const [isCreatingNewTree, setIsCreatingNewTree] = useState<boolean>(false);
   const [nextSequentialId, setNextSequentialId] = useState<string>('FA-000001');
   const [selectedExistingFamilyId, setSelectedExistingFamilyId] = useState<string>('');
+
+  // Delete Tree Modal State
+  const [deleteTreeModalOpen, setDeleteTreeModalOpen] = useState(false);
+  const [targetFamilyToDelete, setTargetFamilyToDelete] = useState<string | null>(null);
+  const [targetFamilyNameToDelete, setTargetFamilyNameToDelete] = useState<string>('');
+  const [deleteWithMembers, setDeleteWithMembers] = useState(false);
+  const [treeConfirmInput, setTreeConfirmInput] = useState('');
+  const [isDeletingTree, setIsDeletingTree] = useState(false);
+  const [deleteTreeError, setDeleteTreeError] = useState<string | null>(null);
 
   // Fetch Next Sequential Chart ID (FA-000001, FA-000002, ...)
   const fetchNextFamilyId = async () => {
@@ -255,40 +264,43 @@ export default function PedigreePage() {
     const famResult = await famRes.json();
     const createdFamily = famResult.family || famResult;
 
-    // 2. Add proband node to backend
-    const pRes = await fetch(`/api/families/${createdFamily.family_id}/members`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(probandData)
-    });
+    // 2. Add proband node to backend if provided
+    let probandNode: PedigreeMember | null = null;
+    if (probandData) {
+      const pRes = await fetch(`/api/families/${createdFamily.family_id}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(probandData)
+      });
 
-    if (!pRes.ok) {
-      const pErr = await pRes.json().catch(() => ({}));
-      throw new Error(pErr.message || 'Could not save the primary patient (proband).');
+      if (!pRes.ok) {
+        const pErr = await pRes.json().catch(() => ({}));
+        throw new Error(pErr.message || 'Could not save the primary patient (proband).');
+      }
+
+      const pData = await pRes.json();
+      const probandId = pData.member_id || Date.now();
+      const probandPseudonym = pData.member?.pseudonym || probandData.pseudonym || 'Proband';
+
+      probandNode = {
+        id: probandId,
+        family_id: createdFamily.family_id,
+        pseudonym: probandPseudonym,
+        full_name: probandData.full_name || probandPseudonym,
+        relationship_to_proband: 'self',
+        sex: probandData.sex || 'female',
+        is_proband: true,
+        is_deceased: false,
+        is_carrier: false,
+        is_affected: (probandData.conditions || []).length > 0,
+        conditions: probandData.conditions || [],
+        dob: probandData.dob,
+        living_status: 'Alive',
+        location: probandData.location
+      };
     }
 
-    const pData = await pRes.json();
-    const probandId = pData.member_id || Date.now();
-    const probandPseudonym = pData.member?.pseudonym || probandData.pseudonym || 'Proband';
-
-    const probandNode: PedigreeMember = {
-      id: probandId,
-      family_id: createdFamily.family_id,
-      pseudonym: probandPseudonym,
-      full_name: probandData.full_name || probandPseudonym,
-      relationship_to_proband: 'self',
-      sex: probandData.sex || 'female',
-      is_proband: true,
-      is_deceased: false,
-      is_carrier: false,
-      is_affected: (probandData.conditions || []).length > 0,
-      conditions: probandData.conditions || [],
-      dob: probandData.dob,
-      living_status: 'Alive',
-      location: probandData.location
-    };
-
-    createdFamily.members = [probandNode];
+    createdFamily.members = probandNode ? [probandNode] : [];
     setActiveFamily(createdFamily);
     setSelectedMember(probandNode);
     setFamilies((prev) => [createdFamily, ...prev.filter((f) => f.family_id !== createdFamily.family_id)]);
@@ -431,15 +443,39 @@ export default function PedigreePage() {
     }
   };
 
-  // Delete Family Chart (preserves members in DB)
-  const handleDeleteFamily = async (familyId: string) => {
-    if (!confirm('Are you sure you want to delete this family chart? The chart will be removed, but all family members will be preserved in your database.')) {
+  // Delete Family Chart Modal Trigger
+  const openDeleteTreeModal = (familyId: string, familyName?: string) => {
+    setTargetFamilyToDelete(familyId);
+    setTargetFamilyNameToDelete(familyName || (activeFamily?.family_name || activeFamily?.name || 'Current Family Chart'));
+    setDeleteWithMembers(false);
+    setTreeConfirmInput('');
+    setDeleteTreeError(null);
+    setDeleteTreeModalOpen(true);
+  };
+
+  const closeDeleteTreeModal = () => {
+    if (isDeletingTree) return;
+    setDeleteTreeModalOpen(false);
+    setTargetFamilyToDelete(null);
+    setTreeConfirmInput('');
+    setDeleteTreeError(null);
+  };
+
+  const handleConfirmDeleteTree = async () => {
+    if (!targetFamilyToDelete) return;
+    if (treeConfirmInput.trim().toLowerCase() !== 'confirm') {
+      setDeleteTreeError('You must type "confirm" to proceed.');
       return;
     }
 
+    setIsDeletingTree(true);
+    setDeleteTreeError(null);
+
     try {
-      const res = await fetch(`/api/families/${familyId}`, {
-        method: 'DELETE'
+      const res = await fetch(`/api/families/${targetFamilyToDelete}?delete_members=${deleteWithMembers ? 'true' : 'false'}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ delete_members: deleteWithMembers }),
       });
 
       if (!res.ok) {
@@ -448,7 +484,8 @@ export default function PedigreePage() {
       }
 
       // Update local family list
-      const updatedList = families.filter((f) => f.family_id !== familyId);
+      const deletedId = targetFamilyToDelete;
+      const updatedList = families.filter((f) => f.family_id !== deletedId);
       setFamilies(updatedList);
 
       if (updatedList.length > 0) {
@@ -467,9 +504,12 @@ export default function PedigreePage() {
           window.history.replaceState({}, '', url.pathname + (url.search ? url.search : ''));
         }
       }
+      closeDeleteTreeModal();
     } catch (err: any) {
       console.error('Delete family error:', err);
-      alert(err.message || 'Failed to delete family chart. Please try again.');
+      setDeleteTreeError(err.message || 'Failed to delete family chart. Please try again.');
+    } finally {
+      setIsDeletingTree(false);
     }
   };
 
@@ -528,26 +568,6 @@ export default function PedigreePage() {
     );
   }, [members, searchQuery]);
 
-  // Metrics
-  const isConsanguineousTree = activeFamily?.is_consanguineous || false;
-  const verifiedVariantsCount = useMemo(() => {
-    return members.filter((m) => m.gene_variant || m.is_affected || (m.conditions && m.conditions.length > 0)).length;
-  }, [members]);
-
-  const lineageIntegrity = useMemo(() => {
-    if (members.length === 0) return '0%';
-    const totalFields = members.length * 4;
-    let completed = 0;
-    members.forEach((m) => {
-      if (m.sex && m.sex !== 'unknown') completed++;
-      if (m.living_status || m.dob) completed++;
-      if (m.conditions && m.conditions.length > 0) completed++;
-      if (m.relationship_to_proband) completed++;
-    });
-    const pct = Math.min(100, Math.round((completed / totalFields) * 100));
-    return `${pct > 90 ? 96.8 : pct}%`;
-  }, [members]);
-
   return (
     <AuthGuard>
       <div className="flex h-screen bg-fog overflow-hidden font-sans">
@@ -567,57 +587,10 @@ export default function PedigreePage() {
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span
-                      className="text-xs font-bold text-pine uppercase tracking-wider cursor-help"
-                      title="Medical insights and health pattern guidance for your family tree"
+                      className="text-xs font-bold text-pine uppercase tracking-wider"
                     >
                       Family Health Guidance
                     </span>
-
-                    {isConsanguineousTree ? (
-                      <span
-                        className="px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 text-[11px] font-bold border border-amber-200 cursor-help"
-                        title="Consanguinity: First-cousin or blood relative marriage in family history"
-                      >
-                        Related Heritage (F = 0.0625)
-                      </span>
-                    ) : (
-                      <span
-                        className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 text-[11px] font-bold border border-emerald-200 cursor-help"
-                        title="No known marriage between blood relatives in this family line"
-                      >
-                        Standard Family Heritage
-                      </span>
-                    )}
-
-                    <span
-                      className="px-2.5 py-0.5 rounded-full bg-mint/25 text-pine text-[11px] font-bold border border-mint cursor-help"
-                      title="Follows National Society of Genetic Counselors (NSGC) standards for accurate family trees"
-                    >
-                      Verified Medical Standard
-                    </span>
-
-                    <span
-                      className="px-2.5 py-0.5 rounded-full bg-slate-900 text-white text-[10px] font-mono font-bold cursor-help"
-                      title="Connected to OMIM (Online Mendelian Inheritance in Man) - the world's official human gene catalog"
-                    >
-                      Gene Catalog Linked: 100%
-                    </span>
-
-                    <span
-                      className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-semibold border border-slate-200 cursor-help"
-                      title="Follows official American College of Medical Genetics (ACMG) and NSGC clinical guidelines"
-                    >
-                      Doctor-Approved Guidelines
-                    </span>
-
-                    <button
-                      type="button"
-                      onClick={() => setShowGlossary(!showGlossary)}
-                      className="text-[11px] text-teal-700 hover:text-pine font-semibold underline flex items-center gap-1 ml-1"
-                    >
-                      <HelpCircle className="w-3.5 h-3.5" />
-                      <span>{showGlossary ? 'Hide Guide' : 'What do these terms mean?'}</span>
-                    </button>
                   </div>
 
                   <p className="text-xs text-slate-500 mt-1 leading-relaxed">
@@ -652,43 +625,6 @@ export default function PedigreePage() {
                 </button>
               </div>
             </div>
-
-            {/* Expandable Simple Medical Terms Guide for Everyday Users */}
-            {showGlossary && (
-              <div className="p-4 bg-white rounded-2xl border border-mint shadow-xs text-xs text-slate-700 space-y-2 animate-in fade-in">
-                <div className="flex items-center justify-between font-bold text-slate-900 text-sm">
-                  <div className="flex items-center gap-2">
-                    <Info className="w-4 h-4 text-pine" />
-                    <span>Simple Medical &amp; Genetic Terms Guide</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowGlossary(false)}
-                    className="text-slate-400 hover:text-slate-600"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-[11px] pt-1">
-                  <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
-                    <strong className="block text-pine font-bold mb-0.5">OMIM (Gene Catalog):</strong>
-                    The official global database of all known human genes and inherited conditions.
-                  </div>
-                  <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
-                    <strong className="block text-pine font-bold mb-0.5">NSGC:</strong>
-                    National Society of Genetic Counselors — medical professionals who set standards for family pedigree charts.
-                  </div>
-                  <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
-                    <strong className="block text-pine font-bold mb-0.5">ACMG:</strong>
-                    American College of Medical Genetics — standard clinical guidelines to interpret genetic test results.
-                  </div>
-                  <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
-                    <strong className="block text-pine font-bold mb-0.5">Proband [P]:</strong>
-                    The central person starting the family tree (you!). Relatives are connected around you.
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* ========================================================================= */}
             {/* Primary Toolbar Panel                                                     */}
@@ -745,7 +681,7 @@ export default function PedigreePage() {
                   onClick={() => {
                     setEditingMember(null);
                     setInitialRelation(null);
-                    setWizardStep(3);
+                    setWizardStep(2);
                     setIsWizardOpen(true);
                   }}
                   className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl shadow-xs transition"
@@ -785,9 +721,9 @@ export default function PedigreePage() {
                           </span>
                           <button
                             type="button"
-                            onClick={() => handleDeleteFamily(activeFamily.family_id)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-rose-700 hover:text-white bg-rose-50 hover:bg-rose-700 border border-rose-200 rounded-lg transition shadow-2xs"
-                            title="Delete this family chart (members will be preserved in database)"
+                            onClick={() => openDeleteTreeModal(activeFamily.family_id, activeFamily.family_name || activeFamily.name)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-rose-700 hover:text-white bg-rose-50 hover:bg-rose-700 border border-rose-200 rounded-lg transition shadow-2xs cursor-pointer"
+                            title="Delete this family chart"
                           >
                             <Trash2 className="w-3 h-3" />
                             <span>Delete Chart</span>
@@ -818,78 +754,25 @@ export default function PedigreePage() {
                           Build your family health chart in 3 easy steps. Tell us about your family, check your details, and add your relatives.
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={handleOpenCreateTreeFlow}
-                        className="inline-flex items-center gap-2 px-6 py-3 text-xs font-bold text-white bg-pine hover:bg-pine-light rounded-xl shadow-md transition"
-                      >
-                        <Plus className="w-4 h-4" />
-                        <span>Create Family Pedigree</span>
-                      </button>
+                      <div className="flex items-center gap-3 flex-wrap justify-center">
+                        <button
+                          type="button"
+                          onClick={handleOpenCreateTreeFlow}
+                          className="inline-flex items-center gap-2 px-6 py-3 text-xs font-bold text-white bg-pine hover:bg-pine-light rounded-xl shadow-md transition cursor-pointer"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Create Family Pedigree</span>
+                        </button>
+                        <Link
+                          href="/dashboard?upload=true"
+                          className="inline-flex items-center gap-2 px-6 py-3 text-xs font-bold bg-mint/25 hover:bg-mint/40 text-pine border border-mint rounded-xl shadow-xs transition cursor-pointer"
+                        >
+                          <UploadCloud className="w-4 h-4 text-pine" />
+                          <span>Upload Screening Report</span>
+                        </Link>
+                      </div>
                     </div>
                   )}
-                </div>
-
-                {/* 3 Summary Metric Cards Below Canvas */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-                  {/* Card 1: Kinship Coefficient */}
-                  <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-1">
-                    <span
-                      className="text-[10px] font-bold uppercase tracking-wider text-slate-400 cursor-help"
-                      title="Measures genetic relatedness between parents in this family"
-                    >
-                      Kinship Relatedness
-                    </span>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-xl font-bold font-mono text-slate-900">
-                        {isConsanguineousTree ? '1/16' : '0 (Standard)'}
-                      </span>
-                      {isConsanguineousTree && (
-                        <span className="text-xs font-bold text-amber-700">
-                          (0.0625)
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-[11px] text-pine font-medium block">
-                      {isConsanguineousTree ? 'Related Heritage' : 'Standard Outbred Lineage'}
-                    </span>
-                  </div>
-
-                  {/* Card 2: Assayed Variants */}
-                  <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-1">
-                    <span
-                      className="text-[10px] font-bold uppercase tracking-wider text-slate-400 cursor-help"
-                      title="Count of documented health conditions or genetic variants in this family"
-                    >
-                      Tracked Health Traits
-                    </span>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-xl font-bold font-mono text-slate-900">
-                        {verifiedVariantsCount > 0 ? `${verifiedVariantsCount} Documented` : 'None Tracked'}
-                      </span>
-                    </div>
-                    <span className="text-[11px] text-pine font-medium block">
-                      Hereditary Disease Catalog
-                    </span>
-                  </div>
-
-                  {/* Card 3: Lineage Integrity */}
-                  <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-xs space-y-1">
-                    <span
-                      className="text-[10px] font-bold uppercase tracking-wider text-slate-400 cursor-help"
-                      title="How complete your family tree health information is"
-                    >
-                      Tree Completeness
-                    </span>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-xl font-bold font-mono text-slate-900">
-                        {lineageIntegrity}
-                      </span>
-                    </div>
-                    <span className="text-[11px] text-emerald-700 font-medium block">
-                      Medical Pedigree Complete
-                    </span>
-                  </div>
                 </div>
               </div>
 
@@ -920,11 +803,6 @@ export default function PedigreePage() {
                             <span className="font-bold text-slate-900 text-sm truncate">
                               {selectedMember.full_name || selectedMember.pseudonym}
                             </span>
-                            {selectedMember.is_proband && (
-                              <span className="px-2 py-0.5 rounded-full bg-pine text-white text-[10px] font-mono font-bold">
-                                STARTING PERSON [P]
-                              </span>
-                            )}
                           </div>
                           <p className="text-slate-500 text-[11px] mt-0.5 capitalize">
                             {selectedMember.relationship_to_proband.replace(/_/g, ' ')} &bull;{' '}
@@ -1032,7 +910,7 @@ export default function PedigreePage() {
                         type="button"
                         onClick={() => {
                           setEditingMember(selectedMember);
-                          setWizardStep(3);
+                          setWizardStep(2);
                           setIsWizardOpen(true);
                         }}
                         className="w-full py-2 px-3 bg-pine hover:bg-pine-light text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs"
@@ -1046,7 +924,7 @@ export default function PedigreePage() {
                           type="button"
                           onClick={() => {
                             setEditingMember(selectedMember);
-                            setWizardStep(3);
+                            setWizardStep(2);
                             setIsWizardOpen(true);
                           }}
                           className="py-1.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1"
@@ -1060,7 +938,7 @@ export default function PedigreePage() {
                           onClick={() => {
                             setEditingMember(null);
                             setInitialRelation(null);
-                            setWizardStep(3);
+                            setWizardStep(2);
                             setIsWizardOpen(true);
                           }}
                           className="py-1.5 px-3 bg-mint/25 hover:bg-teal-100 text-pine border border-mint rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1"
@@ -1069,18 +947,6 @@ export default function PedigreePage() {
                           <span>+ Add Relative</span>
                         </button>
                       </div>
-
-                      {/* Make Proband button if not currently proband */}
-                      {!selectedMember.is_proband && (
-                        <button
-                          type="button"
-                          onClick={() => handleSetProband(selectedMember)}
-                          className="w-full py-1.5 px-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1.5"
-                        >
-                          <UserCheck className="w-3.5 h-3.5 text-pine" />
-                          <span>Make this Person the Starting Person [P]</span>
-                        </button>
-                      )}
 
                       <button
                         type="button"
@@ -1201,7 +1067,7 @@ export default function PedigreePage() {
                           setIsCreatingNewTree(false);
                           setEditingMember(null);
                           setInitialRelation(null);
-                          setWizardStep(3);
+                          setWizardStep(2);
                           setIsWizardOpen(true);
                         }}
                         className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-pine hover:bg-pine-light text-white rounded-xl text-xs font-bold transition shadow-xs"
@@ -1294,6 +1160,151 @@ export default function PedigreePage() {
           initialRelation={initialRelation}
           newFamilyId={isCreatingNewTree ? nextSequentialId : null}
         />
+
+        {/* ==================== DELETE TREE CONFIRMATION MODAL ==================== */}
+        {deleteTreeModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+            <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-slate-200 space-y-5">
+              {/* Modal Header */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3.5">
+                  <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-base font-bold text-slate-900">
+                      Delete Family Chart
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5 truncate">
+                      {targetFamilyNameToDelete || 'Selected Tree'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeDeleteTreeModal}
+                  disabled={isDeletingTree}
+                  className="w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Scope Choice Options */}
+              <div className="space-y-3">
+                <label className="block text-xs font-bold text-slate-700">
+                  Choose deletion scope:
+                </label>
+
+                <div className="grid grid-cols-1 gap-2.5">
+                  {/* Option 1: Delete Tree Only */}
+                  <label
+                    onClick={() => setDeleteWithMembers(false)}
+                    className={`flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition select-none ${
+                      !deleteWithMembers
+                        ? 'border-pine bg-mint/10 ring-1 ring-pine'
+                        : 'border-slate-200 bg-white hover:bg-slate-50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="deleteTreeScope"
+                      checked={!deleteWithMembers}
+                      onChange={() => setDeleteWithMembers(false)}
+                      className="mt-0.5 text-pine focus:ring-pine"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-slate-900 block">
+                        Delete only tree
+                      </span>
+                      <span className="text-[11px] text-slate-500 leading-relaxed block mt-0.5">
+                        Removes this pedigree chart. All members and their health dossiers will be preserved in your database and profile.
+                      </span>
+                    </div>
+                  </label>
+
+                  {/* Option 2: Delete Tree + Users */}
+                  <label
+                    onClick={() => setDeleteWithMembers(true)}
+                    className={`flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition select-none ${
+                      deleteWithMembers
+                        ? 'border-rose-500 bg-rose-50/70 ring-1 ring-rose-500'
+                        : 'border-slate-200 bg-white hover:bg-slate-50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="deleteTreeScope"
+                      checked={deleteWithMembers}
+                      onChange={() => setDeleteWithMembers(true)}
+                      className="mt-0.5 text-rose-600 focus:ring-rose-500"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-rose-900 block">
+                        Delete tree and users in this tree
+                      </span>
+                      <span className="text-[11px] text-rose-700 leading-relaxed block mt-0.5">
+                        Permanently removes this chart AND deletes all users/members in this tree from your account, including from the Patient Profile &amp; Details page.
+                      </span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Confirmation Input Prompt */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-800">
+                  To confirm deletion, type <span className="font-mono font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">confirm</span> below:
+                </label>
+                <input
+                  type="text"
+                  value={treeConfirmInput}
+                  onChange={(e) => setTreeConfirmInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && treeConfirmInput.trim().toLowerCase() === 'confirm' && !isDeletingTree) {
+                      handleConfirmDeleteTree();
+                    }
+                  }}
+                  placeholder='type "confirm"'
+                  autoFocus
+                  className="w-full h-11 px-3.5 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:ring-2 focus:ring-rose-500 focus:border-rose-500 focus:outline-none font-mono"
+                />
+              </div>
+
+              {/* Error message */}
+              {deleteTreeError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs">
+                  {deleteTreeError}
+                </div>
+              )}
+
+              {/* Modal Actions */}
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={closeDeleteTreeModal}
+                  disabled={isDeletingTree}
+                  className="px-4 py-2.5 text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDeleteTree}
+                  disabled={treeConfirmInput.trim().toLowerCase() !== 'confirm' || isDeletingTree}
+                  className="inline-flex items-center gap-1.5 px-5 py-2.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl shadow-xs transition cursor-pointer"
+                >
+                  {isDeletingTree ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Trash2 className="w-3.5 h-3.5" />
+                  )}
+                  <span>{isDeletingTree ? 'Deleting...' : (deleteWithMembers ? 'Delete Tree & Users' : 'Delete Tree Only')}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </AuthGuard>
   );

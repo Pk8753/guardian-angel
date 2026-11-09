@@ -381,6 +381,59 @@ class PedigreeEngineTestCase(unittest.TestCase):
         f2_data = get_family_by_id(f2_id)
         self.assertTrue(any(m['id'] == m_id for m in f2_data['members']), "Preserved member must be linkable to new tree")
 
+    def test_family_deletion_with_members_deletes_nodes_and_scraped_reports(self):
+        """Verify deleting a family with delete_members=true deletes the family, its member nodes, and scraped_reports"""
+        from database import save_scraped_report, get_user_scraped_reports
+        fam = create_family(self.user_id, {'name': 'Chart To Delete With Members'})
+        f_id = fam['family_id']
+
+        # Add member node
+        add_res = self.client.post(f'/api/families/{f_id}/members', json={
+            'name': 'Pankaj Node',
+            'alias_name': 'Nimble-Sequoia-pa-1234',
+            'generation': 'gen2',
+            'sex': 'male',
+            'relationship': 'self'
+        })
+        self.assertEqual(add_res.status_code, 201)
+        m_id = add_res.get_json()['member_id']
+
+        # Add linked scraped report
+        rep_id = save_scraped_report(
+            user_id=self.user_id,
+            file_name='report_test.pdf',
+            panel_name='Premarital Panel',
+            masked_data={
+                'family_id': f_id,
+                'member_id': m_id,
+                'sudo_name': 'Nimble-Sequoia-pa-1234',
+                'patient_name': 'Pankaj'
+            }
+        )
+        self.assertIsNotNone(rep_id)
+
+        # Confirm report exists
+        user_reps_before = get_user_scraped_reports(self.user_id)
+        self.assertTrue(any(r['id'] == rep_id for r in user_reps_before))
+
+        # Delete family with delete_members=true
+        del_res = self.client.delete(f'/api/families/{f_id}?delete_members=true')
+        self.assertEqual(del_res.status_code, 200)
+
+        # Family record must be gone
+        self.assertIsNone(get_family_by_id(f_id))
+
+        # Member node must be gone from database
+        nodes_res = self.client.get('/api/pedigree-nodes')
+        self.assertEqual(nodes_res.status_code, 200)
+        data = nodes_res.get_json()
+        user_nodes = data if isinstance(data, list) else data.get('pedigree_nodes', [])
+        self.assertFalse(any(n['id'] == m_id for n in user_nodes))
+
+        # Scraped report must be removed from database (removing it from Patient Profile & Details)
+        user_reps_after = get_user_scraped_reports(self.user_id)
+        self.assertFalse(any(r['id'] == rep_id for r in user_reps_after))
+
 if __name__ == '__main__':
     unittest.main()
 

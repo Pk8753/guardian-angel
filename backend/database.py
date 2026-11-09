@@ -969,10 +969,12 @@ def get_family_by_share_token(token: str):
     conn.close()
     return get_family_by_id(fam['family_id'])
 
-def delete_family(family_id: str, user_id: int):
+def delete_family(family_id: str, user_id: int, delete_members: bool = False):
     """
-    Deletes a family chart while keeping newly created members intact in pedigree_nodes
-    so that the user can create another tree and add them later.
+    Deletes a family chart. If delete_members is False, members are unlinked and preserved
+    in pedigree_nodes. If delete_members is True, members of this family are permanently
+    deleted from pedigree_nodes and their corresponding screening reports are removed from
+    scraped_reports (and consequently from the Patient profile and details page).
     """
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -988,15 +990,53 @@ def delete_family(family_id: str, user_id: int):
         conn.close()
         return False, "Access denied"
 
-    # CRITICAL: Keep newly created members intact as user can create another tree and add them later.
-    # Unlink members from this deleted family by resetting family_id to NULL.
-    cursor.execute("UPDATE pedigree_nodes SET family_id = NULL WHERE family_id = ?", (family_id,))
+    if delete_members:
+        # 1. Collect all member node IDs and aliases belonging to this family
+        nodes = cursor.execute("SELECT id, alias_name FROM pedigree_nodes WHERE family_id = ?", (family_id,)).fetchall()
+        node_ids = [dict(n)['id'] for n in nodes]
+        node_aliases = [dict(n).get('alias_name') for n in nodes if dict(n).get('alias_name')]
+
+        # 2. Delete associated scraped_reports for this user matching this family or these members
+        rep_rows = cursor.execute("SELECT id, masked_data FROM scraped_reports WHERE user_id = ?", (user_id,)).fetchall()
+        for rep in rep_rows:
+            try:
+                m_data = decrypt_payload(rep['masked_data'])
+                rep_fam_id = m_data.get('family_id')
+                rep_mem_id = m_data.get('member_id')
+                rep_sudo = m_data.get('sudo_name')
+
+                should_delete = False
+                if rep_fam_id == family_id:
+                    should_delete = True
+                elif rep_mem_id and (rep_mem_id in node_ids or int(rep_mem_id) in node_ids):
+                    should_delete = True
+                elif rep_sudo and rep_sudo in node_aliases:
+                    should_delete = True
+
+                if should_delete:
+                    cursor.execute("DELETE FROM scraped_reports WHERE id = ?", (rep['id'],))
+            except Exception:
+                pass
+
+        # 3. Permanently delete member nodes belonging to this family
+        cursor.execute("DELETE FROM pedigree_nodes WHERE family_id = ?", (family_id,))
+        for nid in node_ids:
+            cursor.execute("DELETE FROM pedigree_nodes WHERE id = ?", (nid,))
+
+        # 4. Clean up any partner_id references in remaining nodes pointing to deleted members
+        if node_ids:
+            placeholders = ",".join(["?"] * len(node_ids))
+            cursor.execute(f"UPDATE pedigree_nodes SET partner_id = NULL WHERE partner_id IN ({placeholders})", [str(nid) for nid in node_ids])
+    else:
+        # CRITICAL: Keep newly created members intact as user can create another tree and add them later.
+        # Unlink members from this deleted family by resetting family_id to NULL.
+        cursor.execute("UPDATE pedigree_nodes SET family_id = NULL WHERE family_id = ?", (family_id,))
 
     # Delete family record
     cursor.execute("DELETE FROM families WHERE family_id = ?", (family_id,))
     conn.commit()
     conn.close()
-    return True, "Family chart deleted successfully"
+    return True, "Family chart and members deleted successfully" if delete_members else "Family chart deleted successfully"
 
 def update_family_share(family_id: str, enabled: bool):
     conn = get_db_connection()
@@ -1101,6 +1141,18 @@ def save_scraped_report(user_id: int, file_name: str, panel_name: str, masked_da
     conn.close()
     return report_id
 
+def update_scraped_report(report_id: int, user_id: int, file_name: str, panel_name: str, masked_data: dict, gene_locus: str = "", variant: str = "", carrier_status: str = ""):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    encrypted_payload = encrypt_payload(masked_data)
+    cursor.execute("""
+    UPDATE scraped_reports
+    SET file_name = ?, panel_name = ?, masked_data = ?, gene_locus = ?, variant = ?, carrier_status = ?
+    WHERE id = ? AND user_id = ?
+    """, (file_name, panel_name, encrypted_payload, gene_locus, variant, carrier_status, report_id, user_id))
+    conn.commit()
+    conn.close()
+
 def get_user_scraped_reports(user_id: int):
     conn = get_db_connection()
     rows = conn.execute("SELECT * FROM scraped_reports WHERE user_id = ? ORDER BY created_at DESC, id DESC", (user_id,)).fetchall()
@@ -1111,5 +1163,34 @@ def get_user_scraped_reports(user_id: int):
         reports.append(d)
     conn.close()
     return reports
+
+def delete_scraped_report(report_id: int, user_id: int) -> bool:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    row = cursor.execute("SELECT masked_data FROM scraped_reports WHERE id = ? AND user_id = ?", (report_id, user_id)).fetchone()
+    if not row:
+        conn.close()
+        return False
+    try:
+        m_data = decrypt_payload(row['masked_data'])
+        member_id = m_data.get('member_id')
+        if member_id:
+            cursor.execute("DELETE FROM pedigree_nodes WHERE id = ? AND user_id = ?", (int(member_id), user_id))
+    except Exception:
+        pass
+    cursor.execute("DELETE FROM scraped_reports WHERE id = ? AND user_id = ?", (report_id, user_id))
+    conn.commit()
+    conn.close()
+    return True
+
+def delete_scraped_reports_bulk(report_ids: list, user_id: int) -> int:
+    deleted_count = 0
+    for rid in report_ids:
+        try:
+            if delete_scraped_report(int(rid), user_id):
+                deleted_count += 1
+        except Exception:
+            pass
+    return deleted_count
 
 

@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/useAuthStore';
+import { useUIStore } from '@/stores/useUIStore';
 
 // Modern Unified Palette for Login Page
 const COLORS = {
@@ -29,11 +30,28 @@ const RELATIONSHIPS: [string, string, string, number][] = [
   ['none', 'Not related', 'No known genealogical relationship', 0]
 ];
 
+const AR_RELATIONSHIPS: Record<string, [string, string]> = {
+  fc: ['أبناء عمومة / خؤولة مباشرين', 'الآباء إخوة أو أخوات (أبناء نفس الأجداد)'],
+  dfc: ['أبناء عمومة مزدوجين', 'أخوان تزوجا أختين، فيشتركون في كلا الجدين'],
+  fc1: ['أبناء عمومة من الدرجة الأولى بدرجة إزاحة', 'على سبيل المثال الشريك هو ابن/ابنة ابن عمك'],
+  sc: ['أبناء عمومة من الدرجة الثانية', 'تشتركون في أجداد الأجداد'],
+  rem: ['أقارب من مسافة أبعد (درجة ثالثة فأكثر)', 'من نفس القبيلة أو العائلة الممتدة برابط أبعد'],
+  un: ['خال/عم وابنة أخت/أخ، أو خالة/عمة وابن أخت/أخ', 'قرابة بيولوجية من الدرجة الثانية'],
+  hs: ['إخوة غير أشقاء', 'يشتركون في أحد الوالدين بيولوجياً'],
+  none: ['لا توجد قرابة', 'لا توجد صلة نسب عائلية معروفة']
+};
+
 const EARLIER_GENERATIONS: [string, string, number][] = [
   ['0', 'No, not that we know', 0],
   ['1', 'Yes, once or twice (e.g. grandparents were cousins)', 0.0625],
   ['2', 'Yes, across many generations (multi-generational consanguinity)', 0.125]
 ];
+
+const AR_EARLIER_GENERATIONS: Record<string, string> = {
+  '0': 'لا، على حد علمنا',
+  '1': 'نعم، مرة أو مرتين (مثلاً الأجداد كانوا أبناء عمومة)',
+  '2': 'نعم، عبر أجيال عديدة (زواج أقارب متوارث عبر الأجيال)'
+};
 
 const FAMILY_HISTORY: [string, string, number][] = [
   ['1', 'No known condition in either family', 1.0],
@@ -41,21 +59,39 @@ const FAMILY_HISTORY: [string, string, number][] = [
   ['1.8', 'Yes, in one or both families (e.g. Thalassemia, Sickle Cell, SMA, early child loss)', 1.8]
 ];
 
+const AR_FAMILY_HISTORY: Record<string, string> = {
+  '1': 'لا توجد حالات وراثية معروفة في العائلتين',
+  '1.2': 'غير متأكد أو تاريخ العائلة الطبي غير مكتمل',
+  '1.8': 'نعم، في إحدى العائلتين أو كلتيهما (مثل الثلاسيميا، الأنيميا المنجلية، الضمور العضلي، أو فقدان أطفال)'
+};
+
 const PAST_PREGNANCIES: [string, string, number][] = [
   ['1', 'No pregnancies yet, or all healthy', 1.0],
   ['1.5', 'Two or more miscarriages, or a child who was seriously ill/died without clear cause', 1.5]
 ];
+
+const AR_PAST_PREGNANCIES: Record<string, string> = {
+  '1': 'لا يوجد حمل سابق، أو جميع الأطفال بصحة جيدة',
+  '1.5': 'حالتان إجهاض أو أكثر، أو طفل أصيب بمرض شديد/توفي بدون سبب واضح'
+};
 
 const SCREENING_STATUS: [string, string, number][] = [
   ['1', 'Not done yet', 1.0],
   ['0.7', 'Done, and no concerns were found (CLIA/CAP carrier panel clear)', 0.7]
 ];
 
+const AR_SCREENING_STATUS: Record<string, string> = {
+  '1': 'لم يتم الفحص بعد',
+  '0.7': 'تم الفحص ولم تظهر أي مخاوف وراثية (الفحص سليم تماماً)'
+};
+
 const K_FACTOR = 0.487;
 
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuthStore();
+  const { activeLocale, setActiveLocale } = useUIStore();
+  const isAr = activeLocale === 'ar';
 
   // Auth Modal State (Compact Header Controls)
   const [isAuthOpen, setIsAuthOpen] = React.useState(false);
@@ -200,33 +236,47 @@ export default function LoginPage() {
 
   // Risk Band classification (Humble, reassuring & motivating guidance)
   let riskBandLevel: 'ok' | 'mid' | 'hi' = 'ok';
-  let riskBandTitle = 'Awaiting Selections';
-  let riskBandDesc = 'Please choose your relationship and family background in the 5 steps on the left to view your personalized assessment.';
+  let riskBandTitle = isAr ? 'في انتظار تحديد البيانات' : 'Awaiting Selections';
+  let riskBandDesc = isAr
+    ? 'يرجى تحديد صلة القرابة والتاريخ العائلي في الخطوات الخمس على اليمين لعرض تقييمك الشخصي.'
+    : 'Please choose your relationship and family background in the 5 steps on the left to view your personalized assessment.';
 
   if (sameCarrier) {
     riskBandLevel = 'hi';
-    riskBandTitle = 'Shared Carrier Match Identified';
-    riskBandDesc = 'When both partners carry the same recessive condition, each pregnancy has a 1 in 4 (25%) chance of being affected. While this requires careful clinical planning, modern genomics offers clear, proven pathways—including targeted carrier counseling and reproductive options—so you can proceed with confidence and peace of mind.';
+    riskBandTitle = isAr ? 'تم تحديد تطابق في حمل نفس الجين المتنحي' : 'Shared Carrier Match Identified';
+    riskBandDesc = isAr
+      ? 'عندما يحمل كلا الزوجين نفس الطفرة لجين متنحٍ، يكون لكل حمل احتمال ١ من ٤ (٢٥٪) للإصابة. ورغم أن هذا يتطلب تخطيطاً طبياً دقيقاً، فإن علم الجينات الحديث يوفر حلولاً مؤكدة وواضحة — بما في ذلك الاستشارة المتخصصة وخيارات الإنجاب المتقدمة — للمضي قدماً بثقة وراحة بال.'
+      : 'When both partners carry the same recessive condition, each pregnancy has a 1 in 4 (25%) chance of being affected. While this requires careful clinical planning, modern genomics offers clear, proven pathways—including targeted carrier counseling and reproductive options—so you can proceed with confidence and peace of mind.';
   } else if (!isStarted) {
     riskBandLevel = 'ok';
-    riskBandTitle = 'Awaiting Selections';
-    riskBandDesc = 'Please choose your relationship and family background in the 5 steps on the left to view your personalized assessment.';
+    riskBandTitle = isAr ? 'في انتظار تحديد البيانات' : 'Awaiting Selections';
+    riskBandDesc = isAr
+      ? 'يرجى تحديد صلة القرابة والتاريخ العائلي في الخطوات الخمس على اليمين لعرض تقييمك الشخصي.'
+      : 'Please choose your relationship and family background in the 5 steps on the left to view your personalized assessment.';
   } else if (currentF === 0) {
     riskBandLevel = 'ok';
-    riskBandTitle = 'Standard Baseline Risk';
-    riskBandDesc = 'Partners are not biologically related. Standard baseline population risk (~3%) applies. Routine premarital screening provides reassuring confirmation.';
+    riskBandTitle = isAr ? 'المعدل الطبيعي العام' : 'Standard Baseline Risk';
+    riskBandDesc = isAr
+      ? 'لا توجد قرابة بيولوجية بين الشريكين. ينطبق المعدل الطبيعي العام للسكان (~٣٪). تمنحكم الفحوصات الروتينية للمقبلين على الزواج طمأنينة وتأكيداً إضافياً.'
+      : 'Partners are not biologically related. Standard baseline population risk (~3%) applies. Routine premarital screening provides reassuring confirmation.';
   } else if (currentExtra < 1.5) {
     riskBandLevel = 'ok';
-    riskBandTitle = 'Low Added Risk';
-    riskBandDesc = 'The family link adds only a modest consideration. The vast majority of children are born healthy. Routine premarital screening gives you and your partner reassuring confirmation.';
+    riskBandTitle = isAr ? 'احتمال إضافي منخفض' : 'Low Added Risk';
+    riskBandDesc = isAr
+      ? 'صلة القرابة تضيف احتمالاً بسيطاً جداً. الغالبية العظمى من الأطفال يولدون بصحة تامة. الفحوصات الروتينية للمقبلين على الزواج تمنحكم طمأنينة وتأكيداً.'
+      : 'The family link adds only a modest consideration. The vast majority of children are born healthy. Routine premarital screening gives you and your partner reassuring confirmation.';
   } else if (currentExtra < 4.0) {
     riskBandLevel = 'mid';
-    riskBandTitle = 'Moderate Added Risk';
-    riskBandDesc = 'A modest added chance is identified from shared ancestry. Please remember that most children born to cousins are completely healthy. Completing targeted premarital screening gives you reassuring clarity to plan ahead with confidence.';
+    riskBandTitle = isAr ? 'احتمال إضافي متوسط' : 'Moderate Added Risk';
+    riskBandDesc = isAr
+      ? 'تم تحديد احتمال إضافي معتدل ناتج عن القرابة المشتركة. يُرجى تذكر أن معظم الأطفال لأزواج أقارب يولدون بصحة ممتازة. إجراء الفحوصات الموجهة للمقبلين على الزواج يمنحكم وضوحاً مطمئناً للتخطيط للمستقبل بثقة.'
+      : 'A modest added chance is identified from shared ancestry. Please remember that most children born to cousins are completely healthy. Completing targeted premarital screening gives you reassuring clarity to plan ahead with confidence.';
   } else {
     riskBandLevel = 'hi';
-    riskBandTitle = 'Higher Added Risk';
-    riskBandDesc = 'We understand this can feel concerning, but knowledge is your greatest strength. While closer kinship links mean premarital carrier screening and certified genetic counselor review are especially valuable, please remember that most children born to relatives are healthy. Taking proactive steps together empowers you to move forward with complete clarity and confidence.';
+    riskBandTitle = isAr ? 'احتمال إضافي يستحق المتابعة' : 'Higher Added Risk';
+    riskBandDesc = isAr
+      ? 'نتفهم أن هذا قد يثير بعض القلق، ولكن المعرفة هي مصدر قوتك واطمئنانك. في حين أن درجات القرابة الأقرب تجعل فحص النواقل واستشارة الطبيب الوراثي ذات قيمة عالية، تذكر دائماً أن معظم أطفال الأقارب يولدون أصحاء. الخطوات الاستباقية تمكنكم من المضي قدماً بوضوح وثقة تامة.'
+      : 'We understand this can feel concerning, but knowledge is your greatest strength. While closer kinship links mean premarital carrier screening and certified genetic counselor review are especially valuable, please remember that most children born to relatives are healthy. Taking proactive steps together empowers you to move forward with complete clarity and confidence.';
   }
 
   // ==================== AUTH HANDLERS ====================
@@ -405,7 +455,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#efefef] text-[#0c322c] font-sans selection:bg-[#30ba78] selection:text-[#0c322c] overflow-x-hidden">
+    <div dir={isAr ? 'rtl' : 'ltr'} className="min-h-screen w-full bg-[#efefef] text-[#0c322c] font-sans selection:bg-[#30ba78] selection:text-[#0c322c] overflow-x-hidden">
 
       {/* ==================== 1. FIXED HEADER ==================== */}
       <header
@@ -429,32 +479,60 @@ export default function LoginPage() {
               </div>
               <div className="flex flex-col">
                 <span className="text-lg font-black tracking-tight text-white group-hover:text-[#30ba78] transition-colors">
-                  Guardian Angel
+                  {isAr ? 'جاردين أنجل' : 'Guardian Angel'}
                 </span>
                 <span className="text-[10px] text-[#90ebcd] font-semibold tracking-wider uppercase -mt-0.5">
-                  Genomics Intelligence
+                  {isAr ? 'ذكاء الجينوم السريري' : 'Genomics Intelligence'}
                 </span>
               </div>
             </a>
 
             {/* In-page Navigation Links */}
             <nav className="hidden md:flex items-center gap-6 ml-8 text-xs font-semibold text-[#efefef]">
-              <a href="#hero" className="hover:text-[#30ba78] transition-colors">Overview</a>
-              <a href="#estimator" className="hover:text-[#30ba78] transition-colors">Risk Estimator</a>
-              <a href="#things-worth-remembering" className="hover:text-[#30ba78] transition-colors">Guidance</a>
-              <a href="#screening-centers" className="hover:text-[#30ba78] transition-colors">Screening Centres</a>
-              <a href="#feature-genetics" className="hover:text-[#30ba78] transition-colors">Specialists & AI</a>
+              <a href="#hero" className="hover:text-[#30ba78] transition-colors">{isAr ? 'نظرة عامة' : 'Overview'}</a>
+              <a href="#estimator" className="hover:text-[#30ba78] transition-colors">{isAr ? 'حاسبة المخاطر' : 'Risk Estimator'}</a>
+              <a href="#things-worth-remembering" className="hover:text-[#30ba78] transition-colors">{isAr ? 'إرشادات' : 'Guidance'}</a>
+              <a href="#screening-centers" className="hover:text-[#30ba78] transition-colors">{isAr ? 'مراكز الفحص' : 'Screening Centres'}</a>
+              <a href="#feature-genetics" className="hover:text-[#30ba78] transition-colors">{isAr ? 'المختصون والذكاء الاصطناعي' : 'Specialists & AI'}</a>
             </nav>
           </div>
 
-          {/* Header Right: Compact Auth Controls */}
+          {/* Header Right: Language Switcher + Compact Auth Controls */}
           <div className="flex items-center gap-2">
+            {/* Language Selector: EN & العربية */}
+            <div className="flex items-center gap-1 bg-white/10 px-2 py-1 rounded-full border border-white/20 text-[11px] font-bold">
+              <button
+                type="button"
+                onClick={() => setActiveLocale('en')}
+                className={`px-2.5 py-0.5 rounded-full cursor-pointer transition-all ${
+                  !isAr
+                    ? 'bg-[#30ba78] text-[#0c322c] shadow-xs'
+                    : 'text-white/80 hover:text-white'
+                }`}
+                title="USA English"
+              >
+                EN
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveLocale('ar')}
+                className={`px-2.5 py-0.5 rounded-full cursor-pointer transition-all ${
+                  isAr
+                    ? 'bg-[#30ba78] text-[#0c322c] shadow-xs'
+                    : 'text-white/80 hover:text-white'
+                }`}
+                title="UAE Arabic (العربية)"
+              >
+                العربية
+              </button>
+            </div>
+
             <button
               type="button"
               onClick={() => openAuth('signin')}
               className="px-3.5 py-1.5 text-xs font-bold text-white hover:text-[#30ba78] border border-white/20 hover:border-[#30ba78] rounded-lg transition-all cursor-pointer"
             >
-              Sign In
+              {isAr ? 'تسجيل الدخول' : 'Sign In'}
             </button>
 
             <button
@@ -462,7 +540,7 @@ export default function LoginPage() {
               onClick={() => openAuth('register')}
               className="px-3.5 py-1.5 text-xs font-bold bg-[#30ba78] text-[#0c322c] hover:bg-[#90ebcd] rounded-lg shadow-sm transition-all cursor-pointer"
             >
-              Create Account
+              {isAr ? 'إنشاء حساب' : 'Create Account'}
             </button>
 
             <button
@@ -471,10 +549,10 @@ export default function LoginPage() {
                 window.location.href = '/api/uaepass/login';
               }}
               className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-black text-white hover:bg-neutral-900 border border-white/20 rounded-lg transition-all cursor-pointer"
-              title="Sign in with UAE PASS"
+              title={isAr ? 'تسجيل الدخول بالهوية الرقمية' : 'Sign in with UAE PASS'}
             >
               <span className="material-symbols-outlined text-[15px] text-[#30ba78]">fingerprint</span>
-              <span>UAE PASS</span>
+              <span>{isAr ? 'الهوية الرقمية' : 'UAE PASS'}</span>
             </button>
           </div>
         </div>
@@ -488,7 +566,9 @@ export default function LoginPage() {
             <div className="p-4 bg-[#0c322c] text-white flex items-center justify-between border-b border-[#30ba78]/20">
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-[#30ba78] text-xl">lock</span>
-                <span className="font-bold text-sm tracking-tight">Zero-Knowledge Patient Vault</span>
+                <span className="font-bold text-sm tracking-tight">
+                  {isAr ? 'خزينة المريض المشفرة' : 'Zero-Knowledge Patient Vault'}
+                </span>
               </div>
               <button
                 type="button"
@@ -512,7 +592,7 @@ export default function LoginPage() {
                     : 'text-neutral-500 hover:text-[#0c322c]'
                 }`}
               >
-                Sign In
+                {isAr ? 'تسجيل الدخول' : 'Sign In'}
               </button>
               <button
                 type="button"
@@ -526,7 +606,7 @@ export default function LoginPage() {
                     : 'text-neutral-500 hover:text-[#0c322c]'
                 }`}
               >
-                Create Account
+                {isAr ? 'إنشاء حساب' : 'Create Account'}
               </button>
             </div>
 
@@ -550,12 +630,12 @@ export default function LoginPage() {
                 <form onSubmit={handleSignIn} className="space-y-3.5" noValidate>
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-[#0c322c]" htmlFor="modal_signin_username">
-                      Username or Email
+                      {isAr ? 'اسم المستخدم أو البريد الإلكتروني' : 'Username or Email'}
                     </label>
                     <input
                       id="modal_signin_username"
                       type="text"
-                      placeholder="Username or email"
+                      placeholder={isAr ? 'اسم المستخدم أو البريد الإلكتروني' : 'Username or email'}
                       value={signInUsername}
                       onChange={(e) => {
                         setSignInUsername(e.target.value);
@@ -572,10 +652,10 @@ export default function LoginPage() {
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-bold text-[#0c322c]" htmlFor="modal_signin_password">
-                        Password
+                        {isAr ? 'كلمة المرور' : 'Password'}
                       </label>
                       <span className="text-[10px] text-[#2453ff] hover:underline cursor-pointer">
-                        Forgot Password?
+                        {isAr ? 'نسيت كلمة المرور؟' : 'Forgot Password?'}
                       </span>
                     </div>
                     <div className="relative flex items-center">
@@ -611,7 +691,7 @@ export default function LoginPage() {
                     disabled={isSignInSubmitting}
                     className="w-full h-10 bg-[#30ba78] hover:bg-[#90ebcd] text-[#0c322c] text-xs font-extrabold rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition-all cursor-pointer mt-1"
                   >
-                    <span>Sign In</span>
+                    <span>{isAr ? 'تسجيل الدخول' : 'Sign In'}</span>
                     <span className="material-symbols-outlined text-sm">arrow_forward</span>
                   </button>
 
@@ -620,7 +700,7 @@ export default function LoginPage() {
                       <div className="w-full border-t border-neutral-200"></div>
                     </div>
                     <div className="relative bg-white px-2 text-[10px] font-bold text-neutral-400 uppercase">
-                      or sign in with
+                      {isAr ? 'أو تسجيل الدخول عبر' : 'or sign in with'}
                     </div>
                   </div>
 
@@ -635,7 +715,7 @@ export default function LoginPage() {
                       fingerprint
                     </span>
                     <span className="font-bold text-xs tracking-wide text-white flex items-center gap-1.5">
-                      <span>Sign in with UAE PASS</span>
+                      <span>{isAr ? 'تسجيل الدخول بالهوية الرقمية UAE PASS' : 'Sign in with UAE PASS'}</span>
                       <svg className="w-4 h-2.5 rounded-[1.5px] overflow-hidden shadow-sm shrink-0 border border-white/20" viewBox="0 0 24 16">
                         <rect width="24" height="5.33" fill="#00732f" />
                         <rect y="5.33" width="24" height="5.33" fill="#ffffff" />
@@ -882,14 +962,16 @@ export default function LoginPage() {
             <div className="lg:col-span-7 space-y-4">
 
               <h1 className="text-3xl sm:text-4xl lg:text-[42px] font-black tracking-tight leading-tight text-white">
-                Your Family’s Health Story{' '}
+                {isAr ? 'قصة صحة عائلتك ' : 'Your Family’s Health Story '}
                 <span className="text-[#30ba78]">
-                  Matters.
+                  {isAr ? 'تهمنا.' : 'Matters.'}
                 </span>
               </h1>
 
               <p className="text-xs sm:text-sm text-[#efefef] leading-relaxed max-w-xl font-normal">
-                Clear, caring guidance to help couples and families understand inherited health risks and make choices that fit their values. Private by design.
+                {isAr
+                  ? 'إرشادات واضحة ورعاية لمساعدة الأزواج والعائلات على فهم المخاطر الصحية الوراثية واتخاذ خيارات تتوافق مع قيمهم. مصممة بالكامل لضمان الخصوصية.'
+                  : 'Clear, caring guidance to help couples and families understand inherited health risks and make choices that fit their values. Private by design.'}
               </p>
 
               <div className="flex items-center gap-2 pt-1 flex-wrap sm:flex-nowrap">
@@ -897,7 +979,7 @@ export default function LoginPage() {
                   href="#estimator"
                   className="px-3.5 py-2.5 rounded-lg bg-[#30ba78] hover:bg-[#90ebcd] text-[#0c322c] text-xs font-black flex items-center gap-1 shadow-sm flex-shrink-0 cursor-pointer whitespace-nowrap"
                 >
-                  <span>Calculate Family Health Risk</span>
+                  <span>{isAr ? 'احسب المخاطر الصحية للعائلة' : 'Calculate Family Health Risk'}</span>
                   <span className="material-symbols-outlined text-sm">expand_more</span>
                 </a>
 
@@ -906,7 +988,7 @@ export default function LoginPage() {
                   onClick={() => openAuth('signin')}
                   className="px-3.5 py-2.5 rounded-lg bg-[#192072] hover:bg-[#2453ff] text-white text-xs font-bold flex items-center gap-1 border border-[#90ebcd]/30 shadow-sm flex-shrink-0 cursor-pointer whitespace-nowrap"
                 >
-                  <span>Access Health Vault</span>
+                  <span>{isAr ? 'الوصول إلى الخزينة الصحية' : 'Access Health Vault'}</span>
                   <span className="material-symbols-outlined text-sm">arrow_forward</span>
                 </button>
 
@@ -918,7 +1000,7 @@ export default function LoginPage() {
                   className="px-3 py-2.5 rounded-lg bg-black hover:bg-neutral-900 text-white text-xs font-bold flex items-center gap-1 border border-white/20 flex-shrink-0 cursor-pointer whitespace-nowrap"
                 >
                   <span className="material-symbols-outlined text-[#30ba78] text-sm">fingerprint</span>
-                  <span>UAE PASS</span>
+                  <span>{isAr ? 'الهوية الرقمية' : 'UAE PASS'}</span>
                 </button>
               </div>
 
@@ -927,25 +1009,25 @@ export default function LoginPage() {
                 <div className="space-y-0.5">
                   <div className="flex items-center gap-1 text-[#30ba78]">
                     <span className="material-symbols-outlined text-sm">diversity_1</span>
-                    <span className="text-xs sm:text-sm font-extrabold text-white">Your family</span>
+                    <span className="text-xs sm:text-sm font-extrabold text-white">{isAr ? 'عائلتك' : 'Your family'}</span>
                   </div>
-                  <p className="text-[10px] sm:text-[11px] text-[#90ebcd]/80 font-normal leading-tight">At the heart of care</p>
+                  <p className="text-[10px] sm:text-[11px] text-[#90ebcd]/80 font-normal leading-tight">{isAr ? 'في قلب الرعاية' : 'At the heart of care'}</p>
                 </div>
 
                 <div className="space-y-0.5">
                   <div className="flex items-center gap-1 text-[#90ebcd]">
                     <span className="material-symbols-outlined text-sm">favorite</span>
-                    <span className="text-xs sm:text-sm font-extrabold text-white">Your values</span>
+                    <span className="text-xs sm:text-sm font-extrabold text-white">{isAr ? 'قيمك' : 'Your values'}</span>
                   </div>
-                  <p className="text-[10px] sm:text-[11px] text-[#90ebcd]/80 font-normal leading-tight">Respected & prioritized</p>
+                  <p className="text-[10px] sm:text-[11px] text-[#90ebcd]/80 font-normal leading-tight">{isAr ? 'محترمة وذات أولوية' : 'Respected & prioritized'}</p>
                 </div>
 
                 <div className="space-y-0.5">
                   <div className="flex items-center gap-1 text-[#fe7c3f]">
                     <span className="material-symbols-outlined text-sm">how_to_reg</span>
-                    <span className="text-xs sm:text-sm font-extrabold text-white">Your informed choice</span>
+                    <span className="text-xs sm:text-sm font-extrabold text-white">{isAr ? 'خيارك المستنير' : 'Your informed choice'}</span>
                   </div>
-                  <p className="text-[10px] sm:text-[11px] text-[#90ebcd]/80 font-normal leading-tight">Empowered decisions</p>
+                  <p className="text-[10px] sm:text-[11px] text-[#90ebcd]/80 font-normal leading-tight">{isAr ? 'قرارات مدعومة بالمعرفة' : 'Empowered decisions'}</p>
                 </div>
               </div>
 
@@ -967,16 +1049,18 @@ export default function LoginPage() {
                         <div className="h-1/3 bg-[#000000]"></div>
                       </div>
                     </div>
-                    <span className="text-white font-extrabold tracking-wide">The UAE programme</span>
+                    <span className="text-white font-extrabold tracking-wide">{isAr ? 'برنامج دولة الإمارات' : 'The UAE programme'}</span>
                   </div>
                 </div>
 
                 <div className="text-center space-y-0.5">
                   <h3 className="text-sm sm:text-base font-black text-white leading-snug">
-                    Mandatory pre-marital screening
+                    {isAr ? 'الفحص الطبي الإلزامي للمقبلين على الزواج' : 'Mandatory pre-marital screening'}
                   </h3>
                   <p className="text-[10px] sm:text-[11px] text-[#efefef] leading-relaxed">
-                    Official nationwide protocol required for prospective couples to ensure health clarity and proactive family planning.
+                    {isAr
+                      ? 'البروتوكول الوطني الرسمي الإلزامي للمقبلين على الزواج لضمان الوضوح الصحي والتخطيط الأسري الاستباقي.'
+                      : 'Official nationwide protocol required for prospective couples to ensure health clarity and proactive family planning.'}
                   </p>
                 </div>
 
@@ -989,9 +1073,9 @@ export default function LoginPage() {
                       <span className="material-symbols-outlined text-sm">genetics</span>
                     </div>
                     <span className="text-xl sm:text-2xl font-black text-white leading-none">570</span>
-                    <span className="text-xs font-bold text-[#90ebcd] tracking-wide mt-0.5">Genes</span>
+                    <span className="text-xs font-bold text-[#90ebcd] tracking-wide mt-0.5">{isAr ? 'جين' : 'Genes'}</span>
                     <p className="text-[9.5px] sm:text-[10px] text-neutral-300 font-medium pt-0.5 leading-tight">
-                      Covered by genetic testing
+                      {isAr ? 'مغطاة بالفحص الجيني' : 'Covered by genetic testing'}
                     </p>
                   </div>
 
@@ -1001,9 +1085,9 @@ export default function LoginPage() {
                       <span className="material-symbols-outlined text-sm">health_and_safety</span>
                     </div>
                     <span className="text-xl sm:text-2xl font-black text-white leading-none">845+</span>
-                    <span className="text-xs font-bold text-[#fe7c3f] tracking-wide mt-0.5">Conditions</span>
+                    <span className="text-xs font-bold text-[#fe7c3f] tracking-wide mt-0.5">{isAr ? 'حالة' : 'Conditions'}</span>
                     <p className="text-[9.5px] sm:text-[10px] text-neutral-300 font-medium pt-0.5 leading-tight">
-                      Preventable genetic conditions addressed
+                      {isAr ? 'حالة وراثية يمكن الوقاية منها' : 'Preventable genetic conditions addressed'}
                     </p>
                   </div>
 
@@ -1012,9 +1096,9 @@ export default function LoginPage() {
                     <div className="w-6 h-6 rounded-md bg-[#2453ff]/20 flex items-center justify-center text-[#2453ff] mb-1">
                       <span className="material-symbols-outlined text-sm">bloodtype</span>
                     </div>
-                    <span className="text-xs sm:text-sm font-black text-white leading-tight">Screening Types</span>
+                    <span className="text-xs sm:text-sm font-black text-white leading-tight">{isAr ? 'أنواع الفحص' : 'Screening Types'}</span>
                     <p className="text-[9.5px] sm:text-[10px] text-[#90ebcd] font-semibold leading-tight pt-1">
-                      Genetic, infectious disease, and blood disorders
+                      {isAr ? 'الفحص الجيني، والأمراض المعدية، واضطرابات الدم' : 'Genetic, infectious disease, and blood disorders'}
                     </p>
                   </div>
 
@@ -1027,11 +1111,11 @@ export default function LoginPage() {
                       <span className="material-symbols-outlined text-sm">apartment</span>
                     </div>
                     <div className="flex items-center gap-0.5 text-[#30ba78] group-hover:text-[#90ebcd] font-black text-xs sm:text-sm leading-tight">
-                      <span>Find a screening centre</span>
+                      <span>{isAr ? 'ابحث عن مركز فحص' : 'Find a screening centre'}</span>
                       <span className="material-symbols-outlined text-xs">arrow_downward</span>
                     </div>
                     <p className="text-[9.5px] sm:text-[10px] text-neutral-300 font-medium pt-0.5 leading-tight">
-                      Official centres in Abu Dhabi, Al Ain & Al Dhafra
+                      {isAr ? 'المراكز الرسمية في أبوظبي والعين والظفرة' : 'Official centres in Abu Dhabi, Al Ain & Al Dhafra'}
                     </p>
                   </a>
 
@@ -1045,13 +1129,17 @@ export default function LoginPage() {
           {/* ==================== WHY THIS MATTERS (CENTERED AT BOTTOM OF OVERVIEW) ==================== */}
           <div className="mt-6 pt-5 border-t border-white/10 text-center max-w-3xl mx-auto space-y-1.5">
             <h2 className="text-lg sm:text-xl font-black text-white tracking-tight">
-              Why this matters
+              {isAr ? 'لماذا هذا الأمر مهم' : 'Why this matters'}
             </h2>
             <p className="text-xs sm:text-[13px] text-[#efefef] leading-relaxed font-normal">
-              Family is at the heart of life in the UAE, and marriages within families are a long-standing, respected tradition. Because relatives are more likely to share certain genetic changes, some inherited conditions can be more common in children of related parents. Knowing this early gives families more choices, not fewer.
+              {isAr
+                ? 'الأسرة هي قلب الحياة في دولة الإمارات، والزواج داخل العائلات تقليد عريق ومحترم. ولأن الأقارب أكثر عرضة لمشاركة بعض التغيرات الجينية، فإن بعض الحالات الوراثية قد تكون أكثر شيوعاً لدى أطفال الآباء الأقارب. ومعرفة ذلك مبكراً تمنح العائلات خيارات أكثر، لا أقل.'
+                : 'Family is at the heart of life in the UAE, and marriages within families are a long-standing, respected tradition. Because relatives are more likely to share certain genetic changes, some inherited conditions can be more common in children of related parents. Knowing this early gives families more choices, not fewer.'}
             </p>
             <p className="text-xs sm:text-[13px] text-[#90ebcd] leading-relaxed font-medium">
-              The UAE already requires pre-marital screening. This platform helps you make sense of what comes next: what your results mean, what they don’t mean, and where to get support.
+              {isAr
+                ? 'تتطلب دولة الإمارات بالفعل إجراء الفحوصات الطبية للمقبلين على الزواج. تساعدك هذه المنصة على فهم الخطوات التالية: ماذا تعني نتائجك، وما لا تعنيه، وأين تجد الدعم.'
+                : 'The UAE already requires pre-marital screening. This platform helps you make sense of what comes next: what your results mean, what they don’t mean, and where to get support.'}
             </p>
           </div>
 
@@ -1065,17 +1153,23 @@ export default function LoginPage() {
           <div className="text-center max-w-3xl mx-auto space-y-3 mb-12">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-[#192072]/10 text-[#192072] border border-[#192072]/20">
               <span className="material-symbols-outlined text-sm text-[#2453ff]">calculate</span>
-              <span>Interactive Clinical Screener</span>
+              <span>{isAr ? 'فاحص سريري تفاعلي' : 'Interactive Clinical Screener'}</span>
             </div>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-[#0c322c] tracking-tight">
-              Family Health Risk Estimator
+              {isAr ? 'مقياس المخاطر الصحية الوراثية للعائلة' : 'Family Health Risk Estimator'}
             </h2>
             <p className="text-sm sm:text-base text-neutral-600 leading-relaxed">
-              Many families in the UAE and across the region have marriages between relatives. This tool gives a clear, calm estimate of how that may affect the chance of an inherited condition in a child, and what to do next.
+              {isAr
+                ? 'العديد من العائلات في دولة الإمارات والمنطقة تشهد زواجاً بين الأقارب. توفر هذه الأداة تقديراً هادئاً وواضحاً لكيفية تأثير ذلك على احتمال حدوث حالة وراثية لدى الأطفال، وما هي الخطوات التالية.'
+                : 'Many families in the UAE and across the region have marriages between relatives. This tool gives a clear, calm estimate of how that may affect the chance of an inherited condition in a child, and what to do next.'}
             </p>
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-800 border border-[#30ba78]/30 text-xs font-semibold">
               <span className="material-symbols-outlined text-sm text-[#30ba78]">lock</span>
-              <span>Your answers stay on your device. Nothing is sent or saved. Closing this page clears everything.</span>
+              <span>
+                {isAr
+                  ? 'إجاباتك تبقى على جهازك بالكامل. لا يتم إرسال أو حفظ أي شيء. إغلاق هذه الصفحة يمسح كل شيء.'
+                  : 'Your answers stay on your device. Nothing is sent or saved. Closing this page clears everything.'}
+              </span>
             </div>
           </div>
 
@@ -1090,17 +1184,17 @@ export default function LoginPage() {
                   <div className="flex items-center gap-2">
                     <span className="material-symbols-outlined text-[#30ba78] text-lg">tune</span>
                     <span className="text-xs font-bold uppercase tracking-wider text-[#0c322c]">
-                      Kinship Questionnaire (5 Steps)
+                      {isAr ? 'استبيان القرابة والنسب (٥ خطوات)' : 'Kinship Questionnaire (5 Steps)'}
                     </span>
                   </div>
                   <button
                     type="button"
                     onClick={handleResetEstimator}
                     className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-[#efefef] text-[#0c322c] hover:bg-[#90ebcd]/40 border border-neutral-300 hover:border-[#30ba78] transition-all cursor-pointer shadow-xs"
-                    title="Clear all inputs and results to start again"
+                    title={isAr ? 'مسح كافة المدخلات والنتائج للبدء من جديد' : 'Clear all inputs and results to start again'}
                   >
                     <span className="material-symbols-outlined text-sm text-[#fe7c3f]">restart_alt</span>
-                    <span>Start Again</span>
+                    <span>{isAr ? 'البدء من جديد' : 'Start Again'}</span>
                   </button>
                 </div>
 
@@ -1108,15 +1202,21 @@ export default function LoginPage() {
                 <div className="space-y-2">
                   <div className="flex items-baseline justify-between">
                     <h3 className="text-sm font-bold text-[#0c322c]">
-                      1. How are you and your partner related?
+                      {isAr ? '١. ما هي صلة القرابة بينك وبين شريك حياتك؟' : '1. How are you and your partner related?'}
                     </h3>
-                    <span className="text-[10px] text-neutral-400 font-semibold">Step 1 of 5</span>
+                    <span className="text-[10px] text-neutral-400 font-semibold">{isAr ? 'الخطوة ١ من ٥' : 'Step 1 of 5'}</span>
                   </div>
-                  <p className="text-[11px] text-neutral-500">Father’s side or mother’s side makes no difference to the calculation.</p>
+                  <p className="text-[11px] text-neutral-500">
+                    {isAr
+                      ? 'جهة الأب أو جهة الأم لا تُحدث فرقاً في الحساب السريري.'
+                      : 'Father’s side or mother’s side makes no difference to the calculation.'}
+                  </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                     {RELATIONSHIPS.map(([key, title, desc, rVal], idx) => {
                       const isSelected = relIdx === idx;
                       const proj = computeEstimate(idx, genIdx ?? 0, histIdx ?? 0, pregIdx ?? 0, scrIdx ?? 0);
+                      const optTitle = isAr && AR_RELATIONSHIPS[key] ? AR_RELATIONSHIPS[key][0] : title;
+                      const optDesc = isAr && AR_RELATIONSHIPS[key] ? AR_RELATIONSHIPS[key][1] : desc;
                       return (
                         <button
                           key={key}
@@ -1129,10 +1229,10 @@ export default function LoginPage() {
                           }`}
                         >
                           <div className="pr-2 min-w-0">
-                            <p className="text-xs font-bold leading-tight truncate">{title}</p>
-                            {desc && (
+                            <p className="text-xs font-bold leading-tight truncate">{optTitle}</p>
+                            {optDesc && (
                               <p className={`text-[10px] line-clamp-1 ${isSelected ? 'text-[#90ebcd]' : 'text-neutral-500'}`}>
-                                {desc}
+                                {optDesc}
                               </p>
                             )}
                           </div>
@@ -1151,15 +1251,20 @@ export default function LoginPage() {
                 <div className="pt-4 border-t border-neutral-100 space-y-2">
                   <div className="flex items-baseline justify-between">
                     <h3 className="text-sm font-bold text-[#0c322c]">
-                      2. Has marriage between relatives happened in earlier generations?
+                      {isAr ? '٢. هل حدث زواج أقارب في الأجيال السابقة؟' : '2. Has marriage between relatives happened in earlier generations?'}
                     </h3>
-                    <span className="text-[10px] text-neutral-400 font-semibold">Step 2 of 5</span>
+                    <span className="text-[10px] text-neutral-400 font-semibold">{isAr ? 'الخطوة ٢ من ٥' : 'Step 2 of 5'}</span>
                   </div>
-                  <p className="text-[11px] text-neutral-500">For example, were your grandparents also cousins? This raises the shared-ancestry level.</p>
+                  <p className="text-[11px] text-neutral-500">
+                    {isAr
+                      ? 'على سبيل المثال، هل كان أجدادكم أيضاً أبناء عمومة؟ هذا يرفع نسبة القرابة المشتركة.'
+                      : 'For example, were your grandparents also cousins? This raises the shared-ancestry level.'}
+                  </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                     {EARLIER_GENERATIONS.map(([key, label], idx) => {
                       const isSelected = genIdx === idx;
                       const proj = computeEstimate(relIdx ?? 0, idx, histIdx ?? 0, pregIdx ?? 0, scrIdx ?? 0);
+                      const optLabel = isAr && AR_EARLIER_GENERATIONS[key] ? AR_EARLIER_GENERATIONS[key] : label;
                       return (
                         <button
                           key={key}
@@ -1173,7 +1278,7 @@ export default function LoginPage() {
                               : 'bg-neutral-50 text-[#0c322c] border-neutral-200 hover:border-[#30ba78]'
                           }`}
                         >
-                          <span className="text-xs font-semibold pr-2 leading-tight">{label}</span>
+                          <span className="text-xs font-semibold pr-2 leading-tight">{optLabel}</span>
                           <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${
                             isSelected ? 'bg-[#30ba78] text-[#0c322c]' : 'text-neutral-500 bg-white border border-neutral-200'
                           }`}>
@@ -1189,15 +1294,20 @@ export default function LoginPage() {
                 <div className="pt-4 border-t border-neutral-100 space-y-2">
                   <div className="flex items-baseline justify-between">
                     <h3 className="text-sm font-bold text-[#0c322c]">
-                      3. Is there an inherited condition in either family?
+                      {isAr ? '٣. هل توجد حالة صحية وراثية في أي من العائلتين؟' : '3. Is there an inherited condition in either family?'}
                     </h3>
-                    <span className="text-[10px] text-neutral-400 font-semibold">Step 3 of 5</span>
+                    <span className="text-[10px] text-neutral-400 font-semibold">{isAr ? 'الخطوة ٣ من ٥' : 'Step 3 of 5'}</span>
                   </div>
-                  <p className="text-[11px] text-neutral-500">Examples: thalassemia, sickle cell disease, hearing loss from birth, SMA, or child deaths.</p>
+                  <p className="text-[11px] text-neutral-500">
+                    {isAr
+                      ? 'أمثلة: الثلاسيميا، الأنيميا المنجلية، فقدان السمع الوراثي، الضمور العضلي، أو وفيات أطفال غير مفسرة.'
+                      : 'Examples: thalassemia, sickle cell disease, hearing loss from birth, SMA, or child deaths.'}
+                  </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                     {FAMILY_HISTORY.map(([key, label], idx) => {
                       const isSelected = histIdx === idx;
                       const proj = computeEstimate(relIdx ?? 0, genIdx ?? 0, idx, pregIdx ?? 0, scrIdx ?? 0);
+                      const optLabel = isAr && AR_FAMILY_HISTORY[key] ? AR_FAMILY_HISTORY[key] : label;
                       return (
                         <button
                           key={key}
@@ -1211,7 +1321,7 @@ export default function LoginPage() {
                               : 'bg-neutral-50 text-[#0c322c] border-neutral-200 hover:border-[#30ba78]'
                           }`}
                         >
-                          <span className="text-xs font-semibold pr-2 leading-tight">{label}</span>
+                          <span className="text-xs font-semibold pr-2 leading-tight">{optLabel}</span>
                           <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${
                             isSelected ? 'bg-[#30ba78] text-[#0c322c]' : 'text-neutral-500 bg-white border border-neutral-200'
                           }`}>
@@ -1227,15 +1337,20 @@ export default function LoginPage() {
                 <div className="pt-4 border-t border-neutral-100 space-y-2">
                   <div className="flex items-baseline justify-between">
                     <h3 className="text-sm font-bold text-[#0c322c]">
-                      4. Past pregnancies
+                      {isAr ? '٤. حالات الحمل السابقة' : '4. Past pregnancies'}
                     </h3>
-                    <span className="text-[10px] text-neutral-400 font-semibold">Step 4 of 5</span>
+                    <span className="text-[10px] text-neutral-400 font-semibold">{isAr ? 'الخطوة ٤ من ٥' : 'Step 4 of 5'}</span>
                   </div>
-                  <p className="text-[11px] text-neutral-500">Any history of repeated miscarriages or unexplained early child illness.</p>
+                  <p className="text-[11px] text-neutral-500">
+                    {isAr
+                      ? 'أي تاريخ لتكرار الإجهاض أو أمراض مبكرة غير مفسرة لدى أطفال سابقين.'
+                      : 'Any history of repeated miscarriages or unexplained early child illness.'}
+                  </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                     {PAST_PREGNANCIES.map(([key, label], idx) => {
                       const isSelected = pregIdx === idx;
                       const proj = computeEstimate(relIdx ?? 0, genIdx ?? 0, histIdx ?? 0, idx, scrIdx ?? 0);
+                      const optLabel = isAr && AR_PAST_PREGNANCIES[key] ? AR_PAST_PREGNANCIES[key] : label;
                       return (
                         <button
                           key={key}
@@ -1247,7 +1362,7 @@ export default function LoginPage() {
                               : 'bg-neutral-50 text-[#0c322c] border-neutral-200 hover:border-[#30ba78]'
                           }`}
                         >
-                          <span className="text-xs font-semibold pr-2 leading-tight">{label}</span>
+                          <span className="text-xs font-semibold pr-2 leading-tight">{optLabel}</span>
                           <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${
                             isSelected ? 'bg-[#30ba78] text-[#0c322c]' : 'text-neutral-500 bg-white border border-neutral-200'
                           }`}>
@@ -1263,15 +1378,20 @@ export default function LoginPage() {
                 <div className="pt-4 border-t border-neutral-100 space-y-2">
                   <div className="flex items-baseline justify-between">
                     <h3 className="text-sm font-bold text-[#0c322c]">
-                      5. Premarital or carrier screening
+                      {isAr ? '٥. الفحوصات الطبية للمقبلين على الزواج أو فحص النواقل' : '5. Premarital or carrier screening'}
                     </h3>
-                    <span className="text-[10px] text-neutral-400 font-semibold">Step 5 of 5</span>
+                    <span className="text-[10px] text-neutral-400 font-semibold">{isAr ? 'الخطوة ٥ من ٥' : 'Step 5 of 5'}</span>
                   </div>
-                  <p className="text-[11px] text-neutral-500">Have both partners completed official genetic carrier panel tests?</p>
+                  <p className="text-[11px] text-neutral-500">
+                    {isAr
+                      ? 'هل أكمل كلا الشريكين فحوصات النواقل الجينية الرسمية المعتمدة؟'
+                      : 'Have both partners completed official genetic carrier panel tests?'}
+                  </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                     {SCREENING_STATUS.map(([key, label], idx) => {
                       const isSelected = scrIdx === idx;
                       const proj = computeEstimate(relIdx ?? 0, genIdx ?? 0, histIdx ?? 0, pregIdx ?? 0, idx);
+                      const optLabel = isAr && AR_SCREENING_STATUS[key] ? AR_SCREENING_STATUS[key] : label;
                       return (
                         <button
                           key={key}
@@ -1283,7 +1403,7 @@ export default function LoginPage() {
                               : 'bg-neutral-50 text-[#0c322c] border-neutral-200 hover:border-[#30ba78]'
                           }`}
                         >
-                          <span className="text-xs font-semibold pr-2 leading-tight">{label}</span>
+                          <span className="text-xs font-semibold pr-2 leading-tight">{optLabel}</span>
                           <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${
                             isSelected ? 'bg-[#30ba78] text-[#0c322c]' : 'text-neutral-500 bg-white border border-neutral-200'
                           }`}>
@@ -1303,7 +1423,11 @@ export default function LoginPage() {
                       className="w-4 h-4 mt-0.5 accent-[#fe7c3f] rounded cursor-pointer"
                     />
                     <span className="text-xs font-semibold text-[#0c322c] leading-tight">
-                      A doctor or lab told us we <b>both carry the same</b> recessive condition (e.g. Beta-Thalassemia, Sickle Cell, SMA).
+                      {isAr ? (
+                        <>أخبرنا الطبيب أو المختبر أننا <b>كلينا نحمل نفس</b> الطفرة الوراثية المتنحية (مثل الثلاسيميا، الأنيميا المنجلية، أو الضمور العضلي SMA).</>
+                      ) : (
+                        <>A doctor or lab told us we <b>both carry the same</b> recessive condition (e.g. Beta-Thalassemia, Sickle Cell, SMA).</>
+                      )}
                     </span>
                   </label>
                 </div>
@@ -1318,29 +1442,41 @@ export default function LoginPage() {
               <div className="space-y-6">
                 <div className="space-y-1 border-b border-white/10 pb-4">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-[#90ebcd]">
-                    {isStarted ? 'Your Clinical Estimate' : 'Awaiting Kinship Selections'}
+                    {isStarted
+                      ? (isAr ? 'تقييمك السريري' : 'Your Clinical Estimate')
+                      : (isAr ? 'في انتظار تحديد القرابة' : 'Awaiting Kinship Selections')}
                   </span>
-                  <p className="text-xs text-[#efefef]">Extra chance, because of the family link, that a child has a serious inherited condition:</p>
+                  <p className="text-xs text-[#efefef]">
+                    {isAr
+                      ? 'الاحتمال الإضافي، بسبب صلة القرابة العائلية، لإصابة طفل بحالة وراثية خطيرة:'
+                      : 'Extra chance, because of the family link, that a child has a serious inherited condition:'}
+                  </p>
                   <div className="text-3xl sm:text-4xl font-black text-[#30ba78] pt-1">
                     {!isStarted
                       ? '—'
                       : currentF === 0 && !sameCarrier
-                      ? 'No extra risk from relatedness'
-                      : `about ${formatPct(currentExtra)} extra`}
+                      ? (isAr ? 'لا يوجد خطر إضافي ناتج عن القرابة' : 'No extra risk from relatedness')
+                      : (isAr ? `إضافي بنحو ${formatPct(currentExtra)}` : `about ${formatPct(currentExtra)} extra`)}
                   </div>
                   {isStarted && currentF > 0 && !sameCarrier && (
                     <p className="text-[11px] text-neutral-300">
-                      Likely range: {formatPct(rangeLo)} to {formatPct(rangeHi)} extra
+                      {isAr
+                        ? `المجال المحتمل: ${formatPct(rangeLo)} إلى ${formatPct(rangeHi)} إضافي`
+                        : `Likely range: ${formatPct(rangeLo)} to ${formatPct(rangeHi)} extra`}
                     </p>
                   )}
                   {!isStarted && (
                     <p className="text-[11px] text-neutral-300">
-                      Select your relationship on the left to calculate range
+                      {isAr
+                        ? 'حدد صلة القرابة في الخطوات السابقة لحساب النطاق المحتمل'
+                        : 'Select your relationship on the left to calculate range'}
                     </p>
                   )}
                   {/* One-liner explaining what this % denotes for everyday users */}
                   <p className="text-[11px] text-[#90ebcd] leading-snug pt-1.5 font-medium border-t border-white/10 mt-2">
-                    This denotes the estimated extra likelihood—beyond the general ~3% natural baseline that applies to all couples worldwide—that a child may inherit a serious genetic condition due to shared family ancestry.
+                    {isAr
+                      ? 'يوضح هذا الرقم الاحتمال الإضافي التقديري — بخلاف النسبة الطبيعية العامة (~٣٪) التي تنطبق على جميع الأزواج حول العالم — لاحتمال وراثة الطفل لحالة جينية بسبب السلف المشترك.'
+                      : 'This denotes the estimated extra likelihood—beyond the general ~3% natural baseline that applies to all couples worldwide—that a child may inherit a serious genetic condition due to shared family ancestry.'}
                   </p>
                 </div>
 
@@ -1354,7 +1490,7 @@ export default function LoginPage() {
                     tabIndex={0}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleTile('f'); }}
                     className="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all cursor-pointer min-h-[96px] flex flex-col justify-between select-none relative group"
-                    title="Click to flip and read explanation"
+                    title={isAr ? 'انقر للقلب وقراءة الشرح' : 'Click to flip and read explanation'}
                   >
                     {!flippedTiles['f'] ? (
                       <>
@@ -1362,20 +1498,24 @@ export default function LoginPage() {
                           <b className="text-lg font-black text-[#90ebcd]">
                             {!isStarted ? '—' : currentF === 0 ? '0' : (currentF <= 0.005 ? '< 1/200' : `1/${Math.round(1 / currentF)}`)}
                           </b>
-                          <p className="text-[10px] text-neutral-300 font-medium">Shared-ancestry level (F)</p>
+                          <p className="text-[10px] text-neutral-300 font-medium">
+                            {isAr ? 'معامل القرابة والمصاهرة (F)' : 'Shared-ancestry level (F)'}
+                          </p>
                         </div>
                         <span className="text-[9px] text-[#90ebcd]/70 group-hover:text-[#90ebcd] flex items-center gap-1">
                           <span className="material-symbols-outlined text-[11px]">flip</span>
-                          <span>Click to learn more</span>
+                          <span>{isAr ? 'انقر لمعرفة المزيد' : 'Click to learn more'}</span>
                         </span>
                       </>
                     ) : (
                       <div className="text-[10px] text-[#efefef] leading-tight space-y-1">
-                        <b className="text-[#90ebcd] block text-[11px]">Shared Ancestry (F)</b>
+                        <b className="text-[#90ebcd] block text-[11px]">{isAr ? 'معامل القرابة (F)' : 'Shared Ancestry (F)'}</b>
                         <p className="text-[10px] text-neutral-200">
-                          Wright’s inbreeding coefficient. Measures the proportion of genes a child inherits that are identical from common ancestors.
+                          {isAr
+                            ? 'معامل رايت لزواج الأقارب. يقيس نسبة الجينات التي يرثها الطفل وتكون متطابقة بسبب وجود أسلاف مشتركين.'
+                            : 'Wright’s inbreeding coefficient. Measures the proportion of genes a child inherits that are identical from common ancestors.'}
                         </p>
-                        <span className="text-[9px] text-neutral-400 block pt-0.5">Click to flip back</span>
+                        <span className="text-[9px] text-neutral-400 block pt-0.5">{isAr ? 'انقر للعودة' : 'Click to flip back'}</span>
                       </div>
                     )}
                   </div>
@@ -1387,7 +1527,7 @@ export default function LoginPage() {
                     tabIndex={0}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleTile('l'); }}
                     className="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all cursor-pointer min-h-[96px] flex flex-col justify-between select-none relative group"
-                    title="Click to flip and read explanation"
+                    title={isAr ? 'انقر للقلب وقراءة الشرح' : 'Click to flip and read explanation'}
                   >
                     {!flippedTiles['l'] ? (
                       <>
@@ -1395,20 +1535,24 @@ export default function LoginPage() {
                           <b className="text-lg font-black text-[#30ba78]">
                             {!isStarted ? '—' : `×${currentL.toFixed(2)}`}
                           </b>
-                          <p className="text-[10px] text-neutral-300 font-medium">Family multiplier (L)</p>
+                          <p className="text-[10px] text-neutral-300 font-medium">
+                            {isAr ? 'المعامل السريري للعائلة (L)' : 'Family multiplier (L)'}
+                          </p>
                         </div>
                         <span className="text-[9px] text-[#30ba78]/70 group-hover:text-[#30ba78] flex items-center gap-1">
                           <span className="material-symbols-outlined text-[11px]">flip</span>
-                          <span>Click to learn more</span>
+                          <span>{isAr ? 'انقر لمعرفة المزيد' : 'Click to learn more'}</span>
                         </span>
                       </>
                     ) : (
                       <div className="text-[10px] text-[#efefef] leading-tight space-y-1">
-                        <b className="text-[#30ba78] block text-[11px]">Family Multiplier (L)</b>
+                        <b className="text-[#30ba78] block text-[11px]">{isAr ? 'المعامل السريري للعائلة (L)' : 'Family Multiplier (L)'}</b>
                         <p className="text-[10px] text-neutral-200">
-                          Clinical weight adjusting risk based on reported family conditions, miscarriages, or premarital carrier screening.
+                          {isAr
+                            ? 'وزن سريري يعدل الاحتمال بناءً على الحالات العائلية المسجلة، حالات الإجهاض، أو فحوصات النواقل.'
+                            : 'Clinical weight adjusting risk based on reported family conditions, miscarriages, or premarital carrier screening.'}
                         </p>
-                        <span className="text-[9px] text-neutral-400 block pt-0.5">Click to flip back</span>
+                        <span className="text-[9px] text-neutral-400 block pt-0.5">{isAr ? 'انقر للعودة' : 'Click to flip back'}</span>
                       </div>
                     )}
                   </div>
@@ -1420,28 +1564,34 @@ export default function LoginPage() {
                     tabIndex={0}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleTile('tot'); }}
                     className="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all cursor-pointer min-h-[96px] flex flex-col justify-between select-none relative group"
-                    title="Click to flip and read explanation"
+                    title={isAr ? 'انقر للقلب وقراءة الشرح' : 'Click to flip and read explanation'}
                   >
                     {!flippedTiles['tot'] ? (
                       <>
                         <div>
                           <b className="text-lg font-black text-white">
-                            {!isStarted ? '~3.0% (Baseline)' : `about ${formatPct(totalChance)}`}
+                            {!isStarted
+                              ? (isAr ? '~٣.٠٪ (المعدل الأساسي)' : '~3.0% (Baseline)')
+                              : (isAr ? `حوالي ${formatPct(totalChance)}` : `about ${formatPct(totalChance)}`)}
                           </b>
-                          <p className="text-[10px] text-neutral-300 font-medium">Total chance (w/ ~3% baseline)</p>
+                          <p className="text-[10px] text-neutral-300 font-medium">
+                            {isAr ? 'الاحتمال الإجمالي (مع الأساس ~٣٪)' : 'Total chance (w/ ~3% baseline)'}
+                          </p>
                         </div>
                         <span className="text-[9px] text-white/70 group-hover:text-white flex items-center gap-1">
                           <span className="material-symbols-outlined text-[11px]">flip</span>
-                          <span>Click to learn more</span>
+                          <span>{isAr ? 'انقر لمعرفة المزيد' : 'Click to learn more'}</span>
                         </span>
                       </>
                     ) : (
                       <div className="text-[10px] text-[#efefef] leading-tight space-y-1">
-                        <b className="text-white block text-[11px]">Total Combined Chance</b>
+                        <b className="text-white block text-[11px]">{isAr ? 'الاحتمال التراكمي الإجمالي' : 'Total Combined Chance'}</b>
                         <p className="text-[10px] text-neutral-200">
-                          The overall chance, combining the natural ~3% general population baseline that applies to all couples with the family link.
+                          {isAr
+                            ? 'الاحتمال الإجمالي يجمع بين الأساس السكاني الطبيعي (~٣٪) الذي ينطبق على جميع الأزواج وبين احتمال صلة القرابة.'
+                            : 'The overall chance, combining the natural ~3% general population baseline that applies to all couples with the family link.'}
                         </p>
-                        <span className="text-[9px] text-neutral-400 block pt-0.5">Click to flip back</span>
+                        <span className="text-[9px] text-neutral-400 block pt-0.5">{isAr ? 'انقر للعودة' : 'Click to flip back'}</span>
                       </div>
                     )}
                   </div>
@@ -1453,28 +1603,34 @@ export default function LoginPage() {
                     tabIndex={0}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleTile('oneIn'); }}
                     className="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-all cursor-pointer min-h-[96px] flex flex-col justify-between select-none relative group"
-                    title="Click to flip and read explanation"
+                    title={isAr ? 'انقر للقلب وقراءة الشرح' : 'Click to flip and read explanation'}
                   >
                     {!flippedTiles['oneIn'] ? (
                       <>
                         <div>
                           <b className="text-lg font-black text-[#fe7c3f]">
-                            {!isStarted ? '1 in 33 (Baseline)' : `1 in ${oneInCount}`}
+                            {!isStarted
+                              ? (isAr ? '١ من كل ٣٣ (الأساس)' : '1 in 33 (Baseline)')
+                              : (isAr ? `١ من كل ${oneInCount}` : `1 in ${oneInCount}`)}
                           </b>
-                          <p className="text-[10px] text-neutral-300 font-medium">Roughly, 1 child in</p>
+                          <p className="text-[10px] text-neutral-300 font-medium">
+                            {isAr ? 'تقريباً طفل ١ من كل' : 'Roughly, 1 child in'}
+                          </p>
                         </div>
                         <span className="text-[9px] text-[#fe7c3f]/70 group-hover:text-[#fe7c3f] flex items-center gap-1">
                           <span className="material-symbols-outlined text-[11px]">flip</span>
-                          <span>Click to learn more</span>
+                          <span>{isAr ? 'انقر لمعرفة المزيد' : 'Click to learn more'}</span>
                         </span>
                       </>
                     ) : (
                       <div className="text-[10px] text-[#efefef] leading-tight space-y-1">
-                        <b className="text-[#fe7c3f] block text-[11px]">Frequency Perspective</b>
+                        <b className="text-[#fe7c3f] block text-[11px]">{isAr ? 'منظور التكرار الإحصائي' : 'Frequency Perspective'}</b>
                         <p className="text-[10px] text-neutral-200">
-                          Statistical frequency: roughly 1 child out of every {isStarted ? oneInCount : 33} born to couples with this background may be affected.
+                          {isAr
+                            ? `تكرار إحصائي: يُقدر احتمال إصابة طفل واحد تقريباً من بين كل ${isStarted ? oneInCount : 33} طفلاً يولدون لأزواج بهذا التاريخ العائلي.`
+                            : `Statistical frequency: roughly 1 child out of every ${isStarted ? oneInCount : 33} born to couples with this background may be affected.`}
                         </p>
-                        <span className="text-[9px] text-neutral-400 block pt-0.5">Click to flip back</span>
+                        <span className="text-[9px] text-neutral-400 block pt-0.5">{isAr ? 'انقر للعودة' : 'Click to flip back'}</span>
                       </div>
                     )}
                   </div>
@@ -1483,7 +1639,9 @@ export default function LoginPage() {
 
                 {/* 100 Children Pictogram Visualizer */}
                 <div className="space-y-2 pt-2">
-                  <b className="text-xs font-bold text-white">Out of 100 children:</b>
+                  <b className="text-xs font-bold text-white">
+                    {isAr ? 'من بين كل ١٠٠ طفل:' : 'Out of 100 children:'}
+                  </b>
                   <div className="grid grid-cols-10 gap-1.5 p-3 rounded-xl bg-black/30 border border-white/10">
                     {Array.from({ length: 100 }).map((_, i) => {
                       // First 3 dots: background population risk (about 3%)
@@ -1507,8 +1665,14 @@ export default function LoginPage() {
                     })}
                   </div>
                   <p className="text-[10px] text-neutral-300 flex items-center gap-3">
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#90ebcd]"></span> Usual background (~3%)</span>
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#fe7c3f]"></span> Added family link</span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-[#90ebcd]"></span>
+                      {isAr ? 'المعدل الطبيعي العام (~٣٪)' : 'Usual background (~3%)'}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-[#fe7c3f]"></span>
+                      {isAr ? 'الاحتمال الإضافي للقرابة' : 'Added family link'}
+                    </span>
                   </p>
                 </div>
 
@@ -1533,13 +1697,29 @@ export default function LoginPage() {
                 <div className="space-y-2 pt-2 border-t border-white/10">
                   <b className="text-xs font-bold text-white flex items-center gap-1">
                     <span className="material-symbols-outlined text-sm text-[#30ba78]">checklist</span>
-                    <span>Sensible next steps:</span>
+                    <span>{isAr ? 'خطوات عملية موصى بها:' : 'Sensible next steps:'}</span>
                   </b>
                   <ul className="text-[11px] text-[#efefef] space-y-1.5 list-disc pl-4 leading-relaxed">
-                    <li>Complete premarital screening for both partners (Thalassemia, Sickle Cell, G6PD).</li>
-                    <li>Schedule a genetic counseling review to draw your official 3-generation pedigree tree.</li>
-                    <li>Record any inherited conditions or early child illness in either family before consulting.</li>
-                    <li>Once pregnant, consult about early scans and non-invasive prenatal testing (NIPT).</li>
+                    <li>
+                      {isAr
+                        ? 'إجراء الفحص الطبي للمقبلين على الزواج لكلا الشريكين (الثلاسيميا، الأنيميا المنجلية، نقص G6PD).'
+                        : 'Complete premarital screening for both partners (Thalassemia, Sickle Cell, G6PD).'}
+                    </li>
+                    <li>
+                      {isAr
+                        ? 'حجز جلسة استشارة وراثية معتمدة لتوثيق شجرة العائلة الرسمية لثلاثة أجيال.'
+                        : 'Schedule a genetic counseling review to draw your official 3-generation pedigree tree.'}
+                    </li>
+                    <li>
+                      {isAr
+                        ? 'تسجيل أي حالات وراثية أو أمراض مبكرة في العائلتين قبل الاستشارة.'
+                        : 'Record any inherited conditions or early child illness in either family before consulting.'}
+                    </li>
+                    <li>
+                      {isAr
+                        ? 'عند حدوث الحمل، استشارة الطبيب بشأن الفحوصات المبكرة وفحص ما قبل الولادة غير الجراحي (NIPT).'
+                        : 'Once pregnant, consult about early scans and non-invasive prenatal testing (NIPT).'}
+                    </li>
                   </ul>
                 </div>
               </div>
@@ -1550,7 +1730,7 @@ export default function LoginPage() {
                 onClick={() => openAuth('signin')}
                 className="w-full py-3 rounded-xl bg-[#30ba78] hover:bg-[#90ebcd] text-[#0c322c] text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-lg mt-4"
               >
-                <span>Save Assessment in Clinical Vault</span>
+                <span>{isAr ? 'حفظ التقييم في الخزينة الصحية' : 'Save Assessment in Clinical Vault'}</span>
                 <span className="material-symbols-outlined text-sm">arrow_forward</span>
               </button>
 
@@ -1571,15 +1751,21 @@ export default function LoginPage() {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-[#0c322c]">
-                    How this estimate is worked out
+                    {isAr ? 'كيف يتم حساب هذا التقدير الوراثي' : 'How this estimate is worked out'}
                   </h3>
                   <p className="text-[11px] text-neutral-500">
-                    Wright’s inbreeding coefficient, lethal equivalents model, and clinical multipliers
+                    {isAr
+                      ? 'معامل رايت لزواج الأقارب، نموذج المكافئات المميتة، والمعاملات السريرية'
+                      : 'Wright’s inbreeding coefficient, lethal equivalents model, and clinical multipliers'}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-1.5 text-xs font-bold text-[#192072]">
-                <span>{isFormulaExpanded ? 'Collapse formula' : 'Expand formula'}</span>
+                <span>
+                  {isFormulaExpanded
+                    ? (isAr ? 'إخفاء المعادلة' : 'Collapse formula')
+                    : (isAr ? 'عرض المعادلة' : 'Expand formula')}
+                </span>
                 <span className={`material-symbols-outlined text-base transition-transform duration-200 ${isFormulaExpanded ? 'rotate-180' : ''}`}>
                   expand_more
                 </span>
@@ -1589,40 +1775,61 @@ export default function LoginPage() {
             {isFormulaExpanded && (
               <div className="p-5 sm:p-6 text-xs text-[#0c322c] space-y-4 border-t border-neutral-200 bg-white leading-relaxed animate-in fade-in duration-200">
                 <p className="text-neutral-700">
-                  This is a simple method I designed for clarity. It builds on Wright’s inbreeding coefficient and a standard “lethal equivalents” model.
+                  {isAr
+                    ? 'هذه طريقة مبسطة صُممت لتوفير الوضوح، مبنية على معامل رايت لزواج الأقارب ونموذج "المكافئات المميتة" القياسي.'
+                    : 'This is a simple method I designed for clarity. It builds on Wright’s inbreeding coefficient and a standard “lethal equivalents” model.'}
                 </p>
 
                 <div className="space-y-3 pl-3.5 border-l-2 border-[#30ba78]">
                   <div>
-                    <b className="font-bold text-[#0c322c]">Step 1, shared ancestry:</b>{' '}
+                    <b className="font-bold text-[#0c322c]">
+                      {isAr ? 'الخطوة ١، صلة القرابة السلفية:' : 'Step 1, shared ancestry:'}
+                    </b>{' '}
                     <span className="font-mono bg-neutral-100 px-1.5 py-0.5 rounded text-[11px] text-[#192072]">
                       F = Σ (½)<sup>n₁+n₂+1</sup> × (1 + F<sub>A</sub>)
                     </span>{' '}
-                    summed over every shared ancestor, where n₁ and n₂ are generations from each partner, and F<sub>A</sub> is the ancestors’ own inbreeding (step 2).
+                    {isAr
+                      ? 'مجموع كل سلف مشترك، حيث n₁ و n₂ هما عدد الأجيال لكل شريك، و F_A هي درجة زواج الأقارب للأسلاف أنفسهم.'
+                      : 'summed over every shared ancestor, where n₁ and n₂ are generations from each partner, and FA is the ancestors’ own inbreeding (step 2).'}
                   </div>
 
                   <div>
-                    <b className="font-bold text-[#0c322c]">Step 2, family multiplier:</b>{' '}
+                    <b className="font-bold text-[#0c322c]">
+                      {isAr ? 'الخطوة ٢، المعامل العائلي:' : 'Step 2, family multiplier:'}
+                    </b>{' '}
                     <span className="font-mono bg-neutral-100 px-1.5 py-0.5 rounded text-[11px] text-[#192072]">
                       L = history × pregnancies × screening
-                    </span>, limited to a maximum of 3. Family history of an inherited condition counts ×1.8 (×1.2 if unsure), repeated pregnancy loss or an unexplained child illness ×1.5, and a clear screening result ×0.7.
+                    </span>
+                    {isAr
+                      ? '، بحد أقصى ٣. التاريخ العائلي لوجود مرض وراثي يُحسب بمقدار ×١.٨ (×١.٢ إذا كان غير مؤكد)، تكرار فقدان الحمل أو مرض غير مفسر للطفل ×١.٥، ونتيجة الفحص السليمة ×٠.٧.'
+                      : ', limited to a maximum of 3. Family history of an inherited condition counts ×1.8 (×1.2 if unsure), repeated pregnancy loss or an unexplained child illness ×1.5, and a clear screening result ×0.7.'}
                   </div>
 
                   <div>
-                    <b className="font-bold text-[#0c322c]">Step 3, extra risk:</b>{' '}
+                    <b className="font-bold text-[#0c322c]">
+                      {isAr ? 'الخطوة ٣، الاحتمال الإضافي:' : 'Step 3, extra risk:'}
+                    </b>{' '}
                     <span className="font-mono bg-neutral-100 px-1.5 py-0.5 rounded text-[11px] text-[#192072]">
                       Extra = 1 − e<sup>−k·F·L</sup>
                     </span>{' '}
-                    with k = 0.49. I chose k so that first cousins with L = 1 give about 3 percentage points of extra risk, in line with published studies. The range shown uses L × 0.6 to L × 1.5.
+                    {isAr
+                      ? 'مع k = 0.49 ليتوافق مع الدراسات السريرية المنشورة لأبناء العم المباشرين.'
+                      : 'with k = 0.49. I chose k so that first cousins with L = 1 give about 3 percentage points of extra risk, in line with published studies. The range shown uses L × 0.6 to L × 1.5.'}
                   </div>
                 </div>
 
                 <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200 text-amber-900 text-[11px] leading-relaxed">
-                  <b className="font-bold text-amber-950">Important:</b> the multipliers are judgment-based estimates, not validated clinical values. If you both carry the same recessive condition, the answer is not an estimate: each pregnancy has a 1 in 4 chance of being affected.
+                  <b className="font-bold text-amber-950">{isAr ? 'تنبيه مهم:' : 'Important:'}</b>{' '}
+                  {isAr
+                    ? 'المعاملات هي تقديرات سريرية استرشادية وليست قيماً حتمية مطلقة. إذا كان كلا الشريكين يحملان نفس الجين المتنحي فإن كل حمل يحمل احتمال ١ من ٤ (٢٥٪) للإصابة.'
+                    : 'the multipliers are judgment-based estimates, not validated clinical values. If you both carry the same recessive condition, the answer is not an estimate: each pregnancy has a 1 in 4 chance of being affected.'}
                 </div>
 
                 <div className="p-3.5 rounded-xl bg-emerald-50 border border-[#30ba78]/30 text-emerald-950 text-[11px] leading-relaxed">
-                  <b className="font-bold text-[#0c322c]">Educational Notice:</b> Educational tool only, not medical advice. It can’t see your actual genes. Relatives marrying does not mean children will have a condition: most children of cousins are healthy. A genetic counsellor can review your real family tree.
+                  <b className="font-bold text-[#0c322c]">{isAr ? 'إشعار تعليمي:' : 'Educational Notice:'}</b>{' '}
+                  {isAr
+                    ? 'هذه الأداة مخصصة للتوعية ولا تغني عن الاستشارة الطبية. لا يمكنها قراءة الشيفرة الوراثية الفعلية. زواج الأقارب لا يعني حتمية إصابة الأطفال: معظم أطفال الأقارب يولدون بصحة كاملة. يمكن للمستشار الوراثي مراجعة شجرة عائلتك الفعلية.'
+                    : 'Educational tool only, not medical advice. It can’t see your actual genes. Relatives marrying does not mean children will have a condition: most children of cousins are healthy. A genetic counsellor can review your real family tree.'}
                 </div>
               </div>
             )}
@@ -1633,36 +1840,52 @@ export default function LoginPage() {
             <div className="flex items-center gap-2 border-b border-neutral-200 pb-3">
               <span className="material-symbols-outlined text-[#30ba78] text-xl">help</span>
               <h3 className="text-base sm:text-lg font-bold text-[#0c322c]">
-                What does my result mean?
+                {isAr ? 'ماذا تعني نتائجي؟' : 'What does my result mean?'}
               </h3>
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 space-y-1.5">
-                <b className="text-xs font-bold text-[#0c322c] block">Carrier</b>
+                <b className="text-xs font-bold text-[#0c322c] block">
+                  {isAr ? 'حامل لجين وراثي' : 'Carrier'}
+                </b>
                 <p className="text-xs text-neutral-600 leading-relaxed">
-                  You carry a gene change but are usually healthy. Many people are carriers of at least one.
+                  {isAr
+                    ? 'تحمل تغيراً جينياً ولكنك بصحة جيدة في العادة. معظم الأشخاص يحملون تغيراً جينياً واحداً على الأقل.'
+                    : 'You carry a gene change but are usually healthy. Many people are carriers of at least one.'}
                 </p>
               </div>
 
               <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 space-y-1.5">
-                <b className="text-xs font-bold text-[#0c322c] block">Couple-level risk</b>
+                <b className="text-xs font-bold text-[#0c322c] block">
+                  {isAr ? 'خطر على مستوى الزوجين' : 'Couple-level risk'}
+                </b>
                 <p className="text-xs text-neutral-600 leading-relaxed">
-                  Whether you and your partner carry changes in the same gene, which affects the chance for a child.
+                  {isAr
+                    ? 'ما إذا كنت أنت وشريك حياتك تحملان تغيرات في نفس الجين، مما يؤثر على احتمال إصابة الطفل.'
+                    : 'Whether you and your partner carry changes in the same gene, which affects the chance for a child.'}
                 </p>
               </div>
 
               <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 space-y-1.5">
-                <b className="text-xs font-bold text-[#0c322c] block">Possible child risk</b>
+                <b className="text-xs font-bold text-[#0c322c] block">
+                  {isAr ? 'الاحتمال المحتمل للطفل' : 'Possible child risk'}
+                </b>
                 <p className="text-xs text-neutral-600 leading-relaxed">
-                  A probability, not a prediction. Many couples with a higher chance have healthy children.
+                  {isAr
+                    ? 'هو مجرد احتمال إحصائي وليس تنبؤاً قاطعاً. العديد من الأزواج ذوي الاحتمال المرتفع ينجبون أطفالاً أصحاء.'
+                    : 'A probability, not a prediction. Many couples with a higher chance have healthy children.'}
                 </p>
               </div>
 
               <div className="p-4 rounded-xl bg-neutral-50 border border-neutral-200 space-y-1.5">
-                <b className="text-xs font-bold text-[#0c322c] block">Risk vs. diagnosis</b>
+                <b className="text-xs font-bold text-[#0c322c] block">
+                  {isAr ? 'الاحتمال مقابل التشخيص' : 'Risk vs. diagnosis'}
+                </b>
                 <p className="text-xs text-neutral-600 leading-relaxed">
-                  Risk describes a chance. A diagnosis means a condition is present.
+                  {isAr
+                    ? 'الاحتمال يصف نسبة الإمكانية، بينما التشخيص يعني وجود الحالة المرضية بالفعل.'
+                    : 'Risk describes a chance. A diagnosis means a condition is present.'}
                 </p>
               </div>
             </div>
@@ -1689,10 +1912,10 @@ export default function LoginPage() {
           <div className="text-center space-y-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-[#30ba78]/20 text-[#90ebcd] border border-[#30ba78]/30">
               <span className="material-symbols-outlined text-sm text-[#30ba78]">lightbulb</span>
-              <span>Guidance & Perspective</span>
+              <span>{isAr ? 'إرشادات ورؤى مهمة' : 'Guidance & Perspective'}</span>
             </div>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-              Things worth remembering
+              {isAr ? 'أمور تستحق أن نتذكرها' : 'Things worth remembering'}
             </h2>
           </div>
 
@@ -1703,7 +1926,9 @@ export default function LoginPage() {
                 <span className="material-symbols-outlined text-base">check_circle</span>
               </div>
               <p className="text-sm text-[#efefef] font-medium leading-relaxed">
-                Being a carrier is common. It is not a diagnosis and it is not a fault.
+                {isAr
+                  ? 'أن تكون حاملاً لجين أمر شائع جداً. هذا ليس تشخيصاً بمرض وليس خطأ أحد.'
+                  : 'Being a carrier is common. It is not a diagnosis and it is not a fault.'}
               </p>
             </div>
 
@@ -1712,7 +1937,9 @@ export default function LoginPage() {
                 <span className="material-symbols-outlined text-base">info</span>
               </div>
               <p className="text-sm text-[#efefef] font-medium leading-relaxed">
-                A risk is a possibility, not a certainty.
+                {isAr
+                  ? 'الاحتمال هو مجرد إمكانية وليس أمراً حتمياً.'
+                  : 'A risk is a possibility, not a certainty.'}
               </p>
             </div>
 
@@ -1721,7 +1948,9 @@ export default function LoginPage() {
                 <span className="material-symbols-outlined text-base">balance</span>
               </div>
               <p className="text-sm text-[#efefef] font-medium leading-relaxed">
-                Every couple&apos;s situation is different, and so is every decision.
+                {isAr
+                  ? 'حالة كل زوجين فريدة، وكذلك كل قرار يتخذانه.'
+                  : 'Every couple\'s situation is different, and so is every decision.'}
               </p>
             </div>
 
@@ -1730,7 +1959,9 @@ export default function LoginPage() {
                 <span className="material-symbols-outlined text-base">forum</span>
               </div>
               <p className="text-sm text-[#efefef] font-medium leading-relaxed">
-                Counselling is a conversation, not a verdict.
+                {isAr
+                  ? 'الاستشارة الوراثية هي حوار مطمئن وليست حكماً أو فريضة.'
+                  : 'Counselling is a conversation, not a verdict.'}
               </p>
             </div>
 
@@ -1739,7 +1970,9 @@ export default function LoginPage() {
                 <span className="material-symbols-outlined text-base">verified_user</span>
               </div>
               <p className="text-sm text-[#efefef] font-medium leading-relaxed">
-                You are in charge of your information and your choices.
+                {isAr
+                  ? 'أنت صاحب القرار في معلوماتك وخياراتك بالكامل.'
+                  : 'You are in charge of your information and your choices.'}
               </p>
             </div>
 
@@ -1756,14 +1989,16 @@ export default function LoginPage() {
             <div>
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-[#30ba78]/15 text-[#0c322c] border border-[#30ba78]/30 mb-2">
                 <span className="material-symbols-outlined text-sm text-[#30ba78]">pin_drop</span>
-                <span>Official Screening Network</span>
+                <span>{isAr ? 'شبكة مراكز الفحص المعتمدة' : 'Official Screening Network'}</span>
               </div>
               <h2 className="text-2xl sm:text-3xl font-extrabold text-[#0c322c] tracking-tight">
-                Find a screening centre in Abu Dhabi
+                {isAr ? 'ابحث عن مركز فحص في إمارة أبوظبي' : 'Find a screening centre in Abu Dhabi'}
               </h2>
             </div>
             <p className="text-xs sm:text-sm text-neutral-600 max-w-md leading-relaxed">
-              Official pre-marital screening facilities across Abu Dhabi, Al Ain, and Al Dhafra offering accredited testing packages.
+              {isAr
+                ? 'المرافق الرسمية المعتمدة للفحص الطبي للمقبلين على الزواج في أبوظبي، العين، ومنطقة الظفرة.'
+                : 'Official pre-marital screening facilities across Abu Dhabi, Al Ain, and Al Dhafra offering accredited testing packages.'}
             </p>
           </div>
 
@@ -1773,10 +2008,12 @@ export default function LoginPage() {
             <div className="p-6 rounded-2xl bg-white border border-neutral-200 hover:border-[#30ba78] transition-all space-y-3 shadow-xs">
               <div className="flex items-center gap-2 text-[#30ba78]">
                 <span className="material-symbols-outlined text-xl">apartment</span>
-                <b className="text-base font-bold text-[#0c322c]">Abu Dhabi</b>
+                <b className="text-base font-bold text-[#0c322c]">{isAr ? 'أبوظبي' : 'Abu Dhabi'}</b>
               </div>
               <p className="text-xs text-neutral-700 leading-relaxed font-normal">
-                Baniyas, Madinat Khalifa, Al Shamkha, Al Maqtaa, Al Bateen and Al Bahia Healthcare Centers.
+                {isAr
+                  ? 'مراكز بني ياس، مدينة خليفة، الشامخة، المقطع، البطين، والبهية الصحية.'
+                  : 'Baniyas, Madinat Khalifa, Al Shamkha, Al Maqtaa, Al Bateen and Al Bahia Healthcare Centers.'}
               </p>
             </div>
 
@@ -1784,10 +2021,12 @@ export default function LoginPage() {
             <div className="p-6 rounded-2xl bg-white border border-neutral-200 hover:border-[#2453ff] transition-all space-y-3 shadow-xs">
               <div className="flex items-center gap-2 text-[#2453ff]">
                 <span className="material-symbols-outlined text-xl">local_hospital</span>
-                <b className="text-base font-bold text-[#0c322c]">Al Ain</b>
+                <b className="text-base font-bold text-[#0c322c]">{isAr ? 'العين' : 'Al Ain'}</b>
               </div>
               <p className="text-xs text-neutral-700 leading-relaxed font-normal">
-                Al Muwaiji, Al Maqam, Neima, Al Hayer, Al Quaa, Al Hili and Sweihan Healthcare Centers; Oud Al Touba Diagnostic and Screening Center; Mezyad Healthcare; Al Yahar Healthcare.
+                {isAr
+                  ? 'مراكز المويجعي، المقام، نعمة، الهير، القوع، الهيلي، وسويحان الصحية؛ مركز عود التوبة للتشخيص والفحص؛ مزيد للرعاية الصحية؛ اليحر للرعاية الصحية.'
+                  : 'Al Muwaiji, Al Maqam, Neima, Al Hayer, Al Quaa, Al Hili and Sweihan Healthcare Centers; Oud Al Touba Diagnostic and Screening Center; Mezyad Healthcare; Al Yahar Healthcare.'}
               </p>
             </div>
 
@@ -1795,10 +2034,12 @@ export default function LoginPage() {
             <div className="p-6 rounded-2xl bg-white border border-neutral-200 hover:border-[#fe7c3f] transition-all space-y-3 shadow-xs">
               <div className="flex items-center gap-2 text-[#fe7c3f]">
                 <span className="material-symbols-outlined text-xl">medical_services</span>
-                <b className="text-base font-bold text-[#0c322c]">Al Dhafra Region</b>
+                <b className="text-base font-bold text-[#0c322c]">{isAr ? 'منطقة الظفرة' : 'Al Dhafra Region'}</b>
               </div>
               <p className="text-xs text-neutral-700 leading-relaxed font-normal">
-                Al Dhafra Family Medicine Center; Ghiathy, Marfa, Al Sila, Delma and Liwa Hospitals.
+                {isAr
+                  ? 'مركز الظفرة لطب الأسرة؛ مستشفيات غياثي، المرفأ، السلع، دلما، وليوا.'
+                  : 'Al Dhafra Family Medicine Center; Ghiathy, Marfa, Al Sila, Delma and Liwa Hospitals.'}
               </p>
             </div>
 
@@ -1812,10 +2053,12 @@ export default function LoginPage() {
           
           <div className="max-w-3xl space-y-3">
             <h2 className="text-3xl sm:text-4xl font-extrabold text-[#0c322c] tracking-tight">
-              Certified Genetics Specialists & AI Intelligence
+              {isAr ? 'أخصائيو علم الوراثة المعتمدون والذكاء الاصطناعي' : 'Certified Genetics Specialists & AI Intelligence'}
             </h2>
             <p className="text-sm sm:text-base text-neutral-600 leading-relaxed">
-              Culturally harmonized hereditary counseling and CLIA/CAP certified report workflows. Empowering families with actionable, culturally respectful clinical pedigree intelligence.
+              {isAr
+                ? 'استشارات وراثية تراعي خصوصية المجتمع مع مسارات تقارير معتمدة دولياً CLIA/CAP لتمكين العائلات بمعلومات سريرية دقيقة ومحترمة.'
+                : 'Culturally harmonized hereditary counseling and CLIA/CAP certified report workflows. Empowering families with actionable, culturally respectful clinical pedigree intelligence.'}
             </p>
           </div>
 
@@ -1825,9 +2068,13 @@ export default function LoginPage() {
               <div className="w-10 h-10 rounded-xl bg-[#30ba78]/15 text-[#30ba78] flex items-center justify-center">
                 <span className="material-symbols-outlined text-xl">account_tree</span>
               </div>
-              <h3 className="text-base font-bold text-[#0c322c]">3-Generation Pedigree</h3>
+              <h3 className="text-base font-bold text-[#0c322c]">
+                {isAr ? 'شجرة عائلة لثلاثة أجيال' : '3-Generation Pedigree'}
+              </h3>
               <p className="text-xs text-neutral-600 leading-relaxed">
-                Standardized clinical pedigree charts mapping probands, carrier alleles, and dual-parental consanguinity with ACMG compliance.
+                {isAr
+                  ? 'مخططات أنساب سريرية قياسية توثق حالات النواقل وصلات القرابة المزدوجة وفق معايير ACMG.'
+                  : 'Standardized clinical pedigree charts mapping probands, carrier alleles, and dual-parental consanguinity with ACMG compliance.'}
               </p>
             </div>
 
@@ -1835,9 +2082,13 @@ export default function LoginPage() {
               <div className="w-10 h-10 rounded-xl bg-[#2453ff]/15 text-[#2453ff] flex items-center justify-center">
                 <span className="material-symbols-outlined text-xl">biotech</span>
               </div>
-              <h3 className="text-base font-bold text-[#0c322c]">Pre-marital Couple Risk</h3>
+              <h3 className="text-base font-bold text-[#0c322c]">
+                {isAr ? 'تقييم مخاطر الزوجين' : 'Pre-marital Couple Risk'}
+              </h3>
               <p className="text-xs text-neutral-600 leading-relaxed">
-                Automated Punnett probability matching for common Middle Eastern and South Asian carrier conditions (Thalassemia, G6PD, Sickle Cell).
+                {isAr
+                  ? 'مطابقة احتمالات بونيت التلقائية للحالات الوراثية الشائعة (الثلاسيميا، نقص الخميرة G6PD، الأنيميا المنجلية).'
+                  : 'Automated Punnett probability matching for common Middle Eastern and South Asian carrier conditions (Thalassemia, G6PD, Sickle Cell).'}
               </p>
             </div>
 
@@ -1845,9 +2096,13 @@ export default function LoginPage() {
               <div className="w-10 h-10 rounded-xl bg-[#fe7c3f]/15 text-[#fe7c3f] flex items-center justify-center">
                 <span className="material-symbols-outlined text-xl">psychology</span>
               </div>
-              <h3 className="text-base font-bold text-[#0c322c]">AI Genetic Intelligence</h3>
+              <h3 className="text-base font-bold text-[#0c322c]">
+                {isAr ? 'تحليل وراثي ذكي' : 'AI Genetic Intelligence'}
+              </h3>
               <p className="text-xs text-neutral-600 leading-relaxed">
-                Instant parsing of laboratory PDF screening reports with automated redaction of sensitive PII and candidate de-identification.
+                {isAr
+                  ? 'تحليل فوري لتقارير الفحوصات بصيغة PDF مع تنقية البيانات الشخصية والحفاظ على الخصوصية التامة.'
+                  : 'Instant parsing of laboratory PDF screening reports with automated redaction of sensitive PII and candidate de-identification.'}
               </p>
             </div>
 
@@ -1865,12 +2120,14 @@ export default function LoginPage() {
               </div>
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#30ba78]/20 text-[#90ebcd] border border-[#30ba78]/40 text-xs font-bold">
                 <span className="material-symbols-outlined text-sm">verified</span>
-                <span>Verified Geneticist</span>
+                <span>{isAr ? 'أخصائي وراثي معتمد' : 'Verified Geneticist'}</span>
               </div>
             </div>
 
             <blockquote className="text-base sm:text-lg italic font-medium text-[#efefef] leading-relaxed">
-              "GuardianAngel provided our family with unparalleled clarity on hereditary cardiac markers while strictly keeping our DNA signatures protected under hardware keys."
+              {isAr
+                ? '"منحتنا منصة Guardian Angel وضوحاً استثنائياً حول المؤشرات الوراثية العائلية مع حماية بياناتنا الوراثية بأعلى معايير الأمان."'
+                : '"GuardianAngel provided our family with unparalleled clarity on hereditary cardiac markers while strictly keeping our DNA signatures protected under hardware keys."'}
             </blockquote>
 
             <div className="flex items-center gap-3 pt-2">
@@ -1878,8 +2135,8 @@ export default function LoginPage() {
                 AT
               </div>
               <div>
-                <p className="text-sm font-bold text-white">Dr. Aris Thorne, MS, CGC</p>
-                <p className="text-xs text-[#90ebcd]">Clinical Genomic Specialist • Boston Health Alliance</p>
+                <p className="text-sm font-bold text-white">{isAr ? 'د. أريس ثورن، ماجستير CGC' : 'Dr. Aris Thorne, MS, CGC'}</p>
+                <p className="text-xs text-[#90ebcd]">{isAr ? 'أخصائي علم الجينات السريري • تحالف بوسطن الصحي' : 'Clinical Genomic Specialist • Boston Health Alliance'}</p>
               </div>
             </div>
           </div>
@@ -1896,16 +2153,22 @@ export default function LoginPage() {
             </div>
             <div>
               <p className="text-sm font-bold text-white">Guardian Angel</p>
-              <p className="text-[10px] text-[#90ebcd]">Genomics Intelligence Platform</p>
+              <p className="text-[10px] text-[#90ebcd]">
+                {isAr ? 'منصة الذكاء الجيني والوراثي' : 'Genomics Intelligence Platform'}
+              </p>
             </div>
           </div>
 
           <div className="max-w-3xl space-y-2.5 text-xs text-[#efefef]/90 leading-relaxed pt-2 border-t border-white/10">
             <p>
-              An initiative by the Pairadox Team to raise awareness of inherited health risks and to help families make informed, confident choices, with respect for every family’s values, culture and privacy.
+              {isAr
+                ? 'مبادرة من فريق Pairadox لزيادة الوعي بالمخاطر الصحية الوراثية ولمساعدة العائلات على اتخاذ قرارات واثقة ومستنيرة، مع الاحترام الكامل لقيم كل عائلة وثقافتها وخصوصيتها.'
+                : 'An initiative by the Pairadox Team to raise awareness of inherited health risks and to help families make informed, confident choices, with respect for every family’s values, culture and privacy.'}
             </p>
             <p className="text-neutral-400 text-[11px]">
-              This app provides general information and does not replace medical advice, diagnosis or genetic counselling. Please speak with a qualified healthcare professional about your results.
+              {isAr
+                ? 'يوفر هذا التطبيق معلومات عامة ولا يحل محل الاستشارة الطبية أو التشخيص أو الاستشارة الوراثية التخصصية. يرجى التحدث مع أخصائي رعاية صحية مؤهل بخصوص نتائجك.'
+                : 'This app provides general information and does not replace medical advice, diagnosis or genetic counselling. Please speak with a qualified healthcare professional about your results.'}
             </p>
             <p className="text-neutral-400 text-[11px] pt-1">
               © 2026 Pairadox Team

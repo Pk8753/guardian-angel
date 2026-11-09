@@ -122,31 +122,6 @@ export const PedigreeNodeSymbol: React.FC<PedigreeNodeSymbolProps> = ({
         />
       )}
 
-      {/* Proband Arrow (points to lower-left corner of the shape) */}
-      {member.is_proband && (
-        <g transform={`translate(${-half - 12}, ${half + 12})`}>
-          <line
-            x1={-14}
-            y1={14}
-            x2={0}
-            y2={0}
-            stroke="#006a60"
-            strokeWidth={2.5}
-            markerEnd="url(#proband-arrowhead)"
-          />
-          <text
-            x={-18}
-            y={22}
-            fill="#006a60"
-            fontSize="13"
-            fontWeight="bold"
-            fontFamily="sans-serif"
-          >
-            P
-          </text>
-        </g>
-      )}
-
       {/* Generation & Member ID (e.g. II-3) */}
       <text
         x={0}

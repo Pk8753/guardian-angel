@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Download, Share2, FileCode, Image, FileText, Check, Copy } from 'lucide-react';
+import { Download, Share2, Image, FileText, Check, Copy } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { PedigreeMember } from './types';
@@ -110,30 +110,20 @@ export const ExportToolbar: React.FC<ExportToolbarProps> = ({
       <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={exportSVG}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/90 rounded-xl shadow-xs transition"
-          title="Export vector SVG"
-        >
-          <FileCode className="w-3.5 h-3.5 text-pine" />
-          <span>SVG</span>
-        </button>
-
-        <button
-          type="button"
           onClick={exportPNG}
           disabled={exporting}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/90 rounded-xl shadow-xs transition disabled:opacity-50"
-          title="Export PNG image"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/90 rounded-xl shadow-xs transition disabled:opacity-50 cursor-pointer"
+          title="Export pedigree image"
         >
           <Image className="w-3.5 h-3.5 text-pine" />
-          <span>PNG</span>
+          <span>Image</span>
         </button>
 
         <button
           type="button"
           onClick={exportPDF}
           disabled={exporting}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/90 rounded-xl shadow-xs transition disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/90 rounded-xl shadow-xs transition disabled:opacity-50 cursor-pointer"
           title="Export PDF Clinical Report"
         >
           <FileText className="w-3.5 h-3.5 text-pine" />
