@@ -11,6 +11,7 @@
     padding: 0;
     background-color: #efefef;
     color: #0c322c;
+    scroll-behavior: smooth;
   }
   body {
     overscroll-behavior: none;
