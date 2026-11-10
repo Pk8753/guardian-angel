@@ -230,6 +230,39 @@ def init_db():
     );
     """)
 
+    # 10. Health Policy & Guidelines Documents (Nation-wide screening centers, eligibility, rules)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS policy_documents (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        file_name TEXT NOT NULL,
+        file_type TEXT NOT NULL,
+        title TEXT,
+        chunk_count INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'indexed',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+    """)
+
+    # 11. Health Policy Document Chunks & Vector Embeddings Storage
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS policy_chunks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        doc_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        filename TEXT NOT NULL,
+        title TEXT,
+        chunk_index INTEGER NOT NULL,
+        chunk_text TEXT NOT NULL,
+        file_type TEXT DEFAULT 'pdf',
+        embedding_json TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (doc_id) REFERENCES policy_documents(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+    """)
+
     conn.commit()
 
     # Additive migration: Ensure file_name column exists in scraped_reports
@@ -1192,5 +1225,133 @@ def delete_scraped_reports_bulk(report_ids: list, user_id: int) -> int:
         except Exception:
             pass
     return deleted_count
+
+def save_policy_document(user_id: int, file_name: str, file_type: str, title: str = "", chunk_count: int = 0) -> int:
+    """Save an indexed health policy document record."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO policy_documents (user_id, file_name, file_type, title, chunk_count, status)
+        VALUES (?, ?, ?, ?, ?, 'indexed')
+    """, (user_id, file_name, file_type, title or file_name, chunk_count))
+    doc_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return doc_id
+
+def get_user_policy_documents(user_id: int) -> list:
+    """Fetch all health policy documents uploaded by user or default system policies."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    rows = cursor.execute("""
+        SELECT id, user_id, file_name, file_type, title, chunk_count, status, created_at
+        FROM policy_documents
+        WHERE user_id = ?
+        ORDER BY id DESC
+    """, (user_id,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+def get_policy_document_by_id(doc_id: int, user_id: int):
+    """Retrieve a specific policy document ensuring user ownership."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    row = cursor.execute("""
+        SELECT id, user_id, file_name, file_type, title, chunk_count, status, created_at
+        FROM policy_documents
+        WHERE id = ? AND user_id = ?
+    """, (doc_id, user_id)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def delete_policy_document(doc_id: int, user_id: int) -> bool:
+    """Delete a policy document record."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM policy_documents WHERE id = ? AND user_id = ?", (doc_id, user_id))
+    affected = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return affected > 0
+
+def save_policy_chunk(doc_id: int, user_id: int, filename: str, title: str, chunk_index: int, chunk_text: str, file_type: str = 'pdf', embedding: list = None) -> int:
+    """Save an extracted text chunk and its dense vector embedding into persistent SQLite storage."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO policy_chunks (doc_id, user_id, filename, title, chunk_index, chunk_text, file_type, embedding_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (doc_id, user_id, filename, title or filename, chunk_index, chunk_text, file_type, json.dumps(embedding) if embedding else '[]'))
+    chunk_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return chunk_id
+
+def save_policy_chunks_batch(chunks_data: list) -> int:
+    """Save multiple extracted chunks and embeddings in a single atomic database transaction."""
+    if not chunks_data:
+        return 0
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    params = [
+        (
+            c['doc_id'],
+            c['user_id'],
+            c['filename'],
+            c.get('title') or c['filename'],
+            c['chunk_index'],
+            c['chunk_text'],
+            c.get('file_type', 'pdf'),
+            json.dumps(c.get('embedding', [])) if isinstance(c.get('embedding'), list) else (c.get('embedding') or '[]')
+        )
+        for c in chunks_data
+    ]
+    cursor.executemany("""
+        INSERT INTO policy_chunks (doc_id, user_id, filename, title, chunk_index, chunk_text, file_type, embedding_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, params)
+    inserted = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return inserted
+
+def get_policy_chunks(user_id: int = None, doc_id: int = None) -> list:
+    """Fetch persistent policy chunks and embeddings from database."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    query = "SELECT id, doc_id, user_id, filename, title, chunk_index, chunk_text, file_type, embedding_json, created_at FROM policy_chunks WHERE 1=1"
+    params = []
+    if user_id is not None:
+        query += " AND user_id = ?"
+        params.append(user_id)
+    if doc_id is not None:
+        query += " AND doc_id = ?"
+        params.append(doc_id)
+    query += " ORDER BY doc_id ASC, chunk_index ASC"
+    rows = cursor.execute(query, params).fetchall()
+    conn.close()
+    result = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d['embedding'] = json.loads(d.get('embedding_json') or '[]')
+        except Exception:
+            d['embedding'] = []
+        result.append(d)
+    return result
+
+def delete_policy_chunks_by_doc_id(doc_id: int, user_id: int = None) -> bool:
+    """Delete chunks belonging to a deleted policy document."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    if user_id is not None:
+        cursor.execute("DELETE FROM policy_chunks WHERE doc_id = ? AND user_id = ?", (doc_id, user_id))
+    else:
+        cursor.execute("DELETE FROM policy_chunks WHERE doc_id = ?", (doc_id,))
+    affected = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return affected > 0
+
 
 

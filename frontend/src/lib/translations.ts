@@ -236,6 +236,26 @@ export const translations: Translations = {
   btn_send: {
     en: 'Ask AI',
     ar: 'إرسال السؤال'
+  },
+  settings_title: {
+    en: 'Settings and connections',
+    ar: 'الإعدادات والاتصالات'
+  },
+  settings_subtitle: {
+    en: 'Air-Gap AI Engine (Qwen3 + BGE-M3 + Qdrant) & Health Policy Ingestion',
+    ar: 'محرك الذكاء الاصطناعي المنعزل وسياسات الصحة الوطنية'
+  },
+  settings_btn: {
+    en: 'Settings',
+    ar: 'الإعدادات'
+  },
+  policy_upload_title: {
+    en: 'Upload Nationwide Health Policy & Guidelines',
+    ar: 'رفع وثائق السياسة الصحية الوطنية والإرشادات'
+  },
+  policy_upload_desc: {
+    en: 'Upload screening center rules, eligibility criteria, and protocols (PDF/Image) to embed into Qdrant vector DB.',
+    ar: 'قم برفع وثائق مراكز الفحص ومعايير الأهلية لتحويلها إلى متجهات وتخزينها في قاعدة بيانات Qdrant.'
   }
 };
 

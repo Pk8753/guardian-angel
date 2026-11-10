@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useUIStore } from '@/stores/useUIStore';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { t } from '@/lib/translations';
-import { Sun, Moon } from 'lucide-react';
+import { Sun, Moon, Settings } from 'lucide-react';
 
 export function Navbar() {
   const router = useRouter();
@@ -16,7 +16,8 @@ export function Navbar() {
     activeLocale,
     setActiveLocale,
     isDarkMode,
-    toggleDarkMode
+    toggleDarkMode,
+    setSettingsModalOpen
   } = useUIStore();
   const { user, logout } = useAuthStore();
   const [isDropdownOpen, setIsDropdownOpen] = React.useState(false);
@@ -177,6 +178,19 @@ export function Navbar() {
               </Link>
 
               <div className="border-t border-outline-variant/20 mt-1 pt-1">
+                {/* Settings Option with Gear Logo (above signout) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsDropdownOpen(false);
+                    setSettingsModalOpen(true);
+                  }}
+                  className="w-full text-left flex items-center gap-2.5 px-4 py-2 text-xs text-pine hover:bg-surface-container transition-colors cursor-pointer"
+                >
+                  <Settings className="w-4 h-4 text-pine" />
+                  <span>{t('settings_btn', activeLocale)}</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => {

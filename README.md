@@ -208,6 +208,95 @@ gcloud builds submit --config=cloudbuild.yaml
 
 ---
 
+## 🧠 Air-Gapped / Offline AI Stack: Qwen3, BAAI BGE-M3 & Qdrant
+
+GuardianAngel supports 100% offline and air-gapped operations using a 3-tier local AI architecture:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        GUARDIANANGEL AIR-GAP STACK                     │
+├────────────────────────────────────────────────────────────────────────┤
+│  1. QWEN3 (The Brain)          │ LLM for medical reasoning, medical    │
+│     http://127.0.0.1:11434      │ report explanations, compassionate    │
+│     (qwen2.5 / qwen3)          │ couple assessments & healthcare chat  │
+├────────────────────────────────┼───────────────────────────────────────┤
+│  2. BAAI BGE-M3 (Search Intel) │ 1024-D multilingual dense vector      │
+│     http://127.0.0.1:11434      │ embedding model for PDF/image chunks  │
+│     (bge-m3)                   │ and user inquiries                    │
+├────────────────────────────────┼───────────────────────────────────────┤
+│  3. QDRANT (Vector Storage)    │ Vector database storing policy chunks │
+│     http://127.0.0.1:6333      │ and performing cosine similarity      │
+│     (Collection: health_policies)                                      │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+### 1. Single-Command Docker Setup (Recommended)
+
+Run Qdrant, Ollama, and auto-download both models with a single command without installing anything on your host machine:
+
+```bash
+# Start Qdrant, Ollama, and automatically pull Qwen2.5 and BGE-M3 models:
+docker compose -f docker-compose.ai.yml up -d
+
+# Check status:
+docker compose -f docker-compose.ai.yml ps
+
+# Stop everything cleanly when done:
+docker compose -f docker-compose.ai.yml down
+```
+
+### 2. Manual Setup (Alternative)
+
+If running outside Docker:
+- **Qdrant**: `docker run -d -p 6333:6333 -p 6334:6334 -v $(pwd)/data/qdrant_storage:/qdrant/storage:z qdrant/qdrant:latest`
+- **Ollama**: Install from [ollama.com](https://ollama.com/), run `ollama serve`, and pull models with `ollama pull qwen2.5:latest` and `ollama pull bge-m3`.
+
+### 3. Environment Variables Configuration
+
+Configure the endpoints in your `.env` file or export them before running `./run.sh`:
+
+```bash
+# 1. Qwen3 - The Brain
+export QWEN_API_BASE="http://127.0.0.1:11434"
+export QWEN_MODEL_NAME="qwen2.5:latest"      # or "qwen3"
+export QWEN_TIMEOUT=45
+
+# 2. BAAI BGE-M3 - The Search Intelligence
+export BGE_M3_API_BASE="http://127.0.0.1:11434"
+export BGE_M3_MODEL_NAME="bge-m3"
+export BGE_M3_DIMENSION=1024
+
+# 3. Qdrant - The Vector Storage
+export QDRANT_URL="http://127.0.0.1:6333"
+export QDRANT_COLLECTION="health_policies"
+export QDRANT_API_KEY=""                     # Optional if Qdrant requires an API key
+```
+
+### 4. Uploading Nationwide Health Policy Documents & Interacting via Vector DB
+
+1. **Accessing Settings**:
+   - **Left-hand side menu (Sidebar)**: Click the **Settings** button with gear logo located directly above the Sign Out button.
+   - **Top-right corner User Profile (Navbar)**: Click your profile avatar to open the menu, then click **Settings** (with gear logo) located directly above Sign Out.
+2. **Uploading Policy Documents**:
+   - In the Settings window, drag and drop or select multiple policy documents (PDF, JPG, PNG).
+   - Documents are automatically chunked, embedded via **BGE-M3**, and stored in **Qdrant**.
+   - View your indexed documents, chunk counts, and manage/purge records.
+3. **Interacting with Policy Knowledge**:
+   - **Ask Care AI (`/dashboard`)**: Ask questions about screening center locations, eligibility rules, and protocols. Qwen3 retrieves semantic context from Qdrant and cites relevant documents.
+   - **AI Genetic Intelligence (`/risk-analysis`)**: Qwen3 analyzes uploaded screening reports and performs couple assessments with a positive, motivating vibe, detailing next possible steps and interactive Q&A.
+   - **Couple Assessment (`/couple-assessment`)**: Review pre-conception compatibility guidance, next steps, and ask follow-up questions.
+
+### 5. Embedded In-Process Architecture (Zero-Docker / Standalone Air-Gap)
+
+GuardianAngel features a self-contained **Embedded In-Process AI Stack** that requires zero Docker daemon and zero external background processes:
+- **Embedded Dense Vectorizer**: Generates 1024-dimensional normalized dense vectors directly in-process via NumPy.
+- **Embedded Persistent Vector DB**: Stores document text chunks and vector embeddings permanently in SQLite (`policy_chunks`) and local memory cache with hybrid semantic cosine and lexical scoring.
+- **Embedded Clinical Reasoning Brain**: Directly parses, quotes, and synthesizes answers from retrieved PDF passages, citing exact clauses, titles, and match confidence scores.
+- **Zero Data Leakage**: All patient data and health policy embeddings remain 100% confined to the local machine process.
+- **Optional Hybrid Scaling**: If external Ollama (Qwen3 / BGE-M3) or Qdrant server is running, the system automatically discovers and switches to high-throughput daemon endpoints.
+
+---
+
 ## 📂 Project Directory Structure
 
 ```

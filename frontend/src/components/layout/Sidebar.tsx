@@ -6,13 +6,14 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { t } from '@/lib/translations';
-import { LogOut } from 'lucide-react';
+import { LogOut, Settings } from 'lucide-react';
+import { SettingsModal } from '@/components/settings/SettingsModal';
 
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { logout } = useAuthStore();
-  const { activeLocale } = useUIStore();
+  const { activeLocale, setSettingsModalOpen } = useUIStore();
 
   const navItems = [
     { label: t('nav_dashboard', activeLocale), href: '/dashboard', icon: 'dashboard' },
@@ -95,6 +96,16 @@ export function Sidebar() {
           </p>
         </div>
 
+        {/* Settings Window Button with Gear Logo (above signout) */}
+        <button
+          type="button"
+          onClick={() => setSettingsModalOpen(true)}
+          className="flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-pine hover:bg-surface-container rounded-lg transition-colors cursor-pointer w-full text-left border border-outline-variant/30 bg-white shadow-2xs"
+        >
+          <Settings className="w-4 h-4 text-pine" />
+          <span>{t('settings_btn', activeLocale)}</span>
+        </button>
+
         <button
           type="button"
           onClick={handleSignOut}
@@ -104,6 +115,9 @@ export function Sidebar() {
           <span>{t('sign_out', activeLocale)}</span>
         </button>
       </div>
+
+      {/* Global Settings Window Modal */}
+      <SettingsModal />
     </aside>
   );
 }

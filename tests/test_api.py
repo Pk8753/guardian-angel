@@ -548,5 +548,93 @@ endobj
         self.assertIsNotNone(user['uaepass_uuid'])
         self.assertEqual(user['uaepass_uuid'], 'uaepass-stg-cit-88910-fe2')
 
+    def test_ai_system_status(self):
+        """Verify GET /api/ai/system-status returns Qwen3, BGE-M3, and Qdrant status"""
+        from database import get_user_by_username
+        with self.client.session_transaction() as sess:
+            u = get_user_by_username('admin')
+            sess['user_id'] = u['id']
+
+        res = self.client.get('/api/ai/system-status')
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertTrue(data.get('airgap_mode'))
+        services = data.get('services', {})
+        self.assertIn('qwen3', services)
+        self.assertIn('bge_m3', services)
+        self.assertIn('qdrant', services)
+
+    def test_policy_document_lifecycle_and_qdrant_query(self):
+        """Verify upload, vector indexing, retrieval, search, and deletion of health policy documents"""
+        import io
+        from database import get_user_by_username
+        with self.client.session_transaction() as sess:
+            u = get_user_by_username('admin')
+            sess['user_id'] = u['id']
+
+        # Upload a simulated health policy PDF
+        fake_pdf = io.BytesIO(b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< >>\n%%EOF\nNational Premarital Screening Guidelines: Screening Center Alpha provides Beta-Thalassemia and G6PD screening for all couples.")
+        res = self.client.post(
+            '/api/policy-documents/upload',
+            data={
+                'file': (fake_pdf, 'uae_health_policy.pdf'),
+                'title': 'UAE National Health Policy 2026'
+            },
+            content_type='multipart/form-data'
+        )
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertEqual(data.get('status'), 'success')
+        docs = data.get('documents', [])
+        self.assertTrue(len(docs) > 0)
+        doc_id = docs[0]['id']
+
+        # Retrieve documents
+        res_list = self.client.get('/api/policy-documents')
+        self.assertEqual(res_list.status_code, 200)
+        all_docs = res_list.get_json()
+        self.assertTrue(any(d['id'] == doc_id for d in all_docs))
+
+        # Verify persistent policy chunks in SQLite
+        from database import get_policy_chunks
+        chunks = get_policy_chunks(doc_id=doc_id)
+        self.assertTrue(len(chunks) > 0)
+        self.assertEqual(len(chunks[0]['embedding']), 1024)
+
+        # Query Ask Care AI leveraging knowledge and verify excerpt extraction
+        res_ask = self.client.post('/api/ai/ask', json={'query': 'Which screening center provides Beta-Thalassemia tests?'})
+        self.assertEqual(res_ask.status_code, 200)
+        ask_data = res_ask.get_json()
+        self.assertIsNotNone(ask_data.get('answer'))
+        self.assertIn('matched_chunks', ask_data)
+
+        # Delete document
+        res_del = self.client.delete(f'/api/policy-documents/{doc_id}')
+        self.assertEqual(res_del.status_code, 200)
+
+        # Verify cascading deletion of chunks from SQLite
+        remaining_chunks = get_policy_chunks(doc_id=doc_id)
+        self.assertEqual(len(remaining_chunks), 0)
+
+    def test_qwen_couple_assessment(self):
+        """Verify POST /api/ai/analyze-assessment returns positive vibe couple assessment and next steps"""
+        from database import get_user_by_username
+        with self.client.session_transaction() as sess:
+            u = get_user_by_username('admin')
+            sess['user_id'] = u['id']
+
+        res = self.client.post(
+            '/api/ai/analyze-assessment',
+            json={'partner_a': 'Tariq Al-Mansoor', 'partner_b': 'Fatima Al-Zahra'}
+        )
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertIn('positive_summary', data)
+        self.assertIn('motivational_insight', data)
+        self.assertIn('next_possible_ways', data)
+        self.assertIn('potential_queries', data)
+        self.assertTrue(len(data['next_possible_ways']) > 0)
+        self.assertTrue(len(data['potential_queries']) > 0)
+
 if __name__ == '__main__':
     unittest.main()
