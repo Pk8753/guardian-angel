@@ -17,6 +17,8 @@ interface UIState {
   setAddMemberModalOpen: (open: boolean) => void;
   selectedMemberForEdit: any | null;
   setSelectedMemberForEdit: (member: any | null) => void;
+  isSettingsModalOpen: boolean;
+  setSettingsModalOpen: (open: boolean) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -25,6 +27,8 @@ export const useUIStore = create<UIState>((set) => ({
   carrierNotation: 'dot',
   setCarrierNotation: (notation) => set({ carrierNotation: notation }),
   activeLocale: 'en',
+  isSettingsModalOpen: false,
+  setSettingsModalOpen: (open) => set({ isSettingsModalOpen: open }),
   setActiveLocale: (locale) => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('guardian_locale', locale);

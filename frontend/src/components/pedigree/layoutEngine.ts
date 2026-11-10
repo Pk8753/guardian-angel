@@ -94,12 +94,26 @@ export function computePedigreeLayout(
   }
 
   const memberMap = new Map<string | number, PedigreeMember>();
-  members.forEach((m) => memberMap.set(m.id, m));
+  members.forEach((m) => {
+    memberMap.set(m.id, m);
+    memberMap.set(String(m.id), m);
+    if (!isNaN(Number(m.id))) memberMap.set(Number(m.id), m);
+  });
 
   // 1. Determine generational levels (0 = proband's generation, -1 = parents, -2 = grandparents, +1 = children)
   const genLevelMap = new Map<string | number, number>();
+  const setGen = (id: string | number, val: number) => {
+    genLevelMap.set(id, val);
+    genLevelMap.set(String(id), val);
+    if (!isNaN(Number(id))) genLevelMap.set(Number(id), val);
+  };
+  const getGen = (id: string | number | null | undefined): number | undefined => {
+    if (id === null || id === undefined) return undefined;
+    return genLevelMap.get(id) ?? genLevelMap.get(String(id)) ?? (isNaN(Number(id)) ? undefined : genLevelMap.get(Number(id)));
+  };
+
   if (proband) {
-    genLevelMap.set(proband.id, 0);
+    setGen(proband.id, 0);
   }
 
   // Traverse relationships to determine relative generations
@@ -110,27 +124,27 @@ export function computePedigreeLayout(
     iterations++;
 
     for (const m of members) {
-      const currentGen = genLevelMap.get(m.id);
+      const currentGen = getGen(m.id);
 
       // From parents
       if (m.father_id && memberMap.has(m.father_id)) {
-        const fatherGen = genLevelMap.get(m.father_id);
+        const fatherGen = getGen(m.father_id);
         if (fatherGen !== undefined && currentGen === undefined) {
-          genLevelMap.set(m.id, fatherGen + 1);
+          setGen(m.id, fatherGen + 1);
           changed = true;
         } else if (fatherGen === undefined && currentGen !== undefined) {
-          genLevelMap.set(m.father_id, currentGen - 1);
+          setGen(m.father_id, currentGen - 1);
           changed = true;
         }
       }
 
       if (m.mother_id && memberMap.has(m.mother_id)) {
-        const motherGen = genLevelMap.get(m.mother_id);
+        const motherGen = getGen(m.mother_id);
         if (motherGen !== undefined && currentGen === undefined) {
-          genLevelMap.set(m.id, motherGen + 1);
+          setGen(m.id, motherGen + 1);
           changed = true;
         } else if (motherGen === undefined && currentGen !== undefined) {
-          genLevelMap.set(m.mother_id, currentGen - 1);
+          setGen(m.mother_id, currentGen - 1);
           changed = true;
         }
       }
@@ -138,25 +152,25 @@ export function computePedigreeLayout(
       // Spouses are same generation
       if (m.spouse_ids && m.spouse_ids.length > 0) {
         for (const spouseId of m.spouse_ids) {
-          const spouseGen = genLevelMap.get(spouseId);
+          const spouseGen = getGen(spouseId);
           if (spouseGen !== undefined && currentGen === undefined) {
-            genLevelMap.set(m.id, spouseGen);
+            setGen(m.id, spouseGen);
             changed = true;
           } else if (spouseGen === undefined && currentGen !== undefined) {
-            genLevelMap.set(spouseId, currentGen);
+            setGen(spouseId, currentGen);
             changed = true;
           }
         }
       }
 
       // Infer generation from relationship string if still unset
-      if (genLevelMap.get(m.id) === undefined) {
+      if (getGen(m.id) === undefined) {
         const rel = (m.relationship_to_proband || '').toLowerCase();
-        if (rel.includes('grandparent') || rel.includes('grandfather') || rel.includes('grandmother')) genLevelMap.set(m.id, -2);
-        else if (rel.includes('father') || rel.includes('mother') || rel.includes('parent') || rel.includes('uncle') || rel.includes('aunt')) genLevelMap.set(m.id, -1);
-        else if (rel.includes('sibling') || rel.includes('brother') || rel.includes('sister') || rel.includes('spouse') || rel.includes('partner') || rel.includes('husband') || rel.includes('wife') || rel.includes('cousin') || rel.includes('self') || rel.includes('twin')) genLevelMap.set(m.id, 0);
-        else if (rel.includes('son') || rel.includes('daughter') || rel.includes('child') || rel.includes('loss') || rel.includes('adopt')) genLevelMap.set(m.id, 1);
-        else genLevelMap.set(m.id, 0);
+        if (rel.includes('grandparent') || rel.includes('grandfather') || rel.includes('grandmother')) setGen(m.id, -2);
+        else if (rel.includes('father') || rel.includes('mother') || rel.includes('parent') || rel.includes('uncle') || rel.includes('aunt')) setGen(m.id, -1);
+        else if (rel.includes('sibling') || rel.includes('brother') || rel.includes('sister') || rel.includes('spouse') || rel.includes('partner') || rel.includes('husband') || rel.includes('wife') || rel.includes('cousin') || rel.includes('self') || rel.includes('twin')) setGen(m.id, 0);
+        else if (rel.includes('son') || rel.includes('daughter') || rel.includes('child') || rel.includes('loss') || rel.includes('adopt')) setGen(m.id, 1);
+        else setGen(m.id, 0);
         changed = true;
       }
     }
@@ -185,7 +199,7 @@ export function computePedigreeLayout(
 
   // Helper to ensure union exists
   const getOrCreateUnion = (p1Id: string | number, p2Id: string | number): PedigreeUnion => {
-    const key = [p1Id, p2Id].sort().join('-');
+    const key = [String(p1Id), String(p2Id)].sort().join('-');
     let union = unions.find((u) => u.id === key);
     if (!union) {
       union = {
@@ -207,7 +221,8 @@ export function computePedigreeLayout(
   members.forEach((m) => {
     if (m.father_id && m.mother_id) {
       const u = getOrCreateUnion(m.father_id, m.mother_id);
-      if (!u.children_ids.includes(m.id)) {
+      const childNormId = String(m.id);
+      if (!u.children_ids.some((cid) => String(cid) === childNormId)) {
         u.children_ids.push(m.id);
       }
     } else if (m.spouse_ids && m.spouse_ids.length > 0) {

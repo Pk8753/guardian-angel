@@ -66,6 +66,16 @@ export const PedigreeNodeSymbol: React.FC<PedigreeNodeSymbolProps> = ({
             className="transition-colors group-hover:stroke-teal-700"
           />
         );
+      case 'star':
+        return (
+          <polygon
+            points="0,-22 5.6,-7.7 20.9,-6.8 9,3 12.9,17.8 0,9.5 -12.9,17.8 -9,3 -20.9,-6.8 -5.6,-7.7"
+            fill={isCarrier ? '#c6f5e5' : fillColor}
+            stroke={isSelected ? '#006a60' : (isCarrier ? '#0f766e' : strokeColor)}
+            strokeWidth={strokeWidth}
+            className="transition-colors group-hover:stroke-teal-700"
+          />
+        );
       case 'other':
       case 'unknown':
       default:

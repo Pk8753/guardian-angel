@@ -1,3 +1,9 @@
+// Fix for [DEP0060] DeprecationWarning: The `util._extend` API is deprecated
+const util = require('util');
+if (util && util._extend) {
+  util._extend = Object.assign;
+}
+
 /** @type {import('next').NextConfig} */
 const backendPort = process.env.BACKEND_PORT || '5000';
 

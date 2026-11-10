@@ -1,4 +1,4 @@
-export type Sex = 'male' | 'female' | 'other' | 'unknown' | 'pregnancy_loss';
+export type Sex = 'male' | 'female' | 'other' | 'unknown' | 'pregnancy_loss' | 'star';
 
 export type RelationType =
   | 'self'

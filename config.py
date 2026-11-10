@@ -70,3 +70,20 @@ class Config:
     UAEPASS_LOGOUT_URL = f"{UAEPASS_BASE_URL}/logout"
     FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
 
+    # Air-Gapped / Offline AI Stack Configuration
+    # 1. Qwen3 - The Brain (LLM)
+    QWEN_API_BASE = os.environ.get('QWEN_API_BASE', 'http://127.0.0.1:11434')
+    QWEN_MODEL_NAME = os.environ.get('QWEN_MODEL_NAME', 'qwen2.5:latest')
+    QWEN_TIMEOUT = int(os.environ.get('QWEN_TIMEOUT', 45))
+
+    # 2. BAAI BGE-M3 - The Search Intelligence (Embedding Model)
+    BGE_M3_API_BASE = os.environ.get('BGE_M3_API_BASE', 'http://127.0.0.1:11434')
+    BGE_M3_MODEL_NAME = os.environ.get('BGE_M3_MODEL_NAME', 'bge-m3')
+    BGE_M3_DIMENSION = int(os.environ.get('BGE_M3_DIMENSION', 1024))
+
+    # 3. Qdrant - The Vector Storage (Vector DB)
+    QDRANT_URL = os.environ.get('QDRANT_URL', 'http://127.0.0.1:6333')
+    QDRANT_API_KEY = os.environ.get('QDRANT_API_KEY', '')
+    QDRANT_COLLECTION = os.environ.get('QDRANT_COLLECTION', 'health_policies')
+
+

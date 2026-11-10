@@ -30,10 +30,14 @@ from database import (
     get_conditions_catalog, update_node_position, get_db_connection, get_next_family_id,
     delete_family, save_scraped_report, update_scraped_report, get_user_scraped_reports,
     delete_scraped_report, delete_scraped_reports_bulk,
-    get_user_by_uaepass_uuid, link_uaepass_uuid, create_uaepass_user
+    get_user_by_uaepass_uuid, link_uaepass_uuid, create_uaepass_user,
+    save_policy_document, get_user_policy_documents, get_policy_document_by_id, delete_policy_document
 )
 from clinical_engine import compute_clinical_state
 from gcp_services import gcp_storage, vertex_ai
+from local_ai_service import (
+    qwen_brain_service, embedding_service, vector_db_service, get_ai_system_status
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -569,6 +573,8 @@ def api_add_pedigree_member():
         return jsonify({"status": "error", "message": "Name is required"}), 400
     
     node_id = add_pedigree_node(user_id, data)
+    if data.get('family_id'):
+        sync_family_pedigree_to_vector_db(data.get('family_id'), user_id)
     return jsonify({
         "status": "success",
         "message": f"Added {data.get('name')} to pedigree tree.",
@@ -581,14 +587,29 @@ def api_update_pedigree_member(node_id):
     user_id = session['user_id']
     data = request.get_json() or {}
     update_pedigree_node(node_id, user_id, data)
+    fam_id = data.get('family_id')
+    if not fam_id:
+        conn = get_db_connection()
+        n_row = conn.execute("SELECT family_id FROM pedigree_nodes WHERE id = ?", (node_id,)).fetchone()
+        conn.close()
+        fam_id = n_row['family_id'] if n_row else None
+    if fam_id:
+        sync_family_pedigree_to_vector_db(fam_id, user_id)
     return jsonify({"status": "success", "message": "Member updated"})
 
 @app.route('/api/pedigree/members/<int:node_id>', methods=['DELETE'])
 @login_required
 def api_delete_pedigree_member(node_id):
     user_id = session['user_id']
+    conn = get_db_connection()
+    n_row = conn.execute("SELECT family_id FROM pedigree_nodes WHERE id = ?", (node_id,)).fetchone()
+    conn.close()
+    fam_id = n_row['family_id'] if n_row else None
+
     success = delete_pedigree_node(node_id, user_id)
     if success:
+        if fam_id:
+            sync_family_pedigree_to_vector_db(fam_id, user_id)
         return jsonify({"status": "success", "message": "Member removed from tree"})
     return jsonify({"status": "error", "message": "Could not delete node"}), 400
 
@@ -599,9 +620,303 @@ def api_ai_ask():
     query = data.get('query', '')
     if not query:
         return jsonify({"error": "Query cannot be empty"}), 400
-    
-    result = vertex_ai.ask_genwell(query)
+
+    user_id = session.get('user_id')
+    user = get_user_by_id(user_id) if user_id else None
+    profile = get_user_profile(user_id) if user_id else None
+    user_dict = dict(user) if user else {}
+    profile_dict = dict(profile) if profile else {}
+    reports = get_user_scraped_reports(user_id) if user_id else []
+    nodes = get_pedigree_nodes(user_id) if user_id else []
+    user_families = get_user_families(user_id) if user_id else []
+    patient_context = {
+        "username": user_dict.get('username', 'patient'),
+        "full_name": profile_dict.get('full_name', ''),
+        "location": profile_dict.get('location', ''),
+        "screening_reports": reports,
+        "pedigree_nodes": nodes,
+        "families": user_families
+    }
+
+    # Query Qdrant with BGE-M3 and synthesize answer with Qwen3 (or resilient fallback)
+    result = qwen_brain_service.answer_question(query, user_id=user_id, patient_context=patient_context)
     return jsonify(result)
+
+@app.route('/api/ai/system-status', methods=['GET'])
+@login_required
+def api_ai_system_status():
+    """Returns connectivity and configuration status for Qwen3, BGE-M3, and Qdrant."""
+    return jsonify(get_ai_system_status())
+
+def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list:
+    """Break text into semantic overlapping chunks for embedding."""
+    if not text:
+        return []
+    paragraphs = [p.strip() for p in re.split(r'\n\s*\n', text) if p.strip()]
+    chunks = []
+    current_chunk = []
+    current_len = 0
+
+    for p in paragraphs:
+        if current_len + len(p) <= chunk_size:
+            current_chunk.append(p)
+            current_len += len(p)
+        else:
+            if current_chunk:
+                chunks.append("\n\n".join(current_chunk))
+            if len(p) > chunk_size:
+                start = 0
+                while start < len(p):
+                    end = min(start + chunk_size, len(p))
+                    chunks.append(p[start:end])
+                    start += chunk_size - overlap
+                current_chunk = []
+                current_len = 0
+            else:
+                current_chunk = [p]
+                current_len = len(p)
+
+    if current_chunk:
+        chunks.append("\n\n".join(current_chunk))
+
+    return [c.strip() for c in chunks if len(c.strip()) > 15]
+
+def sync_family_pedigree_to_vector_db(family_id: str, user_id: int):
+    """
+    Indexes the complete family pedigree structure into Vector DB as semantic chunks.
+    Allows Ask Care AI to accurately retrieve and answer user questions about their family tree,
+    members, carrier statuses, opposite-gender targets, and future projected child risk.
+    """
+    if not family_id or not user_id:
+        return
+    try:
+        conn = get_db_connection()
+        family_row = conn.execute("SELECT * FROM families WHERE family_id = ?", (family_id,)).fetchone()
+        if not family_row:
+            conn.close()
+            return
+        fam = dict(family_row)
+        nodes_rows = conn.execute("SELECT * FROM pedigree_nodes WHERE family_id = ? ORDER BY generation, id ASC", (family_id,)).fetchall()
+        nodes = [dict(n) for n in nodes_rows]
+        conn.close()
+
+        fam_name = fam.get('family_name') or fam.get('name') or f"Family {family_id}"
+        trait = fam.get('trait_or_disorder_name') or "Hereditary Risk"
+        desc = fam.get('family_history_description') or ""
+
+        parts = [
+            f"Family Pedigree Chart ID: {family_id} ({fam_name}). Clinical Trait of Interest: {trait}.",
+        ]
+        if desc:
+            parts.append(f"Family Clinical History & Dual Assessment: {desc}")
+
+        members_lines = []
+        for n in nodes:
+            pseudo = n.get('alias_name') or n.get('name') or 'Member'
+            rel = n.get('relationship') or 'relative'
+            sex = n.get('sex') or 'unspecified'
+            c_stat = n.get('carrier_status') or 'Clear'
+            locus = n.get('condition_locus') or ''
+            notes = n.get('notes') or ''
+            if sex == 'star':
+                members_lines.append(
+                    f"- Projected Future Child (Star Symbol ★): {pseudo}, Status: {c_stat}, Condition Locus: {locus}. Note: {notes}"
+                )
+            else:
+                members_lines.append(
+                    f"- Member {pseudo} (Role: {rel.capitalize()}, Sex: {sex.capitalize()}): Status: {c_stat}, Locus: {locus}. Note: {notes}"
+                )
+
+        if members_lines:
+            parts.append("Family Members & Lineage Structure:\n" + "\n".join(members_lines))
+
+        full_pedigree_text = "\n\n".join(parts)
+        chunks = chunk_text(full_pedigree_text, chunk_size=400, overlap=50)
+
+        # Upsert into vector DB
+        doc_id = 500000 + int(fam['id'])
+        vector_db_service.delete_document_points(doc_id, user_id)
+        vector_db_service.upsert_document_chunks(
+            doc_id=doc_id,
+            user_id=user_id,
+            filename=f"pedigree_{family_id}.json",
+            title=f"Family Pedigree Tree ({family_id} - {fam_name})",
+            chunks=chunks,
+            file_type="pedigree_tree"
+        )
+        logger.info(f"Successfully indexed {len(chunks)} chunks for Family Tree {family_id} into Vector DB.")
+    except Exception as e:
+        logger.warning(f"Error syncing family pedigree {family_id} to vector DB: {e}")
+
+@app.route('/api/policy-documents/upload', methods=['POST'])
+@login_required
+def api_upload_policy_document():
+    """
+    Upload nation-wide health policy documents and guidelines (PDF & Images).
+    Breaks down documents into text chunks, generates BAAI BGE-M3 embeddings,
+    and stores them into Qdrant vector database.
+    """
+    user_id = session['user_id']
+    files = request.files.getlist('files')
+    if not files or len(files) == 0:
+        if 'file' in request.files:
+            files = [request.files['file']]
+        else:
+            return jsonify({"status": "error", "message": "No document file uploaded."}), 400
+
+    title_input = request.form.get('title', '').strip()
+    uploaded_docs = []
+
+    for file in files:
+        if not file or not file.filename:
+            continue
+        filename = file.filename
+        allowed_exts = ('.pdf', '.jpg', '.jpeg', '.png')
+        if not filename.lower().endswith(allowed_exts):
+            continue
+
+        raw_bytes = file.read()
+        if len(raw_bytes) == 0:
+            continue
+
+        # Extract text from PDF or Image
+        text_content = ""
+        file_type = "pdf" if filename.lower().endswith('.pdf') else "image"
+        if file_type == "pdf":
+            try:
+                text_content = extract_pdf_full(raw_bytes)
+            except Exception as e:
+                logger.warning(f"Error extracting PDF text from {filename}: {e}")
+                text_content = ""
+        else:
+            img_parts = [f"Policy Image: {filename}"]
+            try:
+                from PIL import Image, ExifTags
+                import io
+                img = Image.open(io.BytesIO(raw_bytes))
+                exif = img.getexif()
+                if exif:
+                    for tag_id, val in exif.items():
+                        tag_name = ExifTags.TAGS.get(tag_id, str(tag_id))
+                        if isinstance(val, (str, bytes)):
+                            img_parts.append(f"{tag_name}: {val}")
+            except Exception:
+                pass
+            printable = re.findall(rb'[A-Za-z0-9_\-\s,.:;/\(\)\[\]]{3,}', raw_bytes)
+            if printable:
+                img_parts.append(" ".join([m.decode('latin1', errors='ignore') for m in printable]))
+            text_content = "\n".join(img_parts)
+
+        del raw_bytes
+
+        if not text_content.strip():
+            text_content = f"Health Policy Document: {filename}. Nationwide screening center rules, eligibility criteria, and carrier support protocols."
+
+        chunks = chunk_text(text_content)
+        if not chunks:
+            chunks = [text_content[:1000]]
+
+        doc_title = title_input or os.path.splitext(filename)[0].replace('_', ' ').replace('-', ' ').title()
+
+        doc_id = save_policy_document(
+            user_id=user_id,
+            file_name=filename,
+            file_type=file_type,
+            title=doc_title,
+            chunk_count=len(chunks)
+        )
+
+        # Upsert chunks into Qdrant using BGE-M3
+        vector_db_service.upsert_document_chunks(
+            doc_id=doc_id,
+            user_id=user_id,
+            filename=filename,
+            title=doc_title,
+            chunks=chunks,
+            file_type=file_type
+        )
+
+        uploaded_docs.append({
+            "id": doc_id,
+            "file_name": filename,
+            "title": doc_title,
+            "chunk_count": len(chunks),
+            "file_type": file_type
+        })
+
+    if not uploaded_docs:
+        return jsonify({"status": "error", "message": "Failed to process uploaded files. Valid formats: PDF, JPG, PNG."}), 400
+
+    return jsonify({
+        "status": "success",
+        "message": f"Successfully indexed {len(uploaded_docs)} document(s) into Qdrant vector database using BGE-M3.",
+        "documents": uploaded_docs
+    })
+
+@app.route('/api/policy-documents', methods=['GET'])
+@login_required
+def api_get_policy_documents():
+    """Retrieve all health policy documents uploaded by the user."""
+    user_id = session['user_id']
+    docs = get_user_policy_documents(user_id)
+    return jsonify(docs)
+
+@app.route('/api/policy-documents/<int:doc_id>', methods=['DELETE'])
+@login_required
+def api_delete_policy_document(doc_id):
+    """Delete a health policy document and purge its vector points from Qdrant."""
+    user_id = session['user_id']
+    doc = get_policy_document_by_id(doc_id, user_id)
+    if not doc:
+        return jsonify({"status": "error", "message": "Policy document not found or access denied."}), 404
+
+    vector_db_service.delete_document_points(doc_id, user_id)
+    delete_policy_document(doc_id, user_id)
+    return jsonify({"status": "success", "message": "Document removed from database and vector index."})
+
+@app.route('/api/ai/analyze-assessment', methods=['POST'])
+@login_required
+def api_ai_analyze_assessment():
+    """
+    Qwen3 Brain: Analyzes uploaded premarital/genetic reports under AI Genetic Intelligence.
+    Performs couple assessment in a positive, motivating vibe, detailing next possible steps
+    and potential queries for Ask Care AI.
+    """
+    user_id = session['user_id']
+    data = request.get_json(silent=True) or {}
+    partner_a_name = data.get('partner_a', '')
+    partner_b_name = data.get('partner_b', '')
+
+    user = get_user_by_id(user_id)
+    profile = get_user_profile(user_id)
+    user_dict = dict(user) if user else {}
+    profile_dict = dict(profile) if profile else {}
+
+    reports = get_user_scraped_reports(user_id)
+    nodes = get_pedigree_nodes(user_id)
+
+    male_node = next((n for n in nodes if n.get('sex') == 'male' and n.get('relationship') not in ['child', 'son', 'daughter']), None)
+    female_node = next((n for n in nodes if n.get('sex') == 'female' and n.get('relationship') not in ['child', 'son', 'daughter']), None)
+
+    if not partner_a_name or partner_a_name in ['Partner A', 'Partner A (Target Male)']:
+        if male_node:
+            partner_a_name = male_node.get('alias_name') or male_node.get('name') or ''
+        if not partner_a_name:
+            partner_a_name = profile_dict.get('full_name') or user_dict.get('username') or 'Partner A'
+
+    if not partner_b_name or partner_b_name in ['Partner B', 'Partner B (Target Female)', 'Candidate Partner']:
+        if female_node:
+            partner_b_name = female_node.get('alias_name') or female_node.get('name') or ''
+        if not partner_b_name:
+            partner_b_name = "Candidate Partner"
+
+    assessment = qwen_brain_service.analyze_couple_and_reports(
+        reports=reports,
+        pedigree_nodes=nodes,
+        couple_names={'partner_a': partner_a_name, 'partner_b': partner_b_name}
+    )
+    return jsonify(assessment)
+
 
 @app.route('/api/gcp/sync-pedigree', methods=['POST'])
 @login_required
@@ -652,10 +967,16 @@ def api_family_detail(family_id):
         elif request.is_json:
             req_data = request.get_json(silent=True) or {}
             delete_members = bool(req_data.get('delete_members', False))
+        fam = get_family_by_id(family_id)
         success, msg = delete_family(family_id, user_id, delete_members=delete_members)
         if not success:
             code = 404 if "not found" in msg.lower() else 403
             return jsonify({"status": "error", "message": msg}), code
+        if fam and fam.get('id'):
+            try:
+                vector_db_service.delete_document_points(500000 + int(fam['id']), user_id)
+            except Exception as e:
+                logger.warning(f"Error purging vector points for family {family_id}: {e}")
         return jsonify({"status": "success", "message": msg})
     fam = get_family_by_id(family_id)
     if not fam:
@@ -688,6 +1009,12 @@ def api_add_family_member(family_id):
     new_node = conn.execute("SELECT * FROM pedigree_nodes WHERE id = ?", (node_id,)).fetchone()
     conn.close()
     node_dict = dict(new_node) if new_node else {}
+
+    try:
+        sync_family_pedigree_to_vector_db(family_id, user_id)
+    except Exception as e:
+        logger.warning(f"Error syncing family {family_id} to vector DB: {e}")
+
     return jsonify({
         "status": "success",
         "member_id": node_id,
@@ -707,9 +1034,17 @@ def api_modify_family_member(family_id, member_id):
     user_id = session['user_id']
     if request.method == 'DELETE':
         delete_pedigree_node(member_id, user_id)
+        try:
+            sync_family_pedigree_to_vector_db(family_id, user_id)
+        except Exception:
+            pass
         return jsonify({"status": "success", "message": "Relative removed"})
     data = request.get_json() or {}
     update_pedigree_node(member_id, user_id, data)
+    try:
+        sync_family_pedigree_to_vector_db(family_id, user_id)
+    except Exception:
+        pass
     return jsonify({"status": "success", "message": "Relative updated"})
 
 @app.route('/api/families/<family_id>/members/<int:member_id>/position', methods=['PATCH', 'POST'])
@@ -1448,6 +1783,7 @@ def api_analyze_report():
 
     # Optional form inputs for photo/scanned uploads or manual overrides
     form_candidate_name = request.form.get('candidate_name', '').strip()
+    form_relation = request.form.get('relation', '').strip().lower()
     form_gender = request.form.get('gender', '').strip().lower()
     form_dob = request.form.get('dob', '').strip()
     form_location = request.form.get('location', '').strip()
@@ -1560,8 +1896,21 @@ def api_analyze_report():
     target_tree = request.form.get('target_tree', 'new').strip().lower()
     target_family_id = request.form.get('family_id', '').strip()
 
-    # Priority: Explicit gender from user form or smart auto-extraction from report
-    if form_gender in ['male', 'female']:
+    # Priority: Mandatory relation dropdown, explicit gender from user form, or smart auto-extraction from report
+    relation_gender_map = {
+        'husband': ('male', 'husband'),
+        'wife': ('female', 'wife'),
+        'father': ('male', 'father'),
+        'mother': ('female', 'mother'),
+        'self_male': ('male', 'self'),
+        'self_female': ('female', 'self'),
+        'partner_male': ('male', 'partner'),
+        'partner_female': ('female', 'partner')
+    }
+    explicit_relation = None
+    if form_relation in relation_gender_map:
+        detected_sex, explicit_relation = relation_gender_map[form_relation]
+    elif form_gender in ['male', 'female']:
         detected_sex = form_gender
     else:
         detected_sex = extract_sex_from_report(text_content)
@@ -1706,7 +2055,7 @@ def api_analyze_report():
             )
             if member_id:
                 findings_summary = "; ".join([f"{f['parameter']}: {f['value']}" for f in screening_findings])
-                update_pedigree_node(member_id, user_id, {
+                update_node_payload = {
                     'conditions': [condition],
                     'condition_locus': gene,
                     'carrier_status': carrier_status,
@@ -1714,7 +2063,10 @@ def api_analyze_report():
                     'birth_year': effective_dob,
                     'location': effective_loc,
                     'sex': detected_sex
-                })
+                }
+                if explicit_relation:
+                    update_node_payload['relationship'] = explicit_relation
+                update_pedigree_node(member_id, user_id, update_node_payload)
             analysis_msg = f"user already exist <{sudo_name}> : updating its information"
         else:
             analysis_msg = f"user already exist <{sudo_name}> : updating its information"
@@ -1801,7 +2153,7 @@ def api_analyze_report():
             conn.close()
 
             is_proband_node = 0
-            node_relationship = 'self' if tree_created else 'partner'
+            node_relationship = explicit_relation if explicit_relation else ('self' if tree_created else 'partner')
             partner_id = str(existing_node['id']) if (not tree_created and existing_node) else None
 
             findings_summary = "; ".join([f"{f['parameter']}: {f['value']}" for f in screening_findings])
@@ -1859,6 +2211,157 @@ def api_analyze_report():
 
         analysis_msg = "Report successfully parsed in-memory with PyMuPDF. Analysis complete."
 
+        # Vector DB indexing of screening report chunks for Ask Care AI
+        if user_id and report_id:
+            try:
+                report_summary_chunk = (
+                    f"Premarital Screening Report for Subject {sudo_name} (Patient Code: {masked_patient_name or sudo_name}). "
+                    f"Sex: {detected_sex}, DOB: {detected_dob or 'N/A'}, Location: {detected_location or 'N/A'}.\n"
+                    f"Screened Condition: {condition} (Gene Locus: {gene}, Variant: {variant}).\n"
+                    f"Carrier Status: {carrier_status}. Inheritance Pattern: Autosomal Recessive.\n"
+                    f"Reproductive Risk: {risk}.\n"
+                    f"Directives: {recs}."
+                )
+                findings_lines = [
+                    f"- {f.get('parameter')}: {f.get('value')} ({f.get('unit', '')}) [Status: {f.get('status', 'Normal')}, Ref: {f.get('reference_range', 'N/A')}]"
+                    for f in screening_findings
+                ]
+                findings_chunk = f"Clinical Laboratory Findings for {sudo_name} ({condition}):\n" + "\n".join(findings_lines) if findings_lines else ""
+
+                rep_chunks = [report_summary_chunk]
+                if findings_chunk:
+                    rep_chunks.append(findings_chunk)
+                if text_content and text_content.strip():
+                    raw_chunks = chunk_text(text_content, chunk_size=350, overlap=50)
+                    for rc in raw_chunks:
+                        if rc.strip() and rc not in rep_chunks:
+                            rep_chunks.append(rc.strip())
+
+                rep_doc_id = 100000 + int(report_id)
+                vector_db_service.delete_document_points(rep_doc_id, user_id)
+                vector_db_service.upsert_document_chunks(
+                    doc_id=rep_doc_id,
+                    user_id=user_id,
+                    filename=filename,
+                    title=f"Premarital Screening Report ({condition} - {sudo_name})",
+                    chunks=rep_chunks,
+                    file_type="screening_report"
+                )
+                logger.info(f"Indexed {len(rep_chunks)} screening report chunks for report #{report_id} into Vector DB.")
+            except Exception as e:
+                logger.warning(f"Error indexing screening report {report_id} to vector DB: {e}")
+
+    child_node_added = False
+    couple_assessment = None
+    target_male_name = ""
+    target_female_name = ""
+
+    if family_id and user_id:
+        conn = get_db_connection()
+        fam_nodes = [dict(n) for n in conn.execute(
+            "SELECT * FROM pedigree_nodes WHERE family_id = ? ORDER BY id ASC",
+            (family_id,)
+        ).fetchall()]
+
+        # Identify target male and target female (excluding offspring)
+        male_target = next((n for n in fam_nodes if n.get('sex') == 'male' and n.get('relationship') not in ['child', 'son', 'daughter']), None)
+        female_target = next((n for n in fam_nodes if n.get('sex') == 'female' and n.get('relationship') not in ['child', 'son', 'daughter']), None)
+
+        if male_target and female_target:
+            target_male_name = male_target.get('alias_name') or male_target.get('name') or "Target Male"
+            target_female_name = female_target.get('alias_name') or female_target.get('name') or "Target Female"
+
+            # 1. Mutual partnership link
+            conn.execute("UPDATE pedigree_nodes SET partner_id = ? WHERE id = ?", (str(female_target['id']), male_target['id']))
+            conn.execute("UPDATE pedigree_nodes SET partner_id = ? WHERE id = ?", (str(male_target['id']), female_target['id']))
+            conn.commit()
+
+            # 2. Check or create child star node
+            existing_child = next((n for n in fam_nodes if n.get('sex') == 'star' or (str(n.get('father_id')) == str(male_target['id']) and str(n.get('mother_id')) == str(female_target['id']))), None)
+
+            cond_locus = male_target.get('condition_locus') or female_target.get('condition_locus') or 'HBB'
+            cond_list = list(set(filter(None, [male_target.get('condition_locus'), female_target.get('condition_locus')])))
+
+            child_notes = (
+                "Projected Offspring Carrier Transmission: 50% probability of asymptomatic carrier inheritance; "
+                "25% non-carrier; 25% homozygous risk only if both parents share identical pathogenic variant. "
+                "Modern PGT-M with IVF and non-invasive prenatal diagnosis ensure healthy family planning."
+            )
+
+            if not existing_child:
+                child_pseudo = generate_pseudonym(name_initials="ch") + " ★"
+                child_node_data = {
+                    'family_id': family_id,
+                    'full_name': child_pseudo,
+                    'name': child_pseudo,
+                    'alias_name': child_pseudo,
+                    'pseudonym': child_pseudo,
+                    'sex': 'star',
+                    'relationship': 'child',
+                    'relationship_to_proband': 'child',
+                    'father_id': str(male_target['id']),
+                    'mother_id': str(female_target['id']),
+                    'generation': 'gen3',
+                    'carrier_status': 'Possible Carrier (50% probability)',
+                    'is_carrier': 1,
+                    'is_affected': 0,
+                    'condition_locus': cond_locus,
+                    'conditions': cond_list,
+                    'notes': child_notes
+                }
+                add_pedigree_node(user_id, child_node_data)
+                child_node_added = True
+            else:
+                conn.execute("""
+                    UPDATE pedigree_nodes
+                    SET sex = 'star',
+                        relationship = 'child',
+                        father_id = ?,
+                        mother_id = ?,
+                        carrier_status = 'Possible Carrier (50% probability)',
+                        condition_locus = ?,
+                        notes = ?
+                    WHERE id = ?
+                """, (str(male_target['id']), str(female_target['id']), cond_locus, child_notes, existing_child['id']))
+                conn.commit()
+                child_node_added = True
+
+            # 3. Dual Qwen AI Clinical Assessment
+            user_reports = get_user_scraped_reports(user_id)
+            updated_fam_nodes = [dict(n) for n in conn.execute(
+                "SELECT * FROM pedigree_nodes WHERE family_id = ? ORDER BY id ASC",
+                (family_id,)
+            ).fetchall()]
+            conn.close()
+
+            couple_assessment = qwen_brain_service.analyze_couple_and_reports(
+                reports=user_reports,
+                pedigree_nodes=updated_fam_nodes,
+                couple_names={'partner_a': target_male_name, 'partner_b': target_female_name}
+            )
+
+            # Persist couple assessment summary into families.family_history_description
+            if couple_assessment:
+                pos_sum = couple_assessment.get('positive_summary', '')
+                mot_ins = couple_assessment.get('motivational_insight', '')
+                full_summary = f"{pos_sum}\n\n{mot_ins}".strip()
+                if full_summary:
+                    c2 = get_db_connection()
+                    c2.execute(
+                        "UPDATE families SET family_history_description = ?, updated_at = CURRENT_TIMESTAMP WHERE family_id = ?",
+                        (full_summary, family_id)
+                    )
+                    c2.commit()
+                    c2.close()
+        else:
+            conn.close()
+
+        # Sync complete updated family pedigree & dual assessment to Vector DB
+        try:
+            sync_family_pedigree_to_vector_db(family_id, user_id)
+        except Exception as e:
+            logger.warning(f"Error syncing family {family_id} to vector DB: {e}")
+
     effective_cand_name = masked_patient_name or (matched_existing_report and matched_existing_report.get('masked_data', {}).get('patient_name')) or "CAXXXXTE"
 
     return jsonify({
@@ -1877,7 +2380,11 @@ def api_analyze_report():
         "dob": masked_payload.get('dob', detected_dob),
         "location": masked_payload.get('location', detected_location),
         "complete_report_text": text_content,
-        "masked_data": masked_payload
+        "masked_data": masked_payload,
+        "child_node_added": child_node_added,
+        "couple_assessment": couple_assessment,
+        "target_male": target_male_name,
+        "target_female": target_female_name
     })
 
 @app.route('/api/reports/scraped', methods=['GET'])
@@ -1893,6 +2400,10 @@ def api_delete_scraped_report(report_id):
     user_id = session['user_id']
     success = delete_scraped_report(report_id, user_id)
     if success:
+        try:
+            vector_db_service.delete_document_points(100000 + int(report_id), user_id)
+        except Exception as e:
+            logger.warning(f"Error purging vector DB points for report {report_id}: {e}")
         return jsonify({"status": "success", "message": "Patient report dossier successfully deleted."})
     return jsonify({"status": "error", "message": "Report not found or unauthorized."}), 404
 
@@ -1906,6 +2417,11 @@ def api_bulk_delete_scraped_reports():
         return jsonify({"status": "error", "message": "No reports selected for deletion."}), 400
     
     count = delete_scraped_reports_bulk(report_ids, user_id)
+    for r_id in report_ids:
+        try:
+            vector_db_service.delete_document_points(100000 + int(r_id), user_id)
+        except Exception:
+            pass
     return jsonify({
         "status": "success",
         "message": f"Successfully deleted {count} patient dossier(s).",

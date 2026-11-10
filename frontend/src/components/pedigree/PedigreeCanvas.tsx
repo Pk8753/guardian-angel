@@ -61,7 +61,11 @@ export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
 
   const memberMap = useMemo(() => {
     const map = new Map<string | number, PedigreeMember>();
-    layout.members.forEach((m) => map.set(m.id, m));
+    layout.members.forEach((m) => {
+      map.set(m.id, m);
+      map.set(String(m.id), m);
+      if (!isNaN(Number(m.id))) map.set(Number(m.id), m);
+    });
     return map;
   }, [layout.members]);
 
@@ -214,8 +218,8 @@ export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
 
                 {/* Relationship Lines (Couple / Union Nodes) */}
                 {layout.unions.map((union) => {
-                  const p1 = memberMap.get(union.parent1_id);
-                  const p2 = memberMap.get(union.parent2_id);
+                  const p1 = memberMap.get(union.parent1_id) ?? memberMap.get(String(union.parent1_id)) ?? memberMap.get(Number(union.parent1_id));
+                  const p2 = memberMap.get(union.parent2_id) ?? memberMap.get(String(union.parent2_id)) ?? memberMap.get(Number(union.parent2_id));
                   if (!p1 || !p2 || p1.x === undefined || p2.x === undefined || p1.y === undefined || p2.y === undefined) {
                     return null;
                   }
@@ -286,7 +290,7 @@ export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
                       {/* Drop stem to children crossbar */}
                       {union.children_ids.length > 0 && (() => {
                         const children = union.children_ids
-                          .map((cid) => memberMap.get(cid))
+                          .map((cid) => memberMap.get(cid) ?? memberMap.get(String(cid)) ?? memberMap.get(Number(cid)))
                           .filter((c): c is PedigreeMember => !!c && c.x !== undefined && c.y !== undefined);
 
                         if (children.length === 0) return null;
@@ -298,6 +302,7 @@ export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
                         // always bridges the parent drop stem and all children seamlessly
                         const sibMinX = Math.min(unionMidX, ...childXs);
                         const sibMaxX = Math.max(unionMidX, ...childXs);
+                        const isFutureBranch = children.some((c) => c.sex === 'star');
 
                         return (
                           <g key={`stem-${union.id}`}>
@@ -309,6 +314,7 @@ export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
                               y2={sibshipY}
                               stroke="#334155"
                               strokeWidth={2}
+                              strokeDasharray={isFutureBranch ? "4 4" : undefined}
                             />
 
                             {/* Horizontal sibship crossbar connecting union stem to every child */}
@@ -319,31 +325,36 @@ export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
                               y2={sibshipY}
                               stroke="#334155"
                               strokeWidth={2}
+                              strokeDasharray={isFutureBranch ? "4 4" : undefined}
                             />
 
                             {/* Drop lines to each individual child */}
-                            {children.map((child) => (
-                              <g key={`child-drop-${child.id}`}>
-                                <line
-                                  x1={child.x!}
-                                  y1={sibshipY}
-                                  x2={child.x!}
-                                  y2={child.y! - 22}
-                                  stroke="#334155"
-                                  strokeWidth={2}
-                                />
-                                {child.is_identical_twin && (
+                            {children.map((child) => {
+                              const isChildStar = child.sex === 'star';
+                              return (
+                                <g key={`child-drop-${child.id}`}>
                                   <line
-                                    x1={child.x! - 12}
-                                    y1={sibshipY + 25}
-                                    x2={child.x! + 12}
-                                    y2={sibshipY + 25}
-                                    stroke="#0f766e"
-                                    strokeWidth={2}
+                                    x1={child.x!}
+                                    y1={sibshipY}
+                                    x2={child.x!}
+                                    y2={child.y! - 22}
+                                    stroke={isChildStar ? "#0f766e" : "#334155"}
+                                    strokeWidth={isChildStar ? 2.5 : 2}
+                                    strokeDasharray={isChildStar ? "4 4" : undefined}
                                   />
-                                )}
-                              </g>
-                            ))}
+                                  {child.is_identical_twin && (
+                                    <line
+                                      x1={child.x! - 12}
+                                      y1={sibshipY + 25}
+                                      x2={child.x! + 12}
+                                      y2={sibshipY + 25}
+                                      stroke="#0f766e"
+                                      strokeWidth={2}
+                                    />
+                                  )}
+                                </g>
+                              );
+                            })}
                           </g>
                         );
                       })()}
@@ -356,20 +367,22 @@ export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
                   if (m.father_id && m.mother_id) return null; // already handled by union
                   const singleParentId = m.father_id || m.mother_id;
                   if (!singleParentId) return null;
-                  const parent = memberMap.get(singleParentId);
+                  const parent = memberMap.get(singleParentId) ?? memberMap.get(String(singleParentId)) ?? memberMap.get(Number(singleParentId));
                   if (!parent || parent.x === undefined || parent.y === undefined || m.x === undefined || m.y === undefined) {
                     return null;
                   }
-
-                  const midY = Math.round((parent.y + m.y) / 2);
-                  const minX = Math.min(parent.x, m.x);
-                  const maxX = Math.max(parent.x, m.x);
-
+                  const isStar = m.sex === 'star';
                   return (
-                    <g key={`single-parent-${parent.id}-${m.id}`}>
-                      <line x1={parent.x} y1={parent.y + 22} x2={parent.x} y2={midY} stroke="#334155" strokeWidth={2} />
-                      <line x1={minX} y1={midY} x2={maxX} y2={midY} stroke="#334155" strokeWidth={2} />
-                      <line x1={m.x} y1={midY} x2={m.x} y2={m.y - 22} stroke="#334155" strokeWidth={2} />
+                    <g key={`single-parent-${m.id}`}>
+                      <line
+                        x1={parent.x}
+                        y1={parent.y + 22}
+                        x2={m.x}
+                        y2={m.y - 22}
+                        stroke={isStar ? "#0f766e" : "#334155"}
+                        strokeWidth={isStar ? 2.5 : 2}
+                        strokeDasharray={isStar ? "4 4" : undefined}
+                      />
                     </g>
                   );
                 })}
@@ -408,6 +421,14 @@ export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
                 <div className="flex items-center gap-1.5">
                   <div className="w-3.5 h-3.5 border-2 border-pine bg-white rounded-full" />
                   <span>Female</span>
+                </div>
+
+                {/* Future Child (Star) */}
+                <div className="flex items-center gap-1.5">
+                  <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-pine fill-amber-100 stroke-pine stroke-2">
+                    <polygon points="12,2 15,8.5 22,9.3 17,14 18.5,21 12,17.5 5.5,21 7,14 2,9.3 9,8.5" />
+                  </svg>
+                  <span>Future Child</span>
                 </div>
 
                 {/* Affected */}

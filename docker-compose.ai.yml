@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # 1. Qdrant Vector Database
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: guardianangel-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    restart: unless-stopped
+
+  # 2. Ollama Core Server (LLM & Embeddings)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: guardianangel-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    restart: unless-stopped
+
+  # 3. Automatic Model Downloader (Pulls Qwen & BGE-M3 on startup, then finishes)
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: guardianangel-ollama-init
+    depends_on:
+      - ollama
+    volumes:
+      - ollama_models:/root/.ollama
+    entrypoint: /bin/sh
+    command:
+      - "-c"
+      - |
+        echo "Waiting for Ollama daemon to initialize..."
+        sleep 5
+        echo "Pulling Qwen2.5:latest (The Brain)..."
+        ollama pull qwen2.5:latest
+        echo "Pulling BAAI BGE-M3 (Search Intelligence)..."
+        ollama pull bge-m3
+        echo "All AI models are downloaded and ready!"
+    restart: "no"
+
+volumes:
+  qdrant_storage:
+  ollama_models:
