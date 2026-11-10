@@ -30,9 +30,16 @@ export function Navbar() {
   const initialChar = (displayName || user?.username || 'P').charAt(0).toUpperCase();
 
   return (
-    <header className="sticky top-0 z-30 h-16 bg-white/90 backdrop-blur-xl border-b border-outline-variant/30 shadow-[0_1px_8px_rgba(12,50,44,0.03)] flex items-center justify-between px-4 sm:px-8">
-      {/* Search Input */}
-      <div className="flex items-center gap-3 flex-1 max-w-md">
+    <header className="sticky top-0 z-30 h-16 bg-white/90 dark:bg-[#16181b]/95 backdrop-blur-xl border-b border-outline-variant/30 shadow-[0_1px_8px_rgba(12,50,44,0.03)] flex items-center justify-between px-3 sm:px-6 lg:px-8 gap-2">
+      {/* Mobile Brand Icon (when Sidebar is collapsed) */}
+      <Link href="/dashboard" className="md:hidden flex items-center gap-2 group shrink-0" title="GuardianAngel">
+        <div className="w-8 h-8 rounded-xl bg-pine flex items-center justify-center text-white shadow-xs group-hover:bg-pine-light transition-colors">
+          <span className="material-symbols-outlined text-[20px] text-jungle">biotech</span>
+        </div>
+      </Link>
+
+      {/* Search Input (Visible on desktop & tablets) */}
+      <div className="hidden md:flex items-center gap-3 flex-1 max-w-xs lg:max-w-md">
         <div className="relative w-full">
           <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[18px]">
             search
@@ -45,14 +52,46 @@ export function Navbar() {
         </div>
       </div>
 
+      {/* DUAL-LENS PERSONA TOGGLE (Patient vs Provider View) - PINNED AT TOP ON BOTH MOBILE & DESKTOP */}
+      <div className="flex items-center gap-0.5 bg-surface-container-low p-1 rounded-full border border-outline-variant/40 shadow-2xs text-[11px] font-bold shrink-0">
+        <button
+          type="button"
+          onClick={() => setViewMode('patient')}
+          className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 rounded-full cursor-pointer transition-all ${
+            viewMode === 'patient'
+              ? 'bg-teal-700 text-white shadow-xs font-extrabold'
+              : 'text-on-surface-variant hover:text-teal-800'
+          }`}
+          title="Switch to Patient / Plain-English View"
+        >
+          <span className="text-xs">👤</span>
+          <span className="text-xs">Patient</span>
+          <span className="hidden sm:inline">View</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewMode('provider')}
+          className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 rounded-full cursor-pointer transition-all ${
+            viewMode === 'provider'
+              ? 'bg-slate-900 text-white shadow-xs font-extrabold'
+              : 'text-on-surface-variant hover:text-slate-900'
+          }`}
+          title="Switch to Clinical Provider / Genetics Specialist View"
+        >
+          <span className="text-xs">🩺</span>
+          <span className="text-xs">Provider</span>
+          <span className="hidden sm:inline">View</span>
+        </button>
+      </div>
+
       {/* Right Controls */}
-      <div className="flex items-center gap-2 sm:gap-4">
-        {/* Language Selector: USA English & UAE Arabic (Hindi removed) */}
-        <div className="flex items-center gap-1 bg-surface-container-low px-2 py-1 rounded-full border border-outline-variant/30 text-[11px] font-bold">
+      <div className="flex items-center gap-1.5 sm:gap-3">
+        {/* Language Selector: USA English & UAE Arabic (Hidden on tiny screens, accessible in menu) */}
+        <div className="hidden sm:flex items-center gap-1 bg-surface-container-low px-2 py-1 rounded-full border border-outline-variant/30 text-[11px] font-bold shrink-0">
           <button
             type="button"
             onClick={() => setActiveLocale('en')}
-            className={`px-2.5 py-0.5 rounded-full cursor-pointer transition-all ${
+            className={`px-2 py-0.5 rounded-full cursor-pointer transition-all ${
               activeLocale === 'en'
                 ? 'bg-pine text-white shadow-xs'
                 : 'text-on-surface-variant hover:text-pine'
@@ -64,7 +103,7 @@ export function Navbar() {
           <button
             type="button"
             onClick={() => setActiveLocale('ar')}
-            className={`px-2.5 py-0.5 rounded-full cursor-pointer transition-all ${
+            className={`px-2 py-0.5 rounded-full cursor-pointer transition-all ${
               activeLocale === 'ar'
                 ? 'bg-pine text-white shadow-xs'
                 : 'text-on-surface-variant hover:text-pine'
@@ -75,43 +114,11 @@ export function Navbar() {
           </button>
         </div>
 
-        {/* DUAL-LENS PERSONA TOGGLE (Patient vs Provider View) */}
-        <div className="flex items-center gap-0.5 bg-surface-container-low p-1 rounded-full border border-outline-variant/40 shadow-2xs text-[11px] font-bold">
-          <button
-            type="button"
-            onClick={() => setViewMode('patient')}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-full cursor-pointer transition-all ${
-              viewMode === 'patient'
-                ? 'bg-teal-700 text-white shadow-xs font-extrabold'
-                : 'text-on-surface-variant hover:text-teal-800'
-            }`}
-            title="Switch to Patient / Plain-English View"
-          >
-            <span>👤</span>
-            <span className="hidden md:inline">Patient View</span>
-            <span className="md:hidden">Patient</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('provider')}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-full cursor-pointer transition-all ${
-              viewMode === 'provider'
-                ? 'bg-slate-900 text-white shadow-xs font-extrabold'
-                : 'text-on-surface-variant hover:text-slate-900'
-            }`}
-            title="Switch to Clinical Provider / Genetics Specialist View"
-          >
-            <span>🩺</span>
-            <span className="hidden md:inline">Provider View</span>
-            <span className="md:hidden">Provider</span>
-          </button>
-        </div>
-
         {/* Dark / Light Mode Sun & Moon Toggle Button */}
         <button
           type="button"
           onClick={toggleDarkMode}
-          className="w-9 h-9 rounded-lg flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low hover:text-pine transition-all cursor-pointer border border-outline-variant/20"
+          className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low hover:text-pine transition-all cursor-pointer border border-outline-variant/20 shrink-0"
           title={isDarkMode ? t('switch_light', activeLocale) : t('switch_dark', activeLocale)}
           aria-label={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
         >
@@ -122,11 +129,11 @@ export function Navbar() {
           )}
         </button>
 
-        {/* PRIVACY TOGGLE BUTTON (formerly Data Hiding) */}
+        {/* PRIVACY TOGGLE BUTTON */}
         <button
           type="button"
           onClick={toggleSudoMode}
-          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm cursor-pointer border ${
+          className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shadow-sm cursor-pointer border shrink-0 ${
             isSudoMode
               ? 'bg-midnight text-white border-midnight-light'
               : 'bg-surface-container text-pine hover:bg-surface-container-high border-outline-variant/40'
@@ -136,7 +143,7 @@ export function Navbar() {
           <span className={`material-symbols-outlined text-[16px] ${isSudoMode ? 'text-jungle' : 'text-on-surface-variant'}`}>
             {isSudoMode ? 'visibility_off' : 'visibility'}
           </span>
-          <span className="hidden sm:inline">
+          <span className="hidden lg:inline">
             {isSudoMode ? (
               <>
                 {t('privacy_label', activeLocale)}{' '}
@@ -149,19 +156,19 @@ export function Navbar() {
               </>
             )}
           </span>
-          <span className="sm:hidden font-mono text-[10px]">
-            {isSudoMode ? '🔒 ON' : '👁️ OFF'}
+          <span className="lg:hidden font-mono text-[10px]">
+            {isSudoMode ? 'ON' : 'OFF'}
           </span>
         </button>
 
         {/* User Identity Chip */}
-        <div className="relative">
+        <div className="relative shrink-0">
           <button
             type="button"
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className="flex items-center gap-2.5 pl-2 py-1 rounded-lg hover:bg-surface-container transition-colors cursor-pointer"
+            className="flex items-center gap-2 pl-1 sm:pl-2 py-1 rounded-lg hover:bg-surface-container transition-colors cursor-pointer"
           >
-            <div className="flex flex-col text-right hidden sm:flex">
+            <div className="flex flex-col text-right hidden lg:flex">
               <span className="text-xs font-bold text-pine leading-tight">{displayName}</span>
               <span className="text-[11px] text-jungle font-semibold leading-tight">
                 {isSudoMode ? t('sudo_pseudonym', activeLocale) : `@${user?.username || 'user'} • Online`}
@@ -177,7 +184,7 @@ export function Navbar() {
 
           {/* User Dropdown */}
           {isDropdownOpen && (
-            <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-outline-variant/40 py-2 z-50">
+            <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-[#1c1f24] rounded-xl shadow-xl border border-outline-variant/40 py-2 z-50">
               <div className="px-4 py-2 border-b border-outline-variant/20">
                 <p className="text-xs font-bold text-pine">{realName}</p>
                 <div className="flex items-center gap-1.5 mt-0.5">
@@ -189,6 +196,27 @@ export function Navbar() {
                 {user?.email && (
                   <p className="text-[10px] text-on-surface-variant mt-1 truncate">{user.email}</p>
                 )}
+              </div>
+
+              {/* Mobile Language Switcher (Visible in dropdown on small screens) */}
+              <div className="sm:hidden px-4 py-2 border-b border-outline-variant/20 flex items-center justify-between">
+                <span className="text-xs text-on-surface-variant font-medium">Language</span>
+                <div className="flex items-center gap-1 bg-surface-container-low px-1.5 py-0.5 rounded-lg border border-outline-variant/30 text-[10px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setActiveLocale('en')}
+                    className={`px-2 py-0.5 rounded ${activeLocale === 'en' ? 'bg-pine text-white' : 'text-on-surface-variant'}`}
+                  >
+                    EN
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveLocale('ar')}
+                    className={`px-2 py-0.5 rounded ${activeLocale === 'ar' ? 'bg-pine text-white' : 'text-on-surface-variant'}`}
+                  >
+                    العربية
+                  </button>
+                </div>
               </div>
 
               <button

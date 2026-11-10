@@ -108,7 +108,7 @@ export default function CoupleAssessmentPage() {
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <Navbar />
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-6 lg:p-8 space-y-6 pb-24 md:pb-8">
           {/* Page Header */}
           <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
             <div className="flex flex-col gap-1.5">

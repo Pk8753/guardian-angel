@@ -170,7 +170,27 @@ export default function RiskAnalysisPage() {
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <Navbar />
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-5 lg:p-6 space-y-5">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-6 lg:p-8 space-y-6 pb-24 md:pb-8">
+          {/* Educational Decision Support Banner */}
+          <div className="w-full bg-white border border-outline-variant/30 rounded-2xl p-3.5 flex items-center justify-between shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-mint/25 flex items-center justify-center text-pine shrink-0">
+                <Info className="w-4 h-4 text-pine" />
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                <span className="text-xs uppercase tracking-wider text-pine font-bold">
+                  Educational Decision Support
+                </span>
+                <span className="hidden sm:inline text-outline-variant font-bold">&bull;</span>
+                <span className="text-xs text-on-surface-variant leading-relaxed">
+                  Synthesized under ACMG/AMP guidelines. Intended to guide proactive counseling discussions with certified geneticists.
+                </span>
+              </div>
+            </div>
+            <span className="text-[11px] text-pine bg-mint/25 px-2.5 py-1 rounded-full font-bold border border-mint shrink-0">
+              CLIA/CAP Synthesized
+            </span>
+          </div>
           {/* Page Header & Key Metrics Strip */}
           <div className="flex flex-col gap-5">
             <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
