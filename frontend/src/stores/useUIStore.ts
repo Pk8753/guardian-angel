@@ -8,6 +8,7 @@ interface UIState {
   setCarrierNotation: (notation: 'dot' | 'half_fill' | 'letter') => void;
   activeLocale: Locale;
   setActiveLocale: (locale: Locale) => void;
+  rehydrateLocale: () => void;
   isDarkMode: boolean;
   toggleDarkMode: () => void;
   setDarkMode: (dark: boolean) => void;
@@ -23,20 +24,57 @@ interface UIState {
   setViewMode: (mode: 'patient' | 'provider') => void;
 }
 
+const getInitialLocale = (): Locale => {
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('guardian_locale');
+      if (saved === 'en' || saved === 'ar') {
+        return saved;
+      }
+      const cookieMatch = document.cookie.match(/(?:^|;\s*)ga_locale=([^;]+)/);
+      if (cookieMatch && (cookieMatch[1] === 'en' || cookieMatch[1] === 'ar')) {
+        return cookieMatch[1] as Locale;
+      }
+    } catch {
+      // fallback
+    }
+  }
+  return 'en';
+};
+
+const syncLocaleToDOM = (locale: Locale) => {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('guardian_locale', locale);
+      document.cookie = `ga_locale=${locale}; path=/; max-age=31536000; SameSite=Lax`;
+      document.documentElement.lang = locale;
+      document.documentElement.dir = locale === 'ar' ? 'rtl' : 'ltr';
+    } catch {
+      // fallback
+    }
+  }
+};
+
+const initialLocale = getInitialLocale();
+if (typeof window !== 'undefined') {
+  syncLocaleToDOM(initialLocale);
+}
+
 export const useUIStore = create<UIState>((set) => ({
   isSudoMode: false,
   toggleSudoMode: () => set((state) => ({ isSudoMode: !state.isSudoMode })),
   carrierNotation: 'dot',
   setCarrierNotation: (notation) => set({ carrierNotation: notation }),
-  activeLocale: 'en',
+  activeLocale: initialLocale,
   isSettingsModalOpen: false,
   setSettingsModalOpen: (open) => set({ isSettingsModalOpen: open }),
   setActiveLocale: (locale) => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('guardian_locale', locale);
-      document.documentElement.lang = locale;
-      document.documentElement.dir = locale === 'ar' ? 'rtl' : 'ltr';
-    }
+    syncLocaleToDOM(locale);
+    set({ activeLocale: locale });
+  },
+  rehydrateLocale: () => {
+    const locale = getInitialLocale();
+    syncLocaleToDOM(locale);
     set({ activeLocale: locale });
   },
   isDarkMode: false,

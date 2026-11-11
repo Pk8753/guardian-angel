@@ -41,13 +41,13 @@ export function Navbar() {
       {/* Search Input (Visible on desktop & tablets) */}
       <div className="hidden md:flex items-center gap-3 flex-1 max-w-xs lg:max-w-md">
         <div className="relative w-full">
-          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[18px]">
+          <span className="material-symbols-outlined absolute left-3 rtl:left-auto rtl:right-3 top-1/2 -translate-y-1/2 text-outline text-[18px]">
             search
           </span>
           <input
             type="text"
             placeholder={t('search_placeholder', activeLocale)}
-            className="w-full pl-9 pr-4 py-1.5 rounded-lg bg-surface-container-low text-on-surface placeholder:text-outline text-xs focus:outline-none focus:bg-white focus:ring-1 focus:ring-waterhole transition-all border border-outline-variant/30"
+            className="w-full pl-9 pr-4 rtl:pl-4 rtl:pr-9 text-start py-1.5 rounded-lg bg-surface-container-low text-on-surface placeholder:text-outline text-xs focus:outline-none focus:bg-white focus:ring-1 focus:ring-waterhole transition-all border border-outline-variant/30"
           />
         </div>
       </div>
@@ -168,7 +168,7 @@ export function Navbar() {
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             className="flex items-center gap-2 pl-1 sm:pl-2 py-1 rounded-lg hover:bg-surface-container transition-colors cursor-pointer"
           >
-            <div className="flex flex-col text-right hidden lg:flex">
+            <div className="flex flex-col text-end hidden sm:flex">
               <span className="text-xs font-bold text-pine leading-tight">{displayName}</span>
               <span className="text-[11px] text-jungle font-semibold leading-tight">
                 {isSudoMode ? t('sudo_pseudonym', activeLocale) : `@${user?.username || 'user'} • Online`}
@@ -178,13 +178,13 @@ export function Navbar() {
               <div className="w-8 h-8 rounded-full bg-pine flex items-center justify-center text-white shadow-sm font-semibold text-xs">
                 {initialChar}
               </div>
-              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-jungle ring-2 ring-white"></span>
+              <span className="absolute -bottom-0.5 -right-0.5 rtl:-right-auto rtl:-left-0.5 w-2.5 h-2.5 rounded-full bg-jungle ring-2 ring-white"></span>
             </div>
           </button>
 
           {/* User Dropdown */}
           {isDropdownOpen && (
-            <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-[#1c1f24] rounded-xl shadow-xl border border-outline-variant/40 py-2 z-50">
+            <div className="absolute right-0 rtl:right-auto rtl:left-0 mt-2 w-64 bg-white dark:bg-[#1c1f24] rounded-xl shadow-xl border border-outline-variant/40 py-2 z-50 text-start">
               <div className="px-4 py-2 border-b border-outline-variant/20">
                 <p className="text-xs font-bold text-pine">{realName}</p>
                 <div className="flex items-center gap-1.5 mt-0.5">
@@ -222,7 +222,7 @@ export function Navbar() {
               <button
                 type="button"
                 onClick={() => { toggleSudoMode(); setIsDropdownOpen(false); }}
-                className="w-full text-left flex items-center gap-2.5 px-4 py-2 text-xs text-pine hover:bg-surface-container transition-colors cursor-pointer"
+                className="w-full text-start flex items-center gap-2.5 px-4 py-2 text-xs text-pine hover:bg-surface-container transition-colors cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[16px] text-waterhole">
                   {isSudoMode ? 'visibility' : 'visibility_off'}
@@ -247,7 +247,7 @@ export function Navbar() {
                     setIsDropdownOpen(false);
                     setSettingsModalOpen(true);
                   }}
-                  className="w-full text-left flex items-center gap-2.5 px-4 py-2 text-xs text-pine hover:bg-surface-container transition-colors cursor-pointer"
+                  className="w-full text-start flex items-center gap-2.5 px-4 py-2 text-xs text-pine hover:bg-surface-container transition-colors cursor-pointer"
                 >
                   <Settings className="w-4 h-4 text-pine" />
                   <span>{t('settings_btn', activeLocale)}</span>
@@ -260,7 +260,7 @@ export function Navbar() {
                     logout();
                     router.push('/login');
                   }}
-                  className="w-full text-left flex items-center gap-2.5 px-4 py-2 text-xs text-error hover:bg-error-container/20 transition-colors cursor-pointer"
+                  className="w-full text-start flex items-center gap-2.5 px-4 py-2 text-xs text-error hover:bg-error-container/20 transition-colors cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-[16px]">logout</span>
                   <span>{t('sign_out', activeLocale)}</span>

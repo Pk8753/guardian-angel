@@ -9,6 +9,10 @@ const backendPort = process.env.BACKEND_PORT || '5000';
 
 const nextConfig = {
   reactStrictMode: true,
+  devIndicators: {
+    buildActivity: false,
+    appIsrStatus: false,
+  },
   async rewrites() {
     return [
       {

@@ -259,13 +259,72 @@ export default function DashboardPage() {
   };
 
   // Interactive AI Question State
+  interface DashboardCitationDetail {
+    title: string;
+    excerpt: string;
+    file_type?: string;
+  }
+
   interface DashboardChatMessage {
     id: string;
     sender: 'user' | 'ai';
     text: string;
     source?: string;
     timestamp: string;
+    citationDetails?: DashboardCitationDetail[];
+    suggestedFollowUps?: string[];
   }
+
+  const [activeCitationPreview, setActiveCitationPreview] = useState<DashboardCitationDetail | null>(null);
+
+  const renderFormattedText = (text: string) => {
+    if (!text) return null;
+    const lines = text.split('\n');
+    return (
+      <div className="space-y-1.5 leading-relaxed text-xs">
+        {lines.map((line, lIdx) => {
+          const trimmed = line.trim();
+          if (!trimmed) {
+            return <div key={lIdx} className="h-1" />;
+          }
+          const isBullet = trimmed.startsWith('* ') || trimmed.startsWith('- ') || trimmed.startsWith('• ');
+          const isNumbered = /^\d+\.\s/.test(trimmed);
+          const content = isBullet ? trimmed.replace(/^[\*\-•]\s+/, '') : isNumbered ? trimmed.replace(/^\d+\.\s+/, '') : trimmed;
+          const numberPrefix = isNumbered ? trimmed.match(/^\d+\./)?.[0] : null;
+
+          const parts = content.split(/(\*\*[^*]+\*\*)/g);
+          const parsedLine = parts.map((part, pIdx) => {
+            if (part.startsWith('**') && part.endsWith('**')) {
+              return (
+                <strong key={pIdx} className="font-semibold text-inherit">
+                  {part.slice(2, -2)}
+                </strong>
+              );
+            }
+            return <React.Fragment key={pIdx}>{part}</React.Fragment>;
+          });
+
+          if (isBullet) {
+            return (
+              <div key={lIdx} className="flex items-start gap-1.5 pl-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70 shrink-0 mt-1.5" />
+                <span>{parsedLine}</span>
+              </div>
+            );
+          }
+          if (isNumbered) {
+            return (
+              <div key={lIdx} className="flex items-start gap-1.5 pl-1.5">
+                <span className="font-semibold text-inherit shrink-0">{numberPrefix}</span>
+                <span>{parsedLine}</span>
+              </div>
+            );
+          }
+          return <p key={lIdx}>{parsedLine}</p>;
+        })}
+      </div>
+    );
+  };
 
   const [query, setQuery] = useState('');
   const [aiAnswer, setAiAnswer] = useState<string | null>(null);
@@ -285,11 +344,85 @@ export default function DashboardPage() {
     {
       id: 'welcome',
       sender: 'ai',
-      text: 'Hello! I am Care AI. Ask me anything about your premarital screening results, family pedigree carrier traits, or national health policy guidelines.',
+      text: 'Hello! I am Care AI, your clinical genetic counselor. Ask me anything about your premarital screening results, family pedigree carrier traits, or medical terms. What would you like to explore today?',
       source: 'Care AI Clinical Engine',
-      timestamp: 'Now'
+      timestamp: 'Now',
+      suggestedFollowUps: [
+        "What is an ACMG Pedigree?",
+        "What does heterozygous mean in plain English?",
+        "Can a carrier feel sick or tired?"
+      ]
     }
   ]);
+
+  // Synchronize chatMessages with sessionStorage scoped to activeFamily
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const famKey = activeFamily?.family_id || 'default';
+      try {
+        const saved = sessionStorage.getItem(`ga_care_ai_history_${famKey}`) ||
+                      sessionStorage.getItem(`ga_care_ai_messages_${famKey}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setChatMessages(parsed);
+            return;
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse chat messages from sessionStorage', e);
+      }
+      setChatMessages([
+        {
+          id: 'welcome',
+          sender: 'ai',
+          text: 'Hello! I am Care AI, your clinical genetic counselor. Ask me anything about your premarital screening results, family pedigree carrier traits, or medical terms. What would you like to explore today?',
+          source: 'Care AI Clinical Engine',
+          timestamp: 'Now',
+          suggestedFollowUps: [
+            "What is an ACMG Pedigree?",
+            "What does heterozygous mean in plain English?",
+            "Can a carrier feel sick or tired?"
+          ]
+        }
+      ]);
+    }
+  }, [activeFamily?.family_id]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && chatMessages.length > 0) {
+      const famKey = activeFamily?.family_id || 'default';
+      try {
+        sessionStorage.setItem(
+          `ga_care_ai_history_${famKey}`,
+          JSON.stringify(chatMessages)
+        );
+      } catch (e) {
+        console.error('Failed to save chat messages to sessionStorage', e);
+      }
+    }
+  }, [chatMessages, activeFamily?.family_id]);
+
+  const handleClearChat = () => {
+    const famKey = activeFamily?.family_id || 'default';
+    const welcomeMsg: DashboardChatMessage = {
+      id: `welcome-${Date.now()}`,
+      sender: 'ai',
+      text: 'Hello! I am Care AI, your clinical genetic counselor. Ask me anything about your premarital screening results, family pedigree carrier traits, or medical terms. What would you like to explore today?',
+      source: 'Care AI Clinical Engine',
+      timestamp: 'Now',
+      suggestedFollowUps: [
+        "What is an ACMG Pedigree?",
+        "What does heterozygous mean in plain English?",
+        "Can a carrier feel sick or tired?"
+      ]
+    };
+    setChatMessages([welcomeMsg]);
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem(`ga_care_ai_history_${famKey}`);
+      sessionStorage.removeItem(`ga_care_ai_messages_${famKey}`);
+    }
+  };
 
   useEffect(() => {
     if (chatScrollRef.current) {
@@ -299,38 +432,94 @@ export default function DashboardPage() {
 
   const defaultSuggestedQuestions = [
     {
+      q: 'What do MCV and HbA2 mean in my blood report?',
+      a: 'MCV measures red blood cell size (like checking delivery vehicle volume), while HbA2 is the key marker for Beta-Thalassemia trait. An elevated HbA2 (>3.5%) indicates a harmless carrier trait. Carriers lead full, active, and healthy lives.'
+    },
+    {
+      q: 'What is the difference between Thalassemia Trait and Major?',
+      a: 'Thalassemia Trait (carrier) is a harmless genetic trait with zero symptoms or transfusions needed. Thalassemia Major is a severe condition requiring lifelong transfusions. Carriers will never turn into Major.'
+    },
+    {
+      q: 'Can a carrier have symptoms or feel sick?',
+      a: 'No. Being a carrier is not an illness. Carriers lead normal, healthy lives with full stamina. Occasionally, slight fatigue can occur, but carriers are completely healthy.'
+    },
+    {
+      q: 'How does PGT-M ensure our future child is healthy?',
+      a: 'PGT-M is genetic testing of IVF embryos before pregnancy. It ensures only embryos without the severe condition are transferred, giving carrier couples complete peace of mind.'
+    },
+    {
       q: 'What does 3rd-degree consanguinity mean for my child?',
-      a: 'When cousins marry, they share about 6.25% of their DNA. This slightly increases the chance that both parents carry the exact same hidden gene. A quick carrier test helps you see if both of you carry any matching trait, so doctors can protect your future baby.'
-    },
-    {
-      q: 'Can G6PD trait be passed down if mother is carrier?',
-      a: 'Yes. G6PD is carried on the X chromosome. A mother who carries the trait has a 50% chance of passing it to her sons (who may have G6PD) or daughters (who may also become carriers).'
-    },
-    {
-      q: 'Differences between Alpha vs Beta Thalassemia?',
-      a: 'Both are inherited blood conditions that affect red blood cells. Being a single-gene carrier usually causes no problems, but if both mother and father carry the same trait, there is a 25% chance their child could have a severe form.'
+      a: 'When cousins marry, they share about 6.25% of their DNA. A quick premarital carrier test confirms whether both partners share any matching traits so doctors can safeguard your future child.'
     }
   ];
 
-  // Load dynamic potential queries generated by Qwen3 based on analyzed reports & pedigree
+  const getFallbackAnswer = (text: string): string => {
+    const low = text.toLowerCase();
+    const matched = defaultSuggestedQuestions.find(
+      (sq) => sq.q.toLowerCase() === text.toLowerCase() || low.includes(sq.q.toLowerCase())
+    );
+    if (matched) return matched.a;
+    if (low.includes('mcv') || low.includes('hba2') || low.includes('mch') || low.includes('ferritin')) {
+      return 'MCV measures red blood cell size, while HbA2 is the primary gold standard marker for Beta-Thalassemia trait. Elevated HbA2 (>3.5%) indicates an asymptomatic, healthy carrier state. Carriers lead completely normal, active lives.';
+    }
+    if (low.includes('carrier') && (low.includes('sick') || low.includes('symptom') || low.includes('tired') || low.includes('feel'))) {
+      return 'Being a carrier is NOT an illness. Carriers have normal life expectancy, full physical vitality, and lead healthy lives. Your single working gene copy produces all the functional proteins your body needs.';
+    }
+    if (low.includes('pgt') || low.includes('ivf')) {
+      return 'PGT-M is Pre-implantation Genetic Testing for Monogenic conditions. Used alongside IVF, it tests embryos in the laboratory before pregnancy to ensure future children are born free of the condition.';
+    }
+    if (low.includes('heterozygous')) {
+      return 'Heterozygous means carrying two different versions of a gene: one standard working copy and one variant copy. In recessive conditions, being heterozygous means you are a healthy carrier with zero disability.';
+    }
+    return `Regarding "${text}": In preventive healthcare and genetic counseling, understanding your lab markers and carrier traits gives you complete clarity. Dual-partner carrier testing provides complete peace of mind.`;
+  };
+
+  const isLoadingQueriesRef = useRef(false);
+
+  // Load dynamic potential queries generated by Qwen3 based on analyzed reports & pedigree (cached)
   const loadDynamicQueries = () => {
+    const fid = activeFamily?.family_id;
+    if (!fid || isLoadingQueriesRef.current) return;
+
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = sessionStorage.getItem(`ga_dynamic_queries_${fid}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setDynamicQueries(parsed);
+            return;
+          }
+        }
+      } catch (e) {}
+    }
+
+    isLoadingQueriesRef.current = true;
     fetch('/api/ai/analyze-assessment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({})
+      body: JSON.stringify({ family_id: fid })
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data?.potential_queries && Array.isArray(data.potential_queries) && data.potential_queries.length > 0) {
           setDynamicQueries(data.potential_queries);
+          if (typeof window !== 'undefined') {
+            try {
+              sessionStorage.setItem(`ga_dynamic_queries_${fid}`, JSON.stringify(data.potential_queries));
+            } catch (e) {}
+          }
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        isLoadingQueriesRef.current = false;
+      });
   };
 
   useEffect(() => {
     loadDynamicQueries();
-  }, []);
+  }, [activeFamily?.family_id]);
 
   const handleAskQuestion = async (questionText: string) => {
     if (!questionText.trim()) return;
@@ -350,12 +539,23 @@ export default function DashboardPage() {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
     setChatMessages((prev) => [...prev, userMsg]);
+    setIsAiLoading(true);
+    setThinkingStep('Reviewing lab records & genetic variants...');
 
-    const stepTimer = setTimeout(() => {
-      setThinkingStep('Synthesizing genetic findings with clinical guidelines...');
-    }, 900);
+    const stepTimer1 = setTimeout(() => {
+      setThinkingStep('Cross-referencing national health policy & standards...');
+    }, 600);
+
+    const stepTimer2 = setTimeout(() => {
+      setThinkingStep('Synthesizing clinical recommendations...');
+    }, 1400);
 
     try {
+      const historyPayload = chatMessages.slice(-6).map((m) => ({
+        sender: m.sender,
+        text: m.text,
+      }));
+
       const endpoint = selectedModel ? '/api/ai/ask-studio' : '/api/ai/ask';
       const res = await fetch(endpoint, {
         method: 'POST',
@@ -363,15 +563,18 @@ export default function DashboardPage() {
         body: JSON.stringify({
           query: userMsgText,
           model: selectedModel,
-          view_mode: viewMode
+          view_mode: viewMode,
+          family_id: activeFamily?.family_id,
+          conversation_history: historyPayload
         })
       });
-      clearTimeout(stepTimer);
+      clearTimeout(stepTimer1);
+      clearTimeout(stepTimer2);
 
       if (res.ok) {
         const data = await res.json();
         const answerText = data.answer || 'No response generated.';
-        const sourceText = data.source || data.model || selectedModel || 'Care AI Clinical Intelligence';
+        const sourceText = data.source || data.model || selectedModel || (data.references && data.references[0]) || 'Care AI Clinical Intelligence';
         const locusText = data.locus_reference || null;
 
         setAiAnswer(answerText);
@@ -383,18 +586,51 @@ export default function DashboardPage() {
           sender: 'ai',
           text: answerText,
           source: sourceText,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          citationDetails: data.citation_details || (data.references ? data.references.map((r: string) => ({ title: r, excerpt: '' })) : []),
+          suggestedFollowUps: data.suggested_follow_ups || []
         };
         setChatMessages((prev) => [...prev, aiMsg]);
         if (data.references && Array.isArray(data.references)) {
           setAiReferences(data.references);
         }
-        return;
+      } else {
+        const fallbackText = getFallbackAnswer(userMsgText);
+        const aiMsg: DashboardChatMessage = {
+          id: `ai-${Date.now()}`,
+          sender: 'ai',
+          text: fallbackText,
+          source: 'Care AI Clinical Knowledge',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          suggestedFollowUps: [
+            "What is an ACMG Pedigree?",
+            "What does heterozygous mean in plain English?",
+            "What are our couple reproductive options?"
+          ]
+        };
+        setChatMessages((prev) => [...prev, aiMsg]);
       }
     } catch (err) {
+      clearTimeout(stepTimer1);
+      clearTimeout(stepTimer2);
       console.error('Care AI query error:', err);
+      const fallbackText = getFallbackAnswer(userMsgText);
+      const aiMsg: DashboardChatMessage = {
+        id: `ai-${Date.now()}`,
+        sender: 'ai',
+        text: fallbackText,
+        source: 'Care AI Clinical Knowledge',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        suggestedFollowUps: [
+          "What is an ACMG Pedigree?",
+          "What does heterozygous mean in plain English?",
+          "What are our couple reproductive options?"
+        ]
+      };
+      setChatMessages((prev) => [...prev, aiMsg]);
     } finally {
-      clearTimeout(stepTimer);
+      clearTimeout(stepTimer1);
+      clearTimeout(stepTimer2);
       setIsAiLoading(false);
       setAiLoading(false);
       setThinkingStep('');
@@ -540,12 +776,21 @@ export default function DashboardPage() {
       };
       setLatestUploadMeta(meta);
 
+      // Clear sessionStorage assessments so navigating to AI Genetic Intelligence loads fresh analysis
+      if (typeof window !== 'undefined') {
+        try {
+          const fid = data.family_id || 'active';
+          sessionStorage.removeItem(`ga_risk_assessment_${fid}`);
+          sessionStorage.removeItem(`ga_couple_assessment_${fid}`);
+          sessionStorage.removeItem(`ga_dynamic_queries_${fid}`);
+        } catch (e) {}
+      }
+
       // Re-fetch families to immediately reflect new tree or added member on dashboard
       if (data.family_id) {
         setSelectedTargetFamilyId(data.family_id);
         loadFamilies(data.family_id);
       }
-      loadDynamicQueries();
     } catch (err: any) {
       setFileError(err.message || 'Unable to analyze report. Please verify connection to backend server.');
     } finally {
@@ -967,37 +1212,37 @@ export default function DashboardPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h2 className="text-base font-bold text-pine">
-                      Your Family Pedigree Charts
+                      {t('dashboard_charts_library', activeLocale)}
                     </h2>
                     <span className="px-2.5 py-0.5 rounded-full bg-mint/25 border border-mint text-pine font-bold text-[11px]">
                       {families.length} {families.length === 1 ? 'Chart' : 'Charts'}
                     </span>
                   </div>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Multi-pedigree chart library with auto-generated Family IDs, clinical linkage, and shareable doctor links.
+                    {t('dashboard_charts_desc', activeLocale)}
                   </p>
                 </div>
               </div>
 
-              {/* Desktop Table View */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-left text-xs">
+              {/* Charts Table matching Requirement 7 */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-start text-xs">
                   <thead>
                     <tr className="border-b border-outline-variant/30 text-on-surface-variant text-[11px] uppercase tracking-wider bg-fog/60">
-                      <th className="py-3 px-4 font-bold rounded-l-xl">Family ID</th>
-                      <th className="py-3 px-4 font-bold">Chart Title</th>
-                      <th className="py-3 px-4 font-bold">Key Member</th>
-                      <th className="py-3 px-4 font-bold">Member Count</th>
-                      <th className="py-3 px-4 font-bold">Last Updated</th>
-                      <th className="py-3 px-4 font-bold">Share Status</th>
-                      <th className="py-3 px-4 font-bold text-right rounded-r-xl">Actions</th>
+                      <th className="py-3 px-4 font-bold rounded-s-xl">{t('dashboard_table_id', activeLocale)}</th>
+                      <th className="py-3 px-4 font-bold">{t('dashboard_table_title', activeLocale)}</th>
+                      <th className="py-3 px-4 font-bold">{t('dashboard_table_proband', activeLocale)}</th>
+                      <th className="py-3 px-4 font-bold">{t('dashboard_table_members', activeLocale)}</th>
+                      <th className="py-3 px-4 font-bold">{t('dashboard_table_updated', activeLocale)}</th>
+                      <th className="py-3 px-4 font-bold">{t('dashboard_table_share', activeLocale)}</th>
+                      <th className="py-3 px-4 font-bold text-end rounded-e-xl">{t('dashboard_table_actions', activeLocale)}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-outline-variant/20">
                     {familiesLoading ? (
                       <tr>
                         <td colSpan={7} className="py-8 text-center text-on-surface-variant">
-                          Loading your pedigree charts...
+                          {t('loading', activeLocale)}
                         </td>
                       </tr>
                     ) : families.length === 0 ? (
@@ -1053,14 +1298,14 @@ export default function DashboardPage() {
                               </span>
                             )}
                           </td>
-                          <td className="py-3.5 px-4 text-right">
+                          <td className="py-3.5 px-4 text-end">
                             <div className="flex items-center justify-end gap-2">
                               <Link
                                 href={`/pedigree?family_id=${fam.family_id}`}
                                 className="inline-flex items-center gap-1 px-3 py-1.5 bg-pine hover:bg-pine-light text-white rounded-lg text-xs font-bold transition shadow-xs"
                               >
-                                <span>Open Chart</span>
-                                <ArrowRight className="w-3 h-3" />
+                                <span>{t('dashboard_open_chart', activeLocale)}</span>
+                                <ArrowRight className="w-3 h-3 rtl:rotate-180" />
                               </Link>
                               {fam.share_token && (
                                 <Link
@@ -1173,16 +1418,16 @@ export default function DashboardPage() {
             </div>
 
             {/* ==================== 3. MAIN 2-COLUMN SECTION ==================== */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
               {/* -------------------- LEFT COLUMN (8 COLS) -------------------- */}
-              <div className="lg:col-span-8 space-y-5">
+              <div className="lg:col-span-8 flex flex-col gap-5">
                 {/* Lineage Pedigree Model Card */}
                 <div className="bg-white rounded-2xl p-4 sm:p-6 border border-outline-variant/30 shadow-[0_1px_4px_rgba(12,50,44,0.04)] space-y-4">
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
                         <h2 className="text-base font-bold text-pine">
-                          Lineage Pedigree Model
+                          {t('dashboard_lineage_title', activeLocale)}
                         </h2>
                         {activeFamily && (
                           <span className="text-sm font-bold text-pine bg-mint/25 px-2.5 py-0.5 rounded-lg border border-mint">
@@ -1201,7 +1446,7 @@ export default function DashboardPage() {
                         )}
                       </div>
                       <p className="text-xs text-on-surface-variant mt-0.5">
-                        Interactive clinical pedigree chart showing family relationships, carriers, and phenotypes.
+                        {t('dashboard_lineage_subtitle', activeLocale)}
                       </p>
                     </div>
 
@@ -1212,7 +1457,7 @@ export default function DashboardPage() {
                         title="Open in Pedigree Studio"
                       >
                         <Maximize2 className="w-3.5 h-3.5 text-waterhole" />
-                        <span>Interactive Studio</span>
+                        <span>{t('dashboard_studio_link', activeLocale)}</span>
                       </Link>
                     </div>
                   </div>
@@ -1234,20 +1479,35 @@ export default function DashboardPage() {
                       />
                     </div>
                   ) : (
-                    <div className="w-full h-[320px] sm:h-[400px] bg-fog rounded-2xl border border-outline-variant/40 flex flex-col items-center justify-center text-center p-6 space-y-3">
-                      <GitBranch className="w-10 h-10 text-outline-variant" />
-                      <h3 className="text-sm font-bold text-pine">No Relatives in Default Tree</h3>
-                      <p className="text-xs text-on-surface-variant max-w-sm">
-                        Open the full interactive editor to add parents, siblings, children, and partners to your pedigree chart.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => setIsUploadModalOpen(true)}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-pine hover:bg-pine-light text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
-                      >
-                        <UploadCloud className="w-4 h-4" />
-                        <span>Upload Screening Report</span>
-                      </button>
+                    <div className="w-full h-[620px] bg-fog rounded-2xl border border-outline-variant/40 flex flex-col items-center justify-center text-center p-8 space-y-4">
+                      <div className="w-16 h-16 rounded-2xl bg-white border border-outline-variant/40 flex items-center justify-center shadow-xs">
+                        <GitBranch className="w-8 h-8 text-pine" />
+                      </div>
+                      <div className="max-w-md space-y-1">
+                        <h3 className="text-sm font-bold text-pine">
+                          {t('pedigree_empty_selection_title', activeLocale)}
+                        </h3>
+                        <p className="text-xs text-on-surface-variant">
+                          {t('pedigree_empty_selection_desc', activeLocale)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2.5 flex-wrap justify-center pt-2">
+                        <Link
+                          href="/pedigree"
+                          className="inline-flex items-center gap-2 px-4 py-2.5 bg-pine hover:bg-pine-light text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>{t('btn_create_pedigree', activeLocale)}</span>
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => setIsUploadModalOpen(true)}
+                          className="inline-flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-fog-dark border border-outline-variant/40 text-pine rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer"
+                        >
+                          <UploadCloud className="w-4 h-4 text-pine" />
+                          <span>{t('btn_upload_screening_report', activeLocale)}</span>
+                        </button>
+                      </div>
                     </div>
                   )}
 
@@ -1256,62 +1516,185 @@ export default function DashboardPage() {
                       href="/pedigree"
                       className="text-xs font-bold text-waterhole hover:text-waterhole-dark transition flex items-center gap-1"
                     >
-                      <span>Open Full Interactive Editor</span>
-                      <ArrowRight className="w-3.5 h-3.5 rtl-flip" />
+                      <span>{t('dashboard_open_full_editor', activeLocale)}</span>
+                      <ArrowRight className="w-3.5 h-3.5 rtl:rotate-180" />
                     </Link>
                   </div>
                 </div>
 
-                {/* Understanding Consanguinity & Hereditary Lineages Literacy Card */}
-                <div className="bg-white rounded-2xl p-4 sm:p-6 border border-outline-variant/30 shadow-[0_1px_4px_rgba(12,50,44,0.04)] space-y-4">
-                  <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-pine">
-                    <ShieldCheck className="w-4 h-4 text-jungle" />
-                    <span>GENOMIC LITERACY</span>
-                  </div>
-
-                  <h3 className="text-base sm:text-lg font-bold text-pine leading-tight">
-                    Understanding Shared Family Bloodlines &amp; Hereditary Health
-                  </h3>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 sm:gap-5 items-center">
-                    {/* Family Photo Representation */}
-                    <div className="sm:col-span-5 rounded-xl overflow-hidden shadow-sm h-36 sm:h-44 border border-outline-variant/40 relative bg-fog">
-                      <img
-                        src="https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=600&auto=format&fit=crop&q=80"
-                        alt="Family Health"
-                        className="w-full h-full object-cover"
-                      />
+                {/* Sub-grid: Action Directives & Genomic Literacy nested directly below Lineage Pedigree Model */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch">
+                  {/* Action Directives Card */}
+                  <div className="bg-white rounded-2xl p-5 border border-outline-variant/30 shadow-[0_1px_4px_rgba(12,50,44,0.04)] space-y-3.5 flex flex-col justify-between">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-jungle" />
+                        <h2 className="text-xs font-bold text-pine uppercase tracking-wide">
+                          Action Directives
+                        </h2>
+                      </div>
+                      <span className="text-[10px] font-bold text-midnight bg-midnight/10 px-2 py-0.5 rounded-full tracking-wider">
+                        TIER 1 CLINICAL
+                      </span>
                     </div>
 
-                    {/* Educational Text in Simple English */}
-                    <div className="sm:col-span-7 space-y-3">
-                      <p className="text-xs text-on-surface-variant leading-relaxed">
-                        Marrying within the family is a deeply respected and valued tradition in many cultures.
-                        Modern genetic testing gives couples clear, private knowledge—spotting shared hidden
-                        traits early so you can take simple steps to keep future generations healthy and thriving.
-                      </p>
+                    <div className="space-y-3">
+                      {/* Sub-card 1: Pre-Marital Gene Panel */}
+                      <div className="p-3.5 rounded-xl bg-fog/60 border border-outline-variant/30 space-y-2.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-lg bg-waterhole/10 border border-waterhole/20 text-waterhole flex items-center justify-center font-bold shrink-0">
+                              <Dna className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-bold text-pine leading-tight">Pre-Marital Gene Panel</h4>
+                              <span className="text-[10px] text-on-surface-variant">
+                                Recommended for Fatima &amp; {firstName}
+                              </span>
+                            </div>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 text-[10px] font-bold border border-rose-200 shrink-0">
+                            Urgent
+                          </span>
+                        </div>
 
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-outline-variant/20 text-[11px]">
-                        <Link
-                          href="/risk-analysis"
-                          className="inline-flex items-center gap-1 font-bold text-waterhole hover:text-waterhole-dark transition"
+                        <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                          A simple blood screening checking for Beta-Thalassemia, G6PD, and Cystic Fibrosis
+                          at an accredited hospital so you have clear answers before marriage.
+                        </p>
+
+                        <button
+                          type="button"
+                          onClick={() => setPanelScheduled(true)}
+                          className={`w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer ${
+                            panelScheduled
+                              ? 'bg-pine text-white'
+                              : 'bg-pine hover:bg-pine-light text-white'
+                          }`}
                         >
-                          <span>Read 5-min Clinical Summary</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </Link>
-                        <span className="text-on-surface-variant/70 font-medium">
-                          &bull; Reviewed by Medical Genetics Board
-                        </span>
+                          <Calendar className="w-3.5 h-3.5" />
+                          <span>{panelScheduled ? 'Panel Scheduled (#902)' : 'Schedule Gene Panel'}</span>
+                        </button>
                       </div>
+
+                      {/* Sub-card 2: Doctor Video Consultation */}
+                      <div className="p-3.5 rounded-xl bg-fog/60 border border-outline-variant/30 space-y-2.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2.5">
+                            <img
+                              src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=120&auto=format&fit=crop&q=80"
+                              alt="Dr. Alisha Patel"
+                              className="w-8 h-8 rounded-full object-cover border border-outline-variant/40 shrink-0"
+                            />
+                            <div>
+                              <h4 className="text-xs font-bold text-pine leading-tight">Dr. Alisha Patel</h4>
+                              <span className="text-[10px] text-on-surface-variant">
+                                Consultant Genetic Counsellor (FACMG)
+                              </span>
+                            </div>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-full bg-white border border-outline-variant/30 text-pine text-[10px] font-bold flex items-center gap-1 shrink-0">
+                            <Video className="w-3 h-3 text-pine" />
+                            <span>Video</span>
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded bg-white border border-outline-variant/30 text-pine text-[10px] font-semibold flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-pine/60" />
+                            Thu &bull; 14:00 (GST)
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-white border border-outline-variant/30 text-pine text-[10px] font-semibold">
+                            45 Mins
+                          </span>
+                        </div>
+
+                        <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                          A friendly private video appointment to discuss your results and answer questions about healthy family planning.
+                        </p>
+
+                        <div className="grid grid-cols-2 gap-2 pt-0.5">
+                          <button
+                            type="button"
+                            onClick={() => alert('Rescheduling calendar opened...')}
+                            className="py-1.5 px-2.5 text-xs font-semibold text-pine bg-white hover:bg-fog border border-outline-variant/40 rounded-xl transition text-center cursor-pointer"
+                          >
+                            Reschedule
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setBookingConfirmed(true)}
+                            className={`py-1.5 px-2.5 text-xs font-bold rounded-xl transition text-center shadow-xs cursor-pointer ${
+                              bookingConfirmed
+                                ? 'bg-pine text-white'
+                                : 'bg-pine hover:bg-pine-light text-white'
+                            }`}
+                          >
+                            {bookingConfirmed ? 'Confirmed!' : 'Confirm Booking'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Genomic Literacy Card */}
+                  <div className="bg-white rounded-2xl p-5 border border-outline-variant/30 shadow-[0_1px_4px_rgba(12,50,44,0.04)] space-y-3.5 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-pine">
+                        <ShieldCheck className="w-4 h-4 text-jungle" />
+                        <span>GENOMIC LITERACY</span>
+                      </div>
+
+                      <h3 className="text-sm font-bold text-pine leading-snug mt-1.5">
+                        Understanding Shared Family Bloodlines &amp; Hereditary Health
+                      </h3>
+                    </div>
+
+                    <div className="flex flex-col gap-3">
+                      {/* Family Photo Representation */}
+                      <div className="rounded-xl overflow-hidden shadow-xs h-32 border border-outline-variant/40 relative bg-fog">
+                        <img
+                          src="https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=600&auto=format&fit=crop&q=80"
+                          alt="Family Health"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+
+                      {/* Educational Text in Simple English */}
+                      <div className="space-y-2">
+                        <p className="text-xs text-on-surface-variant leading-relaxed">
+                          Marrying within the family is a deeply respected and valued tradition in many cultures.
+                          Modern genetic testing gives couples clear, private knowledge—spotting shared hidden
+                          traits early so you can take simple steps to keep future generations healthy and thriving.
+                        </p>
+
+                        <p className="text-xs text-on-surface-variant leading-relaxed">
+                          Carrier status indicates you carry a recessive gene variation without having the clinical illness.
+                          Routine premarital screening empowers you with peace of mind.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-outline-variant/20 text-[11px]">
+                      <Link
+                        href="/risk-analysis"
+                        className="inline-flex items-center gap-1 font-bold text-waterhole hover:text-waterhole-dark transition"
+                      >
+                        <span>Read 5-min Summary</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </Link>
+                      <span className="text-on-surface-variant/70 font-medium text-[10px]">
+                        &bull; Medical Genetics Board
+                      </span>
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* -------------------- RIGHT COLUMN (4 COLS) -------------------- */}
-              <div className="lg:col-span-4 space-y-4 sm:space-y-5">
-                {/* Ask Care AI Messenger Card (Positioned directly next to Lineage Pedigree Model) */}
-                <div className="bg-white rounded-2xl p-4 sm:p-5 border border-outline-variant/30 shadow-[0_1px_4px_rgba(12,50,44,0.04)] space-y-3.5">
+              <div className="lg:col-span-4 flex flex-col h-full">
+                {/* Ask Care AI Messenger Card (Dedicated full-height chat card extending to bottom of page) */}
+                <div id="care-ai-chat-section" className="bg-white rounded-2xl p-5 border border-outline-variant/30 shadow-[0_1px_4px_rgba(12,50,44,0.04)] space-y-3.5 scroll-mt-6 flex flex-col h-full justify-between">
                   <div className="flex items-center justify-between">
                     <div>
                       <h2 className="text-sm font-bold text-pine flex items-center gap-1.5">
@@ -1322,16 +1705,27 @@ export default function DashboardPage() {
                         Premarital screening, policy &amp; pedigree intelligence
                       </p>
                     </div>
-                    <span className="px-2 py-0.5 rounded-full bg-mint/25 text-pine text-[10px] font-bold border border-mint flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      Unified Care AI
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={handleClearChat}
+                        title="Clear conversation"
+                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition text-[11px] flex items-center gap-1 cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span className="text-[10px] hidden sm:inline">Clear</span>
+                      </button>
+                      <span className="px-2 py-0.5 rounded-full bg-mint/25 text-pine text-[10px] font-bold border border-mint flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Unified Care AI
+                      </span>
+                    </div>
                   </div>
 
-                  {/* Scrollable Chat Conversation Viewport */}
+                  {/* Scrollable Chat Conversation Viewport (Extends vertically to bottom of page matching left column) */}
                   <div
                     ref={chatScrollRef}
-                    className="h-80 overflow-y-auto space-y-3 p-3.5 bg-fog/50 rounded-2xl border border-outline-variant/20 scroll-smooth"
+                    className="flex-1 min-h-[700px] max-h-[1050px] overflow-y-auto space-y-3 p-3.5 bg-fog/50 rounded-2xl border border-outline-variant/20 scroll-smooth"
                   >
                     {chatMessages.map((msg) => (
                       <div
@@ -1350,20 +1744,59 @@ export default function DashboardPage() {
                               : 'bg-white text-pine border border-outline-variant/30 rounded-tl-xs'
                           }`}
                         >
-                          <p className="leading-relaxed whitespace-pre-line text-[11px]">{msg.text}</p>
+                          {renderFormattedText(msg.text)}
                           <div
-                            className={`flex items-center justify-between gap-3 text-[9px] pt-0.5 ${
+                            className={`flex flex-col gap-1 text-[9px] pt-0.5 ${
                               msg.sender === 'user' ? 'text-white/70' : 'text-on-surface-variant/70'
                             }`}
                           >
-                            {msg.sender === 'ai' && msg.source ? (
-                              <span className="font-medium text-teal-800">
-                                Source: <span className="underline decoration-mint underline-offset-2">{msg.source}</span>
-                              </span>
-                            ) : (
-                              <span />
+                            {msg.sender === 'ai' && (
+                              <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                                {msg.citationDetails && msg.citationDetails.length > 0 ? (
+                                  msg.citationDetails.map((cit, cIdx) => (
+                                    <button
+                                      key={cIdx}
+                                      type="button"
+                                      onClick={() => setActiveCitationPreview(cit)}
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-mint/30 hover:bg-mint/50 text-pine text-[9px] font-semibold border border-mint/60 transition cursor-pointer shadow-2xs"
+                                      title="Click to preview citation excerpt"
+                                    >
+                                      <FileText className="w-2.5 h-2.5 text-pine" />
+                                      <span className="truncate max-w-[130px]">{cit.title}</span>
+                                    </button>
+                                  ))
+                                ) : msg.source ? (
+                                  <span className="font-medium text-teal-800">
+                                    Source: <span className="underline decoration-mint underline-offset-2">{msg.source}</span>
+                                  </span>
+                                ) : null}
+                              </div>
                             )}
-                            <span className="shrink-0">{msg.timestamp}</span>
+
+                            {msg.sender === 'ai' && msg.suggestedFollowUps && msg.suggestedFollowUps.length > 0 && (
+                              <div className="pt-1.5 border-t border-outline-variant/20 space-y-1">
+                                <p className="text-[10px] font-semibold text-pine/80 flex items-center gap-1">
+                                  <HelpCircle className="w-2.5 h-2.5 text-jungle" /> {t('care_ai_suggested_questions', activeLocale)}
+                                </p>
+                                <div className="flex flex-wrap gap-1">
+                                  {msg.suggestedFollowUps.map((qText, sIdx) => (
+                                    <button
+                                      key={sIdx}
+                                      type="button"
+                                      disabled={isAiLoading}
+                                      onClick={() => handleAskQuestion(qText)}
+                                      className="text-[10px] text-start px-2 py-0.5 rounded-lg bg-mint/20 hover:bg-mint/40 text-pine font-medium border border-mint/40 transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                                    >
+                                      <span>{qText}</span>
+                                      <ArrowRight className="w-2.5 h-2.5 text-jungle shrink-0 rtl:rotate-180" />
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            <div className="flex justify-end">
+                              <span className="shrink-0">{msg.timestamp}</span>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1383,7 +1816,7 @@ export default function DashboardPage() {
                               <span className="w-1.5 h-1.5 rounded-full bg-jungle animate-bounce" style={{ animationDelay: '300ms' }} />
                             </span>
                             <span className="text-[11px] text-pine font-semibold">
-                              {thinkingStep || 'Checking premarital reports & policy documents...'}
+                              {thinkingStep || 'Reviewing lab records & genetic variants...'}
                             </span>
                           </div>
                           <p className="text-[10px] text-slate-500">
@@ -1406,14 +1839,14 @@ export default function DashboardPage() {
                       type="text"
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
-                      placeholder="Ask about your screening results, policy rules, or risks..."
-                      className="w-full pl-3.5 pr-11 py-2.5 text-xs rounded-xl bg-fog border border-outline-variant/30 text-pine placeholder:text-outline focus:bg-white focus:outline-none focus:ring-2 focus:ring-pine transition"
+                      placeholder={t('care_ai_placeholder', activeLocale)}
+                      className="w-full pl-3.5 pr-11 rtl:pl-11 rtl:pr-3.5 text-start py-2.5 text-xs rounded-xl bg-fog border border-outline-variant/30 text-pine placeholder:text-outline focus:bg-white focus:outline-none focus:ring-2 focus:ring-pine transition"
                     />
                     <button
                       type="submit"
                       disabled={isAiLoading || !query.trim()}
-                      className="absolute right-2 w-7 h-7 rounded-full bg-pine text-white flex items-center justify-center hover:bg-pine-light disabled:opacity-40 transition shadow-xs cursor-pointer"
-                      title="Send question"
+                      className="absolute right-2 rtl:right-auto rtl:left-2 w-7 h-7 rounded-full bg-pine text-white flex items-center justify-center hover:bg-pine-light disabled:opacity-40 transition shadow-xs cursor-pointer"
+                      title={t('btn_send', activeLocale)}
                     >
                       <Send className="w-3.5 h-3.5" />
                     </button>
@@ -1422,7 +1855,7 @@ export default function DashboardPage() {
                   {/* Suggested Inquiries Chips */}
                   <div className="space-y-1.5">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/70">
-                      SUGGESTED INQUIRIES
+                      {t('care_ai_suggested_inquiries', activeLocale)}
                     </span>
                     <div className="flex flex-wrap gap-1.5">
                       {(dynamicQueries.length > 0 ? dynamicQueries : defaultSuggestedQuestions.map((d) => d.q)).map((qText, idx) => (
@@ -1431,7 +1864,7 @@ export default function DashboardPage() {
                           type="button"
                           onClick={() => handleAskQuestion(qText)}
                           disabled={isAiLoading}
-                          className="px-2.5 py-1 rounded-lg bg-fog hover:bg-fog-dark border border-outline-variant/30 text-[11px] text-pine flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 text-left"
+                          className="px-2.5 py-1 rounded-lg bg-fog hover:bg-fog-dark border border-outline-variant/30 text-[11px] text-pine flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 text-start"
                         >
                           <Search className="w-3 h-3 text-pine/50 shrink-0" />
                           <span className="truncate max-w-[260px]">{qText}</span>
@@ -1446,120 +1879,6 @@ export default function DashboardPage() {
                     <span>Your questions and health data are private, encrypted, and never shared.</span>
                   </div>
                 </div>
-
-                {/* Action Directives Card (Positioned below Ask Care AI) */}
-                <div className="bg-white rounded-2xl p-4 sm:p-6 border border-outline-variant/30 shadow-[0_1px_4px_rgba(12,50,44,0.04)] space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-jungle" />
-                      <h2 className="text-sm font-bold text-pine uppercase tracking-wide">
-                        Action Directives
-                      </h2>
-                    </div>
-                    <span className="text-[10px] font-bold text-midnight bg-midnight/10 px-2 py-0.5 rounded-full tracking-wider">
-                      TIER 1 CLINICAL
-                    </span>
-                  </div>
-
-                  {/* Sub-card 1: Pre-Marital Gene Panel */}
-                  <div className="p-3.5 sm:p-4 rounded-xl bg-fog/60 border border-outline-variant/30 space-y-3">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-lg bg-waterhole/10 border border-waterhole/20 text-waterhole flex items-center justify-center font-bold">
-                          <Dna className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <h4 className="text-xs font-bold text-pine">Pre-Marital Gene Panel</h4>
-                          <span className="text-[11px] text-on-surface-variant">
-                            Recommended for Fatima &amp; {firstName}
-                          </span>
-                        </div>
-                      </div>
-                      <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 text-[10px] font-bold border border-rose-200">
-                        Urgent
-                      </span>
-                    </div>
-
-                    <p className="text-[11px] text-on-surface-variant leading-relaxed">
-                      A simple blood screening checking for Beta-Thalassemia, G6PD, and Cystic Fibrosis
-                      at an accredited hospital so you have clear answers before marriage.
-                    </p>
-
-                    <button
-                      type="button"
-                      onClick={() => setPanelScheduled(true)}
-                      className={`w-full flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl text-xs font-bold transition shadow-xs ${
-                        panelScheduled
-                          ? 'bg-pine text-white'
-                          : 'bg-pine hover:bg-pine-light text-white'
-                      }`}
-                    >
-                      <Calendar className="w-4 h-4" />
-                      <span>{panelScheduled ? 'Panel Scheduled (Lab Order #902)' : 'Schedule Gene Panel'}</span>
-                    </button>
-                  </div>
-
-                  {/* Sub-card 2: Doctor Video Consultation */}
-                  <div className="p-3.5 sm:p-4 rounded-xl bg-fog/60 border border-outline-variant/30 space-y-3">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <img
-                          src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=120&auto=format&fit=crop&q=80"
-                          alt="Dr. Alisha Patel"
-                          className="w-10 h-10 rounded-full object-cover border border-outline-variant/40"
-                        />
-                        <div>
-                          <h4 className="text-xs font-bold text-pine">Dr. Alisha Patel</h4>
-                          <span className="text-[11px] text-on-surface-variant">
-                            Consultant Genetic Counsellor (FACMG)
-                          </span>
-                        </div>
-                      </div>
-                      <span className="px-2 py-0.5 rounded-full bg-white border border-outline-variant/30 text-pine text-[10px] font-bold flex items-center gap-1">
-                        <Video className="w-3 h-3 text-pine" />
-                        <span>Video</span>
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded bg-white border border-outline-variant/30 text-pine text-[10px] font-semibold flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-pine/60" />
-                        Thursday &bull; 14:00 (GST)
-                      </span>
-                      <span className="px-2 py-0.5 rounded bg-white border border-outline-variant/30 text-pine text-[10px] font-semibold">
-                        45 Mins
-                      </span>
-                    </div>
-
-                    <p className="text-[11px] text-on-surface-variant leading-relaxed">
-                      A friendly private video appointment to discuss your results and answer any questions
-                      about having healthy children.
-                    </p>
-
-                    <div className="grid grid-cols-2 gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => alert('Rescheduling calendar opened...')}
-                        className="py-2 px-3 text-xs font-semibold text-pine bg-white hover:bg-fog border border-outline-variant/40 rounded-xl transition text-center"
-                      >
-                        Reschedule
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setBookingConfirmed(true)}
-                        className={`py-2 px-3 text-xs font-bold rounded-xl transition text-center shadow-xs ${
-                          bookingConfirmed
-                            ? 'bg-pine text-white'
-                            : 'bg-pine hover:bg-pine-light text-white'
-                        }`}
-                      >
-                        {bookingConfirmed ? 'Confirmed!' : 'Confirm Booking'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-
               </div>
             </div>
               </>
@@ -1571,7 +1890,7 @@ export default function DashboardPage() {
       {/* ==================== PREMARITAL & GENETIC REPORT UPLOAD MODAL ==================== */}
       {isUploadModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
-          <div className={`w-full ${analyzedReportData ? 'max-w-4xl' : 'max-w-2xl'} bg-white rounded-3xl shadow-2xl border border-outline-variant/40 overflow-hidden my-8 transition-all duration-300`}>
+          <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-outline-variant/40 overflow-hidden my-8 transition-all duration-300">
             {/* Modal Header */}
             <div className="p-6 pb-4 border-b border-outline-variant/20 flex items-center justify-between gap-4 bg-fog/30">
               <h3 className="text-lg sm:text-xl font-extrabold text-pine tracking-tight">
@@ -1627,7 +1946,7 @@ export default function DashboardPage() {
                         setUploadTreeDestination('existing');
                         setIsChoosingDestination(false);
                       }}
-                      className="p-4 rounded-2xl border-2 text-left transition cursor-pointer hover:border-pine bg-white border-outline-variant/50 hover:bg-surface-container-low group flex flex-col justify-between shadow-xs hover:shadow-md"
+                      className="p-4 rounded-2xl border-2 text-start transition cursor-pointer hover:border-pine bg-white border-outline-variant/50 hover:bg-surface-container-low group flex flex-col justify-between shadow-xs hover:shadow-md"
                     >
                       <div className="space-y-1.5">
                         <div className="flex items-center gap-2">
@@ -1653,7 +1972,7 @@ export default function DashboardPage() {
                         setUploadTreeDestination('new');
                         setIsChoosingDestination(false);
                       }}
-                      className="p-4 rounded-2xl border-2 text-left transition cursor-pointer hover:border-pine bg-white border-outline-variant/50 hover:bg-surface-container-low group flex flex-col justify-between shadow-xs hover:shadow-md"
+                      className="p-4 rounded-2xl border-2 text-start transition cursor-pointer hover:border-pine bg-white border-outline-variant/50 hover:bg-surface-container-low group flex flex-col justify-between shadow-xs hover:shadow-md"
                     >
                       <div className="space-y-1.5">
                         <div className="flex items-center gap-2">
@@ -1819,33 +2138,33 @@ export default function DashboardPage() {
                           ? 'bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-200'
                           : 'bg-pine hover:bg-pine-light text-white cursor-pointer shadow-md'
                       }`}
-                      title={!isValidForUpload ? (!uploadRelation ? 'Please select whose report this is to enable upload' : 'Please select a valid PDF or JPG file under 10 MB to enable upload') : 'Analyze report'}
+                      title={!isValidForUpload ? (!uploadRelation ? 'Please select whose report this is to enable upload' : 'Please select a valid PDF or JPG file under 10 MB to enable upload') : 'Upload report'}
                     >
                       {isAnalyzing ? (
                         <>
                           <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          <span>Analyzing Report...</span>
+                          <span>Uploading &amp; Linking...</span>
                         </>
                       ) : (
                         <>
                           <UploadCloud className="w-4 h-4" />
-                          <span>Upload &amp; Analyze</span>
+                          <span>Upload Report</span>
                         </>
                       )}
                     </button>
                   </div>
                 </div>
               ) : (
-                /* ==================== STATE 2: MEANINGFUL CLINICAL ANALYSIS RESULTS ==================== */
-                <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-1">
-                  {/* Clean Analysis Status Header with masked patient name and tree linkage */}
+                /* ==================== STATE 2: UPLOAD CONFIRMATION & NAVIGATION TO AI GENETIC INTELLIGENCE ==================== */
+                <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+                  {/* Clean Upload Status Header with masked patient name and tree linkage */}
                   <div className="p-4 bg-mint/20 border border-mint rounded-2xl space-y-2.5 shadow-xs">
                     <div className="flex items-center justify-between gap-3 flex-wrap">
                       <div className="flex items-center gap-2.5">
                         <CheckCircle2 className="w-5 h-5 text-jungle shrink-0" />
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs font-bold text-pine">
-                            Report Analysis Complete
+                            Report Uploaded &amp; Linked Successfully
                           </span>
                           {(analyzedReportData.patient_name || analyzedReportData.patient_name_masked) && (
                             <span className="px-2 py-0.5 bg-white text-pine font-mono text-[10px] font-bold rounded border border-mint">
@@ -1919,267 +2238,68 @@ export default function DashboardPage() {
                     </div>
                   )}
 
-                  {/* View Segmented Tabs */}
-                  <div className="flex items-center gap-1.5 p-1 bg-fog rounded-xl border border-outline-variant/30 text-xs font-bold">
-                    <button
-                      type="button"
-                      onClick={() => setReportViewTab('both')}
-                      className={`flex-1 py-1.5 px-3 rounded-lg transition text-center cursor-pointer ${
-                        reportViewTab === 'both'
-                          ? 'bg-white text-pine shadow-xs border border-outline-variant/40'
-                          : 'text-slate-600 hover:text-pine'
-                      }`}
-                    >
-                      Complete Report &amp; Analysis
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setReportViewTab('report')}
-                      className={`flex-1 py-1.5 px-3 rounded-lg transition text-center cursor-pointer ${
-                        reportViewTab === 'report'
-                          ? 'bg-white text-pine shadow-xs border border-outline-variant/40'
-                          : 'text-slate-600 hover:text-pine'
-                      }`}
-                    >
-                      Complete PDF Report ({analyzedReportData.complete_report_text ? `${analyzedReportData.complete_report_text.split('\n').filter(Boolean).length} lines` : 'Text'})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setReportViewTab('analysis')}
-                      className={`flex-1 py-1.5 px-3 rounded-lg transition text-center cursor-pointer ${
-                        reportViewTab === 'analysis'
-                          ? 'bg-white text-pine shadow-xs border border-outline-variant/40'
-                          : 'text-slate-600 hover:text-pine'
-                      }`}
-                    >
-                      Clinical Analysis
-                    </button>
-                  </div>
-
-                  {/* COMPLETE EXTRACTED REPORT CARD (PyMuPDF) */}
-                  {(reportViewTab === 'both' || reportViewTab === 'report') && (
-                    <div className="p-4 bg-slate-900 rounded-2xl border border-slate-800 space-y-3 shadow-md text-white">
-                      <div className="flex items-center justify-between border-b border-slate-800 pb-2.5 flex-wrap gap-2">
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-emerald-400" />
-                          <div>
-                            <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                              Complete Report Content (PyMuPDF)
-                            </h4>
-                            <p className="text-[10px] text-slate-400">
-                              Full document text extracted in-memory with PyMuPDF &bull; Unredacted for testing
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={handleCopyReportText}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] font-semibold text-emerald-300 border border-slate-700 transition cursor-pointer"
-                            title="Copy extracted report text"
-                          >
-                            {copiedReportText ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-emerald-400" />}
-                            <span>{copiedReportText ? 'Copied' : 'Copy Full Text'}</span>
-                          </button>
-                        </div>
+                  {/* Primary Genomic Findings Overview */}
+                  <div className="p-4 bg-white rounded-2xl border border-outline-variant/40 space-y-2.5 shadow-xs">
+                    <div className="flex items-center gap-2 border-b border-outline-variant/20 pb-2">
+                      <Dna className="w-4 h-4 text-pine" />
+                      <h4 className="text-xs font-bold text-pine uppercase tracking-wider">
+                        Screening Findings Overview
+                      </h4>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                      <div className="p-2.5 bg-fog/40 rounded-xl border border-outline-variant/30">
+                        <span className="text-[10px] uppercase font-bold text-slate-500 block">Condition</span>
+                        <span className="font-bold text-pine text-xs mt-0.5 block">{analyzedReportData.condition || 'Beta-Thalassemia Trait'}</span>
                       </div>
-
-                      {/* Monospace Full Text Container */}
-                      <div className="bg-slate-950/90 rounded-xl p-3.5 border border-slate-800/80 max-h-60 overflow-y-auto">
-                        <pre className="text-xs font-mono text-emerald-300/90 whitespace-pre-wrap break-words leading-relaxed select-text selection:bg-emerald-500 selection:text-black">
-                          {analyzedReportData.complete_report_text || 'No text extracted from document.'}
-                        </pre>
+                      <div className="p-2.5 bg-fog/40 rounded-xl border border-outline-variant/30">
+                        <span className="text-[10px] uppercase font-bold text-slate-500 block">Carrier Status</span>
+                        <span className="font-bold text-jungle text-xs mt-0.5 block">{analyzedReportData.carrier_status || 'Heterozygous Carrier'}</span>
                       </div>
                     </div>
-                  )}
+                  </div>
 
-                  {/* CLINICAL ANALYSIS CARDS */}
-                  {(reportViewTab === 'both' || reportViewTab === 'analysis') && (
-                    <>
-                      {/* Pedigree Tree & Sudo Member Integration Card */}
-                      <div className="p-3.5 bg-surface-container-low border border-outline-variant/40 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-                        <div className="flex items-start gap-2.5">
-                          <GitBranch className="w-4 h-4 text-pine mt-0.5 shrink-0" />
-                          <div className="space-y-0.5">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-xs font-bold text-pine">
-                                Pedigree Chart: {latestUploadMeta?.family_id || analyzedReportData.family_id}
-                              </span>
-                              <span className="px-2 py-0.5 bg-mint/30 text-pine font-bold text-[10px] rounded border border-mint">
-                                {latestUploadMeta?.tree_created || analyzedReportData.tree_created ? 'New Tree Created' : 'Added to Existing Tree'}
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-slate-600">
-                              <strong className="text-slate-800">Sudo Member:</strong> {latestUploadMeta?.sudo_name || analyzedReportData.sudo_name} &bull; <strong className="text-slate-800">Sex:</strong> {latestUploadMeta?.sex || analyzedReportData.sex} &bull; <strong className="text-slate-800">DOB:</strong> {latestUploadMeta?.dob || analyzedReportData.dob || 'Not Documented'}
-                              {(latestUploadMeta?.location || analyzedReportData.location) && (
-                                <> &bull; <strong className="text-slate-800">Location:</strong> {latestUploadMeta?.location || analyzedReportData.location}</>
-                              )}
-                            </p>
-                          </div>
-                        </div>
-                        <Link
-                          href={`/pedigree?family_id=${latestUploadMeta?.family_id || analyzedReportData.family_id}`}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-pine hover:bg-pine-light text-white text-[11px] font-bold transition shrink-0"
-                        >
-                          <span>View in Canvas</span>
-                          <ArrowRight className="w-3 h-3" />
-                        </Link>
+                  {/* Primary Call-to-Action Card for AI Genetic Intelligence */}
+                  <div className="p-5 bg-gradient-to-br from-mint/25 via-emerald-50/40 to-white rounded-2xl border-2 border-mint/70 space-y-3 shadow-xs">
+                    <div className="flex items-start gap-3.5">
+                      <div className="w-10 h-10 rounded-2xl bg-pine text-mint flex items-center justify-center shrink-0 shadow-xs">
+                        <Sparkles className="w-5 h-5" />
                       </div>
-
-                      {/* Genetic Finding Overview Card */}
-                      <div className="p-4 bg-white rounded-2xl border border-outline-variant/40 space-y-3 shadow-xs">
-                        <div className="flex items-center justify-between border-b border-outline-variant/20 pb-2">
-                          <div className="flex items-center gap-2">
-                            <Dna className="w-4 h-4 text-pine" />
-                            <h4 className="text-xs font-bold text-pine uppercase tracking-wider">
-                              Identified Genetic Finding
-                            </h4>
-                          </div>
-                          <span className="text-[10px] bg-fog px-2.5 py-0.5 rounded text-slate-600 font-mono font-bold">
-                            {analyzedReportData.gene_locus}
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                          <div className="p-3 bg-fog rounded-xl border border-outline-variant/20 space-y-0.5">
-                            <span className="text-[10px] uppercase font-bold text-slate-400 block">Condition Name</span>
-                            <span className="font-bold text-pine text-sm">{analyzedReportData.condition}</span>
-                            <p className="text-[11px] text-slate-500 mt-1">Single-gene carrier trait. Carriers live full, active, healthy lives.</p>
-                          </div>
-
-                          <div className="p-3 bg-fog rounded-xl border border-outline-variant/20 space-y-0.5">
-                            <span className="text-[10px] uppercase font-bold text-slate-400 block">Carrier Variant Details</span>
-                            <span className="font-bold text-pine text-sm font-mono">{analyzedReportData.variant}</span>
-                            <p className="text-[11px] text-slate-500 mt-1">{analyzedReportData.carrier_status}</p>
-                          </div>
-                        </div>
+                      <div className="space-y-1">
+                        <h4 className="text-sm font-extrabold text-pine">
+                          AI Genetic Intelligence Ready
+                        </h4>
+                        <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                          Your report has been encrypted and added to the pedigree chart. Navigate to AI Genetic Intelligence to generate couple hereditary risk assessments, offspring transmission statistics, and clinical next steps.
+                        </p>
                       </div>
+                    </div>
 
-                      {/* SCREENING FINDINGS WITH LAB VALUES & CLINICAL MEANINGS */}
-                      {analyzedReportData.screening_findings && analyzedReportData.screening_findings.length > 0 && (
-                        <div className="p-4 bg-white rounded-2xl border border-outline-variant/40 space-y-3 shadow-xs">
-                          <div className="flex items-center justify-between border-b border-outline-variant/20 pb-2">
-                            <div className="flex items-center gap-2">
-                              <FileText className="w-4 h-4 text-pine" />
-                              <h4 className="text-xs font-bold text-pine uppercase tracking-wider">
-                                Screening Findings &amp; Clinical Values
-                              </h4>
-                            </div>
-                            <span className="text-[10px] text-slate-400 font-mono">
-                              {analyzedReportData.screening_findings.length} Parameters Evaluated
-                            </span>
-                          </div>
-
-                          <div className="space-y-2.5">
-                            {analyzedReportData.screening_findings.map((finding: any, idx: number) => (
-                              <div key={idx} className="p-3 bg-fog/60 rounded-xl border border-outline-variant/20 text-xs space-y-1.5">
-                                <div className="flex items-center justify-between flex-wrap gap-1.5">
-                                  <span className="font-bold text-pine text-xs">{finding.parameter}</span>
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-mono font-bold text-pine bg-white px-2 py-0.5 rounded border border-outline-variant/30">
-                                      {finding.value}
-                                    </span>
-                                    <span className="text-[10px] text-slate-500 font-mono">
-                                      Ref: {finding.reference_range}
-                                    </span>
-                                    <span className="px-2 py-0.5 bg-mint/30 text-pine font-bold text-[10px] rounded-full border border-mint">
-                                      {finding.status}
-                                    </span>
-                                  </div>
-                                </div>
-                                <p className="text-[11px] text-slate-600 leading-relaxed pt-0.5">
-                                  <strong className="text-slate-700">What this means:</strong> {finding.clinical_meaning}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Meaningful Couple & Family Planning Guidance Card */}
-                      <div className="p-4 bg-white rounded-2xl border border-outline-variant/40 space-y-3 shadow-xs">
-                        <div className="flex items-center gap-2 border-b border-outline-variant/20 pb-2">
-                          <Users className="w-4 h-4 text-pine" />
-                          <h4 className="text-xs font-bold text-pine uppercase tracking-wider">
-                            Family Planning &amp; Child Health Guidance
-                          </h4>
-                        </div>
-
-                        <div className="space-y-2.5 text-xs">
-                          <div className="p-3 bg-amber-50/70 border border-amber-200/80 rounded-xl space-y-1">
-                            <div className="flex items-center justify-between">
-                              <span className="font-bold text-amber-900 text-xs">Offspring Reproductive Risk</span>
-                              <span className="px-2 py-0.5 bg-amber-200/60 text-amber-900 font-mono text-[10px] font-bold rounded">
-                                {analyzedReportData.inheritance_pattern}
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-amber-800 leading-relaxed">
-                              {analyzedReportData.reproductive_risk}
-                            </p>
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                            <div className="p-3 bg-mint/15 rounded-xl border border-mint/40 space-y-1">
-                              <span className="font-bold text-pine text-[11px] flex items-center gap-1.5">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-jungle shrink-0" />
-                                If Your Partner is a Non-Carrier
-                              </span>
-                              <p className="text-[11px] text-slate-600 leading-snug">
-                                Your children will be <strong>100% free of condition symptoms</strong>. About 50% will simply inherit healthy carrier status like you.
-                              </p>
-                            </div>
-
-                            <div className="p-3 bg-fog rounded-xl border border-outline-variant/30 space-y-1">
-                              <span className="font-bold text-pine text-[11px] flex items-center gap-1.5">
-                                <Info className="w-3.5 h-3.5 text-waterhole shrink-0" />
-                                If Both Partners are Carriers
-                              </span>
-                              <p className="text-[11px] text-slate-600 leading-snug">
-                                There is a 25% chance of major condition in each pregnancy. Modern medical counseling and pre-conception screening protect this journey.
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </>
-                  )}
+                    <div className="pt-2 flex items-center justify-end">
+                      <Link
+                        href="/risk-analysis"
+                        onClick={handleCloseUploadModal}
+                        className="inline-flex items-center gap-2 px-5 py-2.5 bg-pine hover:bg-pine-light text-white text-xs font-bold rounded-xl transition shadow-md cursor-pointer group"
+                      >
+                        <span>Go to AI Genetic Intelligence</span>
+                        <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition" />
+                      </Link>
+                    </div>
+                  </div>
 
                   {/* Results Action Buttons */}
                   <div className="flex items-center justify-between pt-3 border-t border-outline-variant/20 flex-wrap gap-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <button
-                        type="button"
-                        onClick={handleCopyReportText}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fog hover:bg-fog-dark border border-outline-variant/40 text-xs font-bold text-pine transition cursor-pointer"
-                        title="Copy Complete Report Text to clipboard"
-                      >
-                        {copiedReportText ? <Check className="w-3.5 h-3.5 text-jungle" /> : <FileText className="w-3.5 h-3.5 text-pine" />}
-                        <span>{copiedReportText ? 'Copied Text' : 'Copy Report Text'}</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={handleCopyMaskedJson}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-fog hover:bg-fog-dark border border-outline-variant/40 text-xs font-bold text-pine transition cursor-pointer"
-                        title="Copy Analysis Summary to clipboard"
-                      >
-                        {copiedAudit ? <Check className="w-3.5 h-3.5 text-jungle" /> : <Copy className="w-3.5 h-3.5 text-pine" />}
-                        <span>{copiedAudit ? 'Copied' : 'Copy Summary'}</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={handleInitiateUploadAnother}
-                        className="px-3 py-2 rounded-xl bg-fog hover:bg-fog-dark border border-outline-variant/40 text-xs font-bold text-slate-700 transition cursor-pointer"
-                      >
-                        Upload Another Report
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={handleInitiateUploadAnother}
+                      className="px-3.5 py-2 rounded-xl bg-fog hover:bg-fog-dark border border-outline-variant/40 text-xs font-bold text-slate-700 transition cursor-pointer"
+                    >
+                      Upload Another Report
+                    </button>
 
                     <button
                       type="button"
                       onClick={handleCloseUploadModal}
-                      className="px-5 py-2 bg-pine hover:bg-pine-light text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+                      className="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
                     >
                       Done
                     </button>
@@ -2330,6 +2450,52 @@ export default function DashboardPage() {
                   <Trash2 className="w-3.5 h-3.5" />
                 )}
                 <span>{isDeletingTree ? 'Deleting...' : (deleteWithMembers ? 'Delete Tree & Users' : 'Delete Tree Only')}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Interactive Document Citation Preview Modal */}
+      {activeCitationPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-outline-variant/30 space-y-3.5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-mint/30 flex items-center justify-center text-pine">
+                  <FileText className="w-4 h-4 text-pine" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-pine leading-tight">
+                    {activeCitationPreview.title}
+                  </h4>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    {activeCitationPreview.file_type === 'screening_report' ? 'Screening Lab Finding' : 'National Health Policy Guideline'}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveCitationPreview(null)}
+                className="text-slate-400 hover:text-pine p-1 rounded-lg hover:bg-fog transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3.5 bg-fog rounded-xl border border-outline-variant/30 text-xs text-slate-700 leading-relaxed font-sans max-h-56 overflow-y-auto">
+              <p className="whitespace-pre-line">
+                {activeCitationPreview.excerpt || 'Referenced in clinical guidelines and premarital protocols.'}
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
+              <span>Verified by GuardianAngel Clinical Engine</span>
+              <button
+                type="button"
+                onClick={() => setActiveCitationPreview(null)}
+                className="px-3.5 py-1.5 bg-pine text-white text-xs font-semibold rounded-lg hover:bg-pine-light transition cursor-pointer"
+              >
+                Close
               </button>
             </div>
           </div>

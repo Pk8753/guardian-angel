@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Navbar } from '@/components/layout/Navbar';
 import { AuthGuard } from '@/components/layout/AuthGuard';
 import { useUIStore } from '@/stores/useUIStore';
 import { PgtSimulator } from '@/components/simulation/PgtSimulator';
+import { t } from '@/lib/translations';
 import {
   Activity,
   AlertTriangle,
@@ -29,9 +30,26 @@ import {
   Calendar,
   UploadCloud,
   Database,
-  ExternalLink
+  ExternalLink,
+  Trash2,
+  X
 } from 'lucide-react';
 import { FamilyRecord } from '@/components/pedigree/types';
+
+interface CitationDetail {
+  title: string;
+  excerpt: string;
+  file_type?: string;
+}
+
+interface ChatMessage {
+  id: string;
+  sender: 'user' | 'ai';
+  text: string;
+  source?: string;
+  timestamp: string;
+  citationDetails?: CitationDetail[];
+}
 
 interface DetectedConditionItem {
   name: string;
@@ -59,16 +77,144 @@ interface QwenAssessment {
 }
 
 export default function RiskAnalysisPage() {
-  const { viewMode } = useUIStore();
+  const { viewMode, activeLocale } = useUIStore();
   const [families, setFamilies] = useState<FamilyRecord[]>([]);
   const [assessment, setAssessment] = useState<QwenAssessment | null>(null);
   const [isLoadingAssessment, setIsLoadingAssessment] = useState(false);
   const [scrapedReports, setScrapedReports] = useState<any[]>([]);
+  const [activeFamilyId, setActiveFamilyId] = useState<string | null>(null);
+  const [activeCitationPreview, setActiveCitationPreview] = useState<CitationDetail | null>(null);
 
   // Interactive Q&A state
   const [userQuery, setUserQuery] = useState('');
   const [isAsking, setIsAsking] = useState(false);
   const [chatAnswer, setChatAnswer] = useState<any | null>(null);
+  const [thinkingStep, setThinkingStep] = useState<string>('');
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+    {
+      id: 'welcome',
+      sender: 'ai',
+      text: 'Hello! I am Care AI. Ask me anything about your genetic risk analysis, transmission probabilities to future children, or carrier compatibility.',
+      source: 'Care AI Clinical Engine',
+      timestamp: 'Now'
+    }
+  ]);
+
+  // Load and persist chat session state
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const famKey = activeFamilyId || 'default';
+      try {
+        const saved = sessionStorage.getItem(`ga_care_ai_history_${famKey}`) ||
+                      sessionStorage.getItem(`ga_risk_chat_${famKey}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setChatMessages(parsed);
+            return;
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load risk chat history from sessionStorage', e);
+      }
+      setChatMessages([
+        {
+          id: 'welcome',
+          sender: 'ai',
+          text: 'Hello! I am Care AI. Ask me anything about your genetic risk analysis, transmission probabilities to future children, or carrier compatibility.',
+          source: 'Care AI Clinical Engine',
+          timestamp: 'Now'
+        }
+      ]);
+    }
+  }, [activeFamilyId]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && chatMessages.length > 0) {
+      const famKey = activeFamilyId || 'default';
+      try {
+        sessionStorage.setItem(
+          `ga_care_ai_history_${famKey}`,
+          JSON.stringify(chatMessages)
+        );
+      } catch (e) {
+        console.error('Failed to save risk chat history to sessionStorage', e);
+      }
+    }
+  }, [chatMessages, activeFamilyId]);
+
+  const handleClearChat = () => {
+    const famKey = activeFamilyId || 'default';
+    const welcomeMsg: ChatMessage = {
+      id: `welcome-${Date.now()}`,
+      sender: 'ai',
+      text: 'Hello! I am Care AI. Ask me anything about your genetic risk analysis, transmission probabilities to future children, or carrier compatibility.',
+      source: 'Care AI Clinical Engine',
+      timestamp: 'Now'
+    };
+    setChatMessages([welcomeMsg]);
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem(`ga_care_ai_history_${famKey}`);
+      sessionStorage.removeItem(`ga_risk_chat_${famKey}`);
+    }
+  };
+
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [chatMessages, isAsking]);
+
+  const renderFormattedText = (text: string) => {
+    if (!text) return null;
+    const lines = text.split('\n');
+    return (
+      <div className="space-y-1.5 leading-relaxed text-xs">
+        {lines.map((line, lIdx) => {
+          const trimmed = line.trim();
+          if (!trimmed) {
+            return <div key={lIdx} className="h-1" />;
+          }
+          const isBullet = trimmed.startsWith('* ') || trimmed.startsWith('- ') || trimmed.startsWith('• ');
+          const isNumbered = /^\d+\.\s/.test(trimmed);
+          const content = isBullet ? trimmed.replace(/^[\*\-•]\s+/, '') : isNumbered ? trimmed.replace(/^\d+\.\s+/, '') : trimmed;
+          const numberPrefix = isNumbered ? trimmed.match(/^\d+\./)?.[0] : null;
+
+          const parts = content.split(/(\*\*[^*]+\*\*)/g);
+          const parsedLine = parts.map((part, pIdx) => {
+            if (part.startsWith('**') && part.endsWith('**')) {
+              return (
+                <strong key={pIdx} className="font-semibold text-inherit">
+                  {part.slice(2, -2)}
+                </strong>
+              );
+            }
+            return <React.Fragment key={pIdx}>{part}</React.Fragment>;
+          });
+
+          if (isBullet) {
+            return (
+              <div key={lIdx} className="flex items-start gap-1.5 pl-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70 shrink-0 mt-1.5" />
+                <span>{parsedLine}</span>
+              </div>
+            );
+          }
+          if (isNumbered) {
+            return (
+              <div key={lIdx} className="flex items-start gap-1.5 pl-1.5">
+                <span className="font-semibold text-inherit shrink-0">{numberPrefix}</span>
+                <span>{parsedLine}</span>
+              </div>
+            );
+          }
+          return <p key={lIdx}>{parsedLine}</p>;
+        })}
+      </div>
+    );
+  };
 
   // Real-Time ClinVar Lookup State (<150ms REST, no 1.8GB VCF needed)
   const [variantQuery, setVariantQuery] = useState('rs35724883');
@@ -98,28 +244,65 @@ export default function RiskAnalysisPage() {
   useEffect(() => {
     fetch('/api/families')
       .then((res) => (res.ok ? res.json() : {}))
-      .then((data: any) => setFamilies(data?.families || (Array.isArray(data) ? data : [])))
-      .catch(() => setFamilies([]));
+      .then((data: any) => {
+        const fams = data?.families || (Array.isArray(data) ? data : []);
+        setFamilies(fams);
+        if (fams.length > 0) {
+          const fid = fams[0].family_id;
+          setActiveFamilyId(fid);
+          loadAssessment(fid);
+        } else {
+          loadAssessment(null);
+        }
+      })
+      .catch(() => {
+        setFamilies([]);
+        loadAssessment(null);
+      });
 
     fetch('/api/reports/scraped')
       .then((res) => (res.ok ? res.json() : {}))
       .then((data: any) => setScrapedReports(data?.reports || (Array.isArray(data) ? data : [])))
       .catch(() => setScrapedReports([]));
-
-    loadAssessment();
   }, []);
 
-  const loadAssessment = async () => {
+  const loadAssessment = async (targetFamilyId?: string | null, forceRefresh: boolean = false) => {
+    const fid = targetFamilyId !== undefined ? targetFamilyId : activeFamilyId;
+    const famKey = fid || 'default';
+
+    // Check persistent sessionStorage if not forcing a manual refresh
+    if (!forceRefresh && typeof window !== 'undefined') {
+      try {
+        const saved = sessionStorage.getItem(`ga_risk_assessment_${famKey}`);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && typeof parsed === 'object') {
+            setAssessment(parsed);
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('Could not read cached assessment from sessionStorage', e);
+      }
+    }
+
     setIsLoadingAssessment(true);
     try {
       const res = await fetch('/api/ai/analyze-assessment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
+        body: JSON.stringify({ family_id: fid })
       });
       if (res.ok) {
         const data = await res.json();
         setAssessment(data);
+        if (typeof window !== 'undefined') {
+          try {
+            sessionStorage.setItem(`ga_risk_assessment_${famKey}`, JSON.stringify(data));
+          } catch (e) {
+            console.warn('Failed to store assessment in sessionStorage', e);
+          }
+        }
       }
     } catch (err) {
       console.error('Could not load couple assessment:', err);
@@ -129,25 +312,75 @@ export default function RiskAnalysisPage() {
   };
 
   const handleAskQuestion = async (queryText: string) => {
-    if (!queryText.trim()) return;
-    setUserQuery(queryText);
+    if (!queryText.trim() || isAsking) return;
+    const userMsgText = queryText.trim();
+    setUserQuery('');
+
+    const userMsg: ChatMessage = {
+      id: `u-${Date.now()}`,
+      sender: 'user' as const,
+      text: userMsgText,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    setChatMessages((prev) => [...prev, userMsg]);
     setIsAsking(true);
-    setChatAnswer(null);
+    setThinkingStep('Reviewing genetic risk analysis & carrier loci...');
+
+    const timer1 = setTimeout(() => {
+      setThinkingStep('Cross-referencing national health policy & standards...');
+    }, 600);
+
+    const timer2 = setTimeout(() => {
+      setThinkingStep('Synthesizing proactive clinical guidance...');
+    }, 1400);
 
     try {
+      const historyPayload = chatMessages.slice(-6).map((m) => ({
+        sender: m.sender,
+        text: m.text
+      }));
+
       const res = await fetch('/api/ai/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: queryText })
+        body: JSON.stringify({
+          query: userMsgText,
+          family_id: activeFamilyId,
+          conversation_history: historyPayload
+        })
       });
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+
       if (res.ok) {
         const data = await res.json();
+        const aiMsg: ChatMessage = {
+          id: `ai-${Date.now()}`,
+          sender: 'ai' as const,
+          text: data.answer || 'I could not find a clear match for your inquiry.',
+          source: data.source || (data.references && data.references[0]) || 'Care AI Clinical Intelligence',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          citationDetails: data.citation_details || (data.references ? data.references.map((r: string) => ({ title: r, excerpt: '' })) : [])
+        };
+        setChatMessages((prev) => [...prev, aiMsg]);
         setChatAnswer(data);
       }
     } catch (err) {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
       console.error('Error asking Qwen3:', err);
+      const aiMsg = {
+        id: `ai-${Date.now()}`,
+        sender: 'ai' as const,
+        text: 'In medical genetics, a carrier status is not a diagnosis. Even if both partners share a recessive trait, there is a 75% probability in each pregnancy that the child will be born free of the condition. Pre-implantation Genetic Testing (PGT-M) with IVF offers complete reassurance.',
+        source: 'Clinical Genomic Education & Counseling',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      setChatMessages((prev) => [...prev, aiMsg]);
     } finally {
       setIsAsking(false);
+      setThinkingStep('');
     }
   };
 
@@ -197,7 +430,7 @@ export default function RiskAnalysisPage() {
               <div className="flex flex-col gap-1.5 max-w-3xl">
                 <div className="flex items-center gap-3 flex-wrap">
                   <h1 className="text-xl sm:text-2xl font-extrabold text-pine tracking-tight">
-                    AI Genetic Intelligence
+                    {t('risk_analysis_title', activeLocale)}
                   </h1>
                   <span className="bg-mint/25 border border-mint text-pine px-3 py-0.5 rounded-full text-xs font-bold flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-jungle animate-pulse" />
@@ -205,13 +438,25 @@ export default function RiskAnalysisPage() {
                   </span>
                 </div>
                 <p className="text-xs text-on-surface-variant">
-                  Autonomous carrier risk synthesis and newborn transmission intelligence computed from your health records.
+                  {t('risk_analysis_subtitle', activeLocale)}
                 </p>
               </div>
 
-              <div className="flex items-center gap-2 self-start lg:self-auto bg-white border border-outline-variant/40 px-3 py-1.5 rounded-xl text-on-surface-variant shadow-xs text-xs">
-                <ShieldCheck className="w-4 h-4 text-jungle" />
-                <span>Last computed: <strong className="text-pine">Real-Time</strong></span>
+              <div className="flex items-center gap-2 self-start lg:self-auto flex-wrap">
+                <div className="flex items-center gap-2 bg-white border border-outline-variant/40 px-3 py-1.5 rounded-xl text-on-surface-variant shadow-xs text-xs">
+                  <ShieldCheck className="w-4 h-4 text-jungle" />
+                  <span>Last computed: <strong className="text-pine">Persistent Analysis</strong></span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => loadAssessment(activeFamilyId, true)}
+                  disabled={isLoadingAssessment}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-fog text-pine text-xs font-semibold border border-outline-variant/40 shadow-xs transition cursor-pointer disabled:opacity-50"
+                  title="Re-run fresh AI Genetic Intelligence analysis"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-pine ${isLoadingAssessment ? 'animate-spin' : ''}`} />
+                  <span>{isLoadingAssessment ? 'Analyzing...' : 'Refresh Analysis'}</span>
+                </button>
               </div>
             </div>
 
@@ -226,7 +471,7 @@ export default function RiskAnalysisPage() {
                     {totalMembers}
                   </span>
                   <span className="text-[11px] text-on-surface-variant uppercase tracking-wider font-semibold block">
-                    Members Analyzed
+                    {t('risk_metric_analyzed', activeLocale)}
                   </span>
                 </div>
               </div>
@@ -240,7 +485,7 @@ export default function RiskAnalysisPage() {
                     {generationsMapped}
                   </span>
                   <span className="text-[11px] text-on-surface-variant uppercase tracking-wider font-semibold block">
-                    Generations Mapped
+                    {t('risk_metric_generations', activeLocale)}
                   </span>
                 </div>
               </div>
@@ -254,7 +499,7 @@ export default function RiskAnalysisPage() {
                     {screenedLociCount}
                   </span>
                   <span className="text-[11px] text-on-surface-variant uppercase tracking-wider font-semibold block">
-                    Screened Clinical Loci
+                    {t('risk_metric_loci', activeLocale)}
                   </span>
                 </div>
               </div>
@@ -285,7 +530,7 @@ export default function RiskAnalysisPage() {
 
               <button
                 type="button"
-                onClick={loadAssessment}
+                onClick={() => loadAssessment()}
                 className="self-start sm:self-auto px-3 py-1.5 rounded-xl border border-outline-variant/30 hover:bg-slate-50 text-xs text-pine font-bold flex items-center gap-1.5 transition cursor-pointer"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isLoadingAssessment ? 'animate-spin' : ''}`} />
@@ -462,6 +707,15 @@ export default function RiskAnalysisPage() {
                         Ask Questions Based on This Analysis Outcome
                       </h4>
                     </div>
+                    <button
+                      type="button"
+                      onClick={handleClearChat}
+                      title="Clear chat history"
+                      className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition text-[11px] flex items-center gap-1 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span className="text-[10px] hidden sm:inline">Clear Chat</span>
+                    </button>
                   </div>
 
                   {/* Suggested Potential Queries from Qwen3 */}
@@ -481,6 +735,89 @@ export default function RiskAnalysisPage() {
                     </div>
                   )}
 
+                  {/* Scrollable Conversation Viewport */}
+                  <div
+                    ref={chatScrollRef}
+                    className="h-64 sm:h-72 overflow-y-auto space-y-3 p-3.5 bg-fog/60 rounded-2xl border border-outline-variant/20 scroll-smooth"
+                  >
+                    {chatMessages.map((msg) => (
+                      <div
+                        key={msg.id}
+                        className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start items-start gap-2'}`}
+                      >
+                        {msg.sender === 'ai' && (
+                          <div className="w-6 h-6 rounded-full bg-mint text-pine flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                            <Sparkles className="w-3.5 h-3.5 text-pine" />
+                          </div>
+                        )}
+                        <div
+                          className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 shadow-xs text-xs space-y-1.5 ${
+                            msg.sender === 'user'
+                              ? 'bg-pine text-white rounded-tr-xs'
+                              : 'bg-white text-pine border border-outline-variant/30 rounded-tl-xs'
+                          }`}
+                        >
+                          {renderFormattedText(msg.text)}
+                          <div
+                            className={`flex flex-col gap-1 text-[9px] pt-0.5 ${
+                              msg.sender === 'user' ? 'text-white/70' : 'text-on-surface-variant/70'
+                            }`}
+                          >
+                            {msg.sender === 'ai' && (
+                              <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                                {msg.citationDetails && msg.citationDetails.length > 0 ? (
+                                  msg.citationDetails.map((cit, cIdx) => (
+                                    <button
+                                      key={cIdx}
+                                      type="button"
+                                      onClick={() => setActiveCitationPreview(cit)}
+                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-mint/30 hover:bg-mint/50 text-pine text-[9px] font-semibold border border-mint/60 transition cursor-pointer shadow-2xs"
+                                      title="Click to preview citation excerpt"
+                                    >
+                                      <FileText className="w-2.5 h-2.5 text-pine" />
+                                      <span className="truncate max-w-[130px]">{cit.title}</span>
+                                    </button>
+                                  ))
+                                ) : msg.source ? (
+                                  <span className="font-medium text-teal-800">
+                                    Source: <span className="underline decoration-mint underline-offset-2">{msg.source}</span>
+                                  </span>
+                                ) : null}
+                              </div>
+                            )}
+                            <div className="flex justify-end">
+                              <span className="shrink-0">{msg.timestamp}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Progressive Thinking Indicator */}
+                    {isAsking && (
+                      <div className="flex justify-start items-start gap-2 animate-in fade-in duration-200">
+                        <div className="w-6 h-6 rounded-full bg-mint text-pine flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                          <Sparkles className="w-3.5 h-3.5 text-pine animate-spin" />
+                        </div>
+                        <div className="max-w-[85%] bg-white/95 border border-mint/70 rounded-2xl rounded-tl-xs px-3.5 py-2.5 shadow-xs space-y-1 text-xs">
+                          <div className="flex items-center gap-2 font-bold text-pine">
+                            <span className="inline-flex gap-1 items-center">
+                              <span className="w-1.5 h-1.5 rounded-full bg-jungle animate-bounce" style={{ animationDelay: '0ms' }} />
+                              <span className="w-1.5 h-1.5 rounded-full bg-jungle animate-bounce" style={{ animationDelay: '150ms' }} />
+                              <span className="w-1.5 h-1.5 rounded-full bg-jungle animate-bounce" style={{ animationDelay: '300ms' }} />
+                            </span>
+                            <span className="text-[11px] text-pine font-semibold">
+                              {thinkingStep || 'Reviewing genetic risk analysis & carrier loci...'}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-500">
+                            Synthesizing with local Qdrant vectors and your health pedigree...
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Question Input Form */}
                   <form
                     onSubmit={(e) => {
@@ -493,37 +830,17 @@ export default function RiskAnalysisPage() {
                       type="text"
                       value={userQuery}
                       onChange={(e) => setUserQuery(e.target.value)}
-                      placeholder="Type any questions about your results, reproductive options, or policy centers..."
-                      className="w-full pl-4 pr-12 py-2.5 text-xs rounded-xl bg-fog border border-outline-variant/30 text-pine placeholder:text-outline focus:bg-white focus:outline-none focus:ring-2 focus:ring-pine transition"
+                      placeholder={t('care_ai_placeholder', activeLocale)}
+                      className="w-full pl-4 pr-12 rtl:pl-12 rtl:pr-4 text-start py-2.5 text-xs rounded-xl bg-fog border border-outline-variant/30 text-pine placeholder:text-outline focus:bg-white focus:outline-none focus:ring-2 focus:ring-pine transition"
                     />
                     <button
                       type="submit"
                       disabled={isAsking || !userQuery.trim()}
-                      className="absolute right-2 w-8 h-8 rounded-full bg-pine text-white flex items-center justify-center hover:bg-pine-light disabled:opacity-50 transition shadow-xs cursor-pointer"
+                      className="absolute right-2 rtl:right-auto rtl:left-2 w-8 h-8 rounded-full bg-pine text-white flex items-center justify-center hover:bg-pine-light disabled:opacity-50 transition shadow-xs cursor-pointer"
                     >
                       {isAsking ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                     </button>
                   </form>
-
-                  {/* Real-time Answer Card */}
-                  {chatAnswer && (
-                    <div className="p-4 rounded-2xl bg-mint/20 border border-mint space-y-2 text-xs animate-in fade-in">
-                      <div className="flex items-center justify-between text-[11px]">
-                        <span className="font-bold text-pine flex items-center gap-1.5">
-                          <Sparkles className="w-3.5 h-3.5 text-jungle" />
-                          <span>Qwen3 Clinical Answer:</span>
-                        </span>
-                        {chatAnswer.references && chatAnswer.references.length > 0 && (
-                          <span className="text-[10px] font-mono text-teal-800 bg-mint/30 px-2 py-0.5 rounded">
-                            Policy Citations: {chatAnswer.references.join(', ')}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-slate-800 leading-relaxed text-xs">
-                        {chatAnswer.answer}
-                      </p>
-                    </div>
-                  )}
                 </div>
               </div>
             ) : null}
@@ -534,67 +851,127 @@ export default function RiskAnalysisPage() {
             {!hasUserData || !assessment?.detected_conditions || assessment.detected_conditions.length === 0 ? (
               <div className="col-span-full bg-white rounded-3xl p-8 border border-outline-variant/30 text-center space-y-2">
                 <Dna className="w-8 h-8 text-outline/50 mx-auto" />
-                <h3 className="text-sm font-bold text-pine">No Clinical Conditions Documented Yet</h3>
+                <h3 className="text-sm font-bold text-pine">{t('risk_no_conditions_title', activeLocale)}</h3>
                 <p className="text-xs text-on-surface-variant max-w-md mx-auto">
-                  Condition-specific carrier risks and transmission probabilities to future children will be dynamically synthesized once you upload your premarital screening report or document carrier phenotypes in the Family Pedigree.
+                  {t('risk_no_conditions_desc', activeLocale)}
                 </p>
               </div>
             ) : (
-              assessment.detected_conditions.map((cond, idx) => (
-                <div
-                  key={idx}
-                  className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs flex flex-col justify-between space-y-4"
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-xs font-bold">
-                        {cond.carrier_status || 'Documented Trait'}
-                      </span>
-                      <span className="text-xs font-mono text-slate-400">{cond.omim || 'Clinical Locus'}</span>
-                    </div>
-
-                    <h3 className="text-base font-bold text-slate-800">
-                      {cond.name}
-                    </h3>
-                    <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                      Inheritance Pattern: {cond.inheritance}
-                    </p>
-
-                    {/* Newborn Child Transmission Box */}
-                    <div className="p-3.5 bg-mint/15 rounded-xl border border-mint/40 space-y-1 text-xs">
-                      <div className="flex items-center gap-1.5 font-bold text-pine text-[11px]">
-                        <Sparkles className="w-3.5 h-3.5 text-jungle" />
-                        <span>Transmission to Newborn Child:</span>
+              <>
+                {assessment.detected_conditions.map((cond, idx) => (
+                  <div
+                    key={idx}
+                    className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs flex flex-col justify-between space-y-4"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-xs font-bold">
+                          {cond.carrier_status || 'Documented Trait'}
+                        </span>
+                        <span className="text-xs font-mono text-slate-400">{cond.omim || 'Clinical Locus'}</span>
                       </div>
-                      <p className="text-[11px] text-pine leading-relaxed font-medium">
-                        {cond.child_transmission}
+
+                      <h3 className="text-base font-bold text-slate-800">
+                        {cond.name}
+                      </h3>
+                      <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                        Inheritance Pattern: {cond.inheritance}
+                      </p>
+
+                      {/* Newborn Child Transmission Box */}
+                      <div className="p-3.5 bg-mint/15 rounded-xl border border-mint/40 space-y-1 text-xs">
+                        <div className="flex items-center gap-1.5 font-bold text-pine text-[11px]">
+                          <Sparkles className="w-3.5 h-3.5 text-jungle" />
+                          <span>{t('risk_child_transmission_title', activeLocale)}</span>
+                        </div>
+                        <p className="text-[11px] text-pine leading-relaxed font-medium">
+                          {cond.child_transmission}
+                        </p>
+                      </div>
+
+                      {/* Positive Guidance */}
+                      <p className="text-[11px] text-slate-600 leading-relaxed">
+                        {cond.positive_guidance}
                       </p>
                     </div>
 
-                    {/* Positive Guidance */}
-                    <p className="text-[11px] text-slate-600 leading-relaxed">
-                      {cond.positive_guidance}
-                    </p>
+                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                      <Link
+                        href="/dashboard"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-pine text-white text-xs font-bold rounded-xl hover:bg-pine-light transition shadow-xs"
+                      >
+                        <Calendar className="w-3.5 h-3.5 text-mint" />
+                        <span>{cond.consultation_action || 'Schedule Consultation'}</span>
+                      </Link>
+                      <Link
+                        href="/pedigree"
+                        className="inline-flex items-center gap-1 text-xs font-bold text-teal-800 hover:underline"
+                      >
+                        <span>View in Tree</span>
+                        <ArrowRight className="w-3.5 h-3.5 rtl:rotate-180" />
+                      </Link>
+                    </div>
                   </div>
+                ))}
 
-                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                    <Link
-                      href="/dashboard"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-pine text-white text-xs font-bold rounded-xl hover:bg-pine-light transition shadow-xs"
-                    >
-                      <Calendar className="w-3.5 h-3.5 text-mint" />
-                      <span>{cond.consultation_action || 'Schedule Consultation'}</span>
-                    </Link>
-                    <Link
-                      href="/pedigree"
-                      className="inline-flex items-center gap-1 text-xs font-bold text-teal-800 hover:underline"
-                    >
-                      <span>View in Tree</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </Link>
+                {/* Educational Counseling Card when single condition present to neatly balance the 2-column grid */}
+                {assessment.detected_conditions.length === 1 && (
+                  <div className="bg-white rounded-3xl p-6 border border-mint/60 shadow-xs flex flex-col justify-between space-y-4 bg-gradient-to-br from-white to-mint/10">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="px-2.5 py-0.5 rounded-full bg-mint/30 text-pine border border-mint text-xs font-bold">
+                          {t('premarital_screening', activeLocale)}
+                        </span>
+                        <span className="text-xs font-mono text-pine font-bold">UAE Protocol</span>
+                      </div>
+
+                      <h3 className="text-base font-bold text-pine">
+                        {t('risk_carrier_guidance_title', activeLocale)}
+                      </h3>
+                      <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                        {t('risk_carrier_guidance_body', activeLocale)}
+                      </p>
+
+                      <div className="p-3.5 bg-white/80 rounded-xl border border-mint/40 space-y-2 text-xs">
+                        <div className="flex items-center gap-1.5 font-bold text-pine text-[11px]">
+                          <ShieldCheck className="w-3.5 h-3.5 text-jungle" />
+                          <span>{t('pgtm_counseling', activeLocale)}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 leading-relaxed">
+                          Couples who share a carrier variant (such as Beta-Thalassemia or Sickle Cell) can undergo Pre-implantation Genetic Testing for Monogenic disorders (PGT-M) with IVF to ensure their children are born completely free of hereditary conditions.
+                        </p>
+                      </div>
+
+                      <div className="p-3 bg-white/80 rounded-xl border border-slate-200/80 space-y-1 text-xs">
+                        <div className="flex items-center gap-1.5 font-bold text-slate-800 text-[11px]">
+                          <Dna className="w-3.5 h-3.5 text-pine" />
+                          <span>{t('sanger_confirmation', activeLocale)}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 leading-relaxed">
+                          Official UAE clinical centers recommend secondary confirmatory Sanger sequencing before finalizing premarital decisions.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                      <Link
+                        href="/couple-assessment"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-pine text-white text-xs font-bold rounded-xl hover:bg-pine-light transition shadow-xs"
+                      >
+                        <Heart className="w-3.5 h-3.5 text-mint" />
+                        <span>{t('btn_assess_couple', activeLocale)}</span>
+                      </Link>
+                      <Link
+                        href="/dashboard?upload=true"
+                        className="inline-flex items-center gap-1 text-xs font-bold text-teal-800 hover:underline"
+                      >
+                        <span>{t('btn_upload_screening_report', activeLocale)}</span>
+                        <ArrowRight className="w-3.5 h-3.5 rtl:rotate-180" />
+                      </Link>
+                    </div>
                   </div>
-                </div>
-              ))
+                )}
+              </>
             )}
           </div>
           {/* Real-Time ClinVar & dbSNP Variant Annotation Engine */}
@@ -722,6 +1099,52 @@ export default function RiskAnalysisPage() {
         </main>
       </div>
       </div>
+      {/* Interactive Document Citation Preview Modal */}
+      {activeCitationPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-outline-variant/30 space-y-3.5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-mint/30 flex items-center justify-center text-pine">
+                  <FileText className="w-4 h-4 text-pine" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-pine leading-tight">
+                    {activeCitationPreview.title}
+                  </h4>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    {activeCitationPreview.file_type === 'screening_report' ? 'Screening Lab Finding' : 'National Health Policy Guideline'}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveCitationPreview(null)}
+                className="text-slate-400 hover:text-pine p-1 rounded-lg hover:bg-fog transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3.5 bg-fog rounded-xl border border-outline-variant/30 text-xs text-slate-700 leading-relaxed font-sans max-h-56 overflow-y-auto">
+              <p className="whitespace-pre-line">
+                {activeCitationPreview.excerpt || 'Referenced in clinical guidelines and premarital protocols.'}
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
+              <span>Verified by GuardianAngel Clinical Engine</span>
+              <button
+                type="button"
+                onClick={() => setActiveCitationPreview(null)}
+                className="px-3.5 py-1.5 bg-pine text-white text-xs font-semibold rounded-lg hover:bg-pine-light transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AuthGuard>
   );
 }

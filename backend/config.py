@@ -77,7 +77,7 @@ class Config:
     # 1. Qwen3 - The Brain (LLM)
     QWEN_API_BASE = os.environ.get('QWEN_API_BASE', 'http://127.0.0.1:11434')
     QWEN_MODEL_NAME = os.environ.get('QWEN_MODEL_NAME', 'qwen2.5:latest')
-    QWEN_TIMEOUT = int(os.environ.get('QWEN_TIMEOUT', 45))
+    QWEN_TIMEOUT = int(os.environ.get('QWEN_TIMEOUT', 60))
 
     # 2. BAAI BGE-M3 - The Search Intelligence (Embedding Model)
     BGE_M3_API_BASE = os.environ.get('BGE_M3_API_BASE', 'http://127.0.0.1:11434')

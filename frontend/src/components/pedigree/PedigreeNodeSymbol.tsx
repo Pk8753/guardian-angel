@@ -115,9 +115,71 @@ export const PedigreeNodeSymbol: React.FC<PedigreeNodeSymbolProps> = ({
       {/* Symbol Shape */}
       {renderShape()}
 
-      {/* Carrier dot if carrier and not fully affected */}
+      {/* Carrier Right-Half Shading (ACMG / NSGC Standard from Image 1 & 2) */}
       {isCarrier && !isAffected && (
-        <circle cx={0} cy={0} r={5} fill="#0f766e" />
+        <>
+          {member.sex === 'male' && (
+            <rect
+              x={0}
+              y={-half}
+              width={half}
+              height={size}
+              fill="#0f766e"
+            />
+          )}
+          {member.sex === 'female' && (
+            <path
+              d={`M 0,${-half} A ${half} ${half} 0 0 1 0,${half} Z`}
+              fill="#0f766e"
+            />
+          )}
+          {(member.sex === 'other' || member.sex === 'unknown' || !['male', 'female', 'star', 'pregnancy_loss'].includes(member.sex)) && (
+            <polygon
+              points={`0,${-half} ${half},0 0,${half}`}
+              fill="#0f766e"
+            />
+          )}
+          {/* Re-stroke border so half-fill doesn't overlap stroke */}
+          {member.sex === 'male' && (
+            <rect
+              x={-half}
+              y={-half}
+              width={size}
+              height={size}
+              fill="none"
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+              rx={2}
+            />
+          )}
+          {member.sex === 'female' && (
+            <circle
+              cx={0}
+              cy={0}
+              r={half}
+              fill="none"
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+            />
+          )}
+          {(member.sex === 'other' || member.sex === 'unknown' || !['male', 'female', 'star', 'pregnancy_loss'].includes(member.sex)) && (
+            <polygon
+              points={`0,${-half} ${half},0 0,${half} ${-half},0`}
+              fill="none"
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+            />
+          )}
+          {/* Center vertical divider */}
+          <line
+            x1={0}
+            y1={-half}
+            x2={0}
+            y2={half}
+            stroke={strokeColor}
+            strokeWidth={1.5}
+          />
+        </>
       )}
 
       {/* Deceased diagonal strike-through */}
@@ -130,6 +192,36 @@ export const PedigreeNodeSymbol: React.FC<PedigreeNodeSymbolProps> = ({
           stroke="#475569"
           strokeWidth={2.5}
         />
+      )}
+
+      {/* Proband Arrow (↗ P) - ACMG/NSGC Standard Annotation */}
+      {member.is_proband && (
+        <g className="proband-annotation">
+          <line
+            x1={-half - 14}
+            y1={half + 14}
+            x2={-half - 2}
+            y2={half + 2}
+            stroke="#0f766e"
+            strokeWidth={2.5}
+            strokeLinecap="round"
+          />
+          <polygon
+            points={`${-half - 2},${half + 2} ${-half - 9},${half + 2} ${-half - 2},${half + 9}`}
+            fill="#0f766e"
+          />
+          <text
+            x={-half - 18}
+            y={half + 22}
+            textAnchor="middle"
+            fontSize="11"
+            fontWeight="bold"
+            fill="#0f766e"
+            fontFamily="monospace"
+          >
+            P
+          </text>
+        </g>
       )}
 
       {/* Generation & Member ID (e.g. II-3) */}

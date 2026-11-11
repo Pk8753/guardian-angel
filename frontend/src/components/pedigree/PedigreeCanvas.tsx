@@ -5,7 +5,7 @@ import { TransformWrapper, TransformComponent, ReactZoomPanPinchRef } from 'reac
 import { PedigreeMember, PedigreeUnion } from './types';
 import { computePedigreeLayout, LayoutResult } from './layoutEngine';
 import { PedigreeNodeSymbol } from './PedigreeNodeSymbol';
-import { ZoomIn, ZoomOut, RotateCcw, Maximize2, Shield } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw, Maximize2, Shield, BookOpen, X, Info } from 'lucide-react';
 
 interface PedigreeCanvasProps {
   members: PedigreeMember[];
@@ -34,6 +34,7 @@ export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const dragStartPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const hasDragged = useRef<boolean>(false);
+  const [isSymbolsGuideOpen, setIsSymbolsGuideOpen] = useState<boolean>(false);
 
   // Whenever members are created, added, or loaded, re-center tree view
   useEffect(() => {
@@ -226,7 +227,7 @@ export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
 
                   const minX = Math.min(p1.x, p2.x);
                   const maxX = Math.max(p1.x, p2.x);
-                  const unionY = p1.y;
+                  const unionY = Math.round((p1.y + p2.y) / 2);
                   const unionMidX = (p1.x + p2.x) / 2;
 
                   return (
@@ -408,69 +409,323 @@ export const PedigreeCanvas: React.FC<PedigreeCanvasProps> = ({
               </svg>
             </TransformComponent>
 
-            {/* Bottom NSGC Standard Legend matching screen.png */}
+            {/* Bottom NSGC Standard Legend matching screen.png & Image 1 / 2 */}
             <div className="shrink-0 z-10 bg-white border-t border-outline-variant/30 px-4 py-2.5 flex items-center justify-between flex-wrap gap-3 text-[11px] text-on-surface-variant font-medium">
-              <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-3.5 flex-wrap">
                 {/* Male */}
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5" title="Unaffected Male">
                   <div className="w-3.5 h-3.5 border-2 border-pine bg-white rounded-xs" />
                   <span>Male</span>
                 </div>
 
                 {/* Female */}
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5" title="Unaffected Female">
                   <div className="w-3.5 h-3.5 border-2 border-pine bg-white rounded-full" />
                   <span>Female</span>
                 </div>
 
-                {/* Future Child (Star) */}
-                <div className="flex items-center gap-1.5">
-                  <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-pine fill-amber-100 stroke-pine stroke-2">
-                    <polygon points="12,2 15,8.5 22,9.3 17,14 18.5,21 12,17.5 5.5,21 7,14 2,9.3 9,8.5" />
-                  </svg>
-                  <span>Future Child</span>
-                </div>
-
-                {/* Affected */}
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3.5 h-3.5 border-2 border-pine bg-pine rounded-xs" />
-                  <span>Affected</span>
+                {/* Not Specified */}
+                <div className="flex items-center gap-1.5" title="Gender Not Specified">
+                  <div className="w-3 h-3 border-2 border-pine bg-white rotate-45 rounded-2xs" />
+                  <span>Unknown</span>
                 </div>
 
                 {/* Carrier */}
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3.5 h-3.5 border-2 border-pine bg-white rounded-full flex items-center justify-center">
-                    <div className="w-1.5 h-1.5 bg-pine rounded-full" />
+                <div className="flex items-center gap-1.5" title="Carrier (Heterozygous)">
+                  <div className="w-3.5 h-3.5 border-2 border-pine rounded-full overflow-hidden flex">
+                    <div className="w-1/2 h-full bg-white" />
+                    <div className="w-1/2 h-full bg-pine" />
                   </div>
                   <span>Carrier</span>
                 </div>
 
+                {/* Affected */}
+                <div className="flex items-center gap-1.5" title="Affected Individual">
+                  <div className="w-3.5 h-3.5 border-2 border-pine bg-pine rounded-xs" />
+                  <span>Affected</span>
+                </div>
+
                 {/* Deceased */}
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3.5 h-3.5 border-2 border-pine bg-white relative">
-                    <div className="absolute inset-0 border-t border-pine -rotate-45 top-1.5" />
+                <div className="flex items-center gap-1.5" title="Deceased Relative">
+                  <div className="w-3.5 h-3.5 border-2 border-pine bg-white relative overflow-hidden">
+                    <div className="absolute inset-0 border-t-2 border-slate-700 -rotate-45 top-1" />
                   </div>
                   <span>Deceased</span>
                 </div>
 
+                {/* Proband */}
+                <div className="flex items-center gap-1.5" title="Proband / Index Consultand">
+                  <span className="font-mono font-bold text-pine text-xs flex items-center">
+                    <span className="text-[10px]">↗</span>P
+                  </span>
+                  <span>Proband</span>
+                </div>
+
                 {/* Consanguineous */}
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5" title="Consanguineous Union (e.g. 1st Cousins)">
                   <div className="flex flex-col gap-0.5">
                     <div className="w-4 h-0.5 bg-pine" />
                     <div className="w-4 h-0.5 bg-pine" />
                   </div>
                   <span>Consanguineous</span>
                 </div>
+
+                {/* Future Child (Star) */}
+                <div className="flex items-center gap-1.5" title="Projected Future Child">
+                  <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-pine fill-amber-100 stroke-pine stroke-2">
+                    <polygon points="12,2 15,8.5 22,9.3 17,14 18.5,21 12,17.5 5.5,21 7,14 2,9.3 9,8.5" />
+                  </svg>
+                  <span>Future Child</span>
+                </div>
               </div>
 
-              <div className="flex items-center gap-1 text-[10px] text-on-surface-variant/70">
-                <Shield className="w-3 h-3 text-pine" />
-                <span>NSGC & ACMG Pedigree Standard 2026</span>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsSymbolsGuideOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-mint/25 hover:bg-mint/45 text-pine font-bold text-xs border border-mint transition cursor-pointer shadow-2xs"
+                  title="View complete pedigree symbols, clinical meanings & annotations"
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-pine" />
+                  <span>View Symbols &amp; Meaning Guide</span>
+                </button>
+                <div className="hidden sm:flex items-center gap-1 text-[10px] text-on-surface-variant/70">
+                  <Shield className="w-3 h-3 text-pine" />
+                  <span>ACMG &amp; NSGC 2026</span>
+                </div>
               </div>
             </div>
           </>
         )}
       </TransformWrapper>
+
+      {/* ==================== ACMG & NSGC PEDIGREE SYMBOLS & MEANING GUIDE MODAL ==================== */}
+      {isSymbolsGuideOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-outline-variant/30 space-y-4 max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between pb-3 border-b border-outline-variant/20">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-mint/30 text-pine flex items-center justify-center font-bold">
+                  <BookOpen className="w-5 h-5 text-pine" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-pine leading-tight">
+                    Pedigree Symbols &amp; Meaning Guide
+                  </h3>
+                  <p className="text-xs text-on-surface-variant">
+                    ACMG &amp; NSGC International Clinical Genetics Nomenclature
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSymbolsGuideOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* 1. Standard Individual Symbols Table (Matching Image 1) */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold text-pine uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-jungle" />
+                <span>Standard Individual Symbols</span>
+              </h4>
+              <div className="overflow-x-auto rounded-xl border border-outline-variant/30">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-fog text-pine font-bold border-b border-outline-variant/20 text-[11px]">
+                    <tr>
+                      <th className="py-2.5 px-3">State / Category</th>
+                      <th className="py-2.5 px-3 text-center">Female</th>
+                      <th className="py-2.5 px-3 text-center">Male</th>
+                      <th className="py-2.5 px-3 text-center">Not Specified</th>
+                      <th className="py-2.5 px-3">Clinical Meaning</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-outline-variant/15 text-[11px]">
+                    {/* Row 1: Unaffected */}
+                    <tr className="hover:bg-fog/40 transition">
+                      <td className="py-2.5 px-3 font-semibold text-pine">Unaffected / Normal</td>
+                      <td className="py-2.5 px-3 text-center">
+                        <div className="w-4 h-4 border-2 border-pine bg-white rounded-full mx-auto" />
+                      </td>
+                      <td className="py-2.5 px-3 text-center">
+                        <div className="w-4 h-4 border-2 border-pine bg-white rounded-xs mx-auto" />
+                      </td>
+                      <td className="py-2.5 px-3 text-center">
+                        <div className="w-3.5 h-3.5 border-2 border-pine bg-white rotate-45 rounded-2xs mx-auto" />
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-600">
+                        Standard phenotype; non-carrier or tested negative for condition.
+                      </td>
+                    </tr>
+                    {/* Row 2: Affected */}
+                    <tr className="hover:bg-fog/40 transition">
+                      <td className="py-2.5 px-3 font-semibold text-pine">Affected Individual</td>
+                      <td className="py-2.5 px-3 text-center">
+                        <div className="w-4 h-4 border-2 border-pine bg-pine rounded-full mx-auto" />
+                      </td>
+                      <td className="py-2.5 px-3 text-center">
+                        <div className="w-4 h-4 border-2 border-pine bg-pine rounded-xs mx-auto" />
+                      </td>
+                      <td className="py-2.5 px-3 text-center">
+                        <div className="w-3.5 h-3.5 border-2 border-pine bg-pine rotate-45 rounded-2xs mx-auto" />
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-600">
+                        Clinically expresses the hereditary disorder or pathogenic trait.
+                      </td>
+                    </tr>
+                    {/* Row 3: Carrier */}
+                    <tr className="hover:bg-fog/40 transition bg-mint/5">
+                      <td className="py-2.5 px-3 font-semibold text-pine">Carrier (Heterozygous)</td>
+                      <td className="py-2.5 px-3 text-center">
+                        <div className="w-4 h-4 border-2 border-pine rounded-full overflow-hidden flex mx-auto">
+                          <div className="w-1/2 h-full bg-white" />
+                          <div className="w-1/2 h-full bg-pine" />
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3 text-center">
+                        <div className="w-4 h-4 border-2 border-pine rounded-xs overflow-hidden flex mx-auto">
+                          <div className="w-1/2 h-full bg-white" />
+                          <div className="w-1/2 h-full bg-pine" />
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3 text-center">
+                        <div className="w-3.5 h-3.5 border-2 border-pine rotate-45 rounded-2xs overflow-hidden flex mx-auto">
+                          <div className="w-1/2 h-full bg-white" />
+                          <div className="w-1/2 h-full bg-pine" />
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-600">
+                        Has 1 altered gene copy and 1 working copy. Healthy &amp; asymptomatic.
+                      </td>
+                    </tr>
+                    {/* Row 4: Deceased */}
+                    <tr className="hover:bg-fog/40 transition">
+                      <td className="py-2.5 px-3 font-semibold text-pine">Deceased Individual</td>
+                      <td className="py-2.5 px-3 text-center">
+                        <div className="w-4 h-4 border-2 border-pine bg-white rounded-full relative mx-auto">
+                          <div className="absolute inset-0 border-t-2 border-slate-700 -rotate-45 top-1.5" />
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3 text-center">
+                        <div className="w-4 h-4 border-2 border-pine bg-white rounded-xs relative mx-auto">
+                          <div className="absolute inset-0 border-t-2 border-slate-700 -rotate-45 top-1.5" />
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3 text-center">
+                        <div className="w-3.5 h-3.5 border-2 border-pine bg-white rotate-45 rounded-2xs relative mx-auto">
+                          <div className="absolute inset-0 border-t-2 border-slate-700 -rotate-45 top-1" />
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3 text-slate-600">
+                        Deceased family member (annotated with age or cause of death).
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* 2. Clinical Annotations & Tree Connections (Matching Image 2) */}
+            <div className="space-y-2 pt-1">
+              <h4 className="text-xs font-bold text-pine uppercase tracking-wider flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-jungle" />
+                <span>Tree Connections &amp; Annotations</span>
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                {/* Mating */}
+                <div className="p-3 bg-fog/60 rounded-xl border border-outline-variant/20 flex items-start gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-white border border-outline-variant/30 flex items-center justify-center shrink-0">
+                    <div className="w-5 h-0.5 bg-slate-700" />
+                  </div>
+                  <div>
+                    <span className="font-bold text-pine block">Mating / Partnership</span>
+                    <p className="text-[11px] text-slate-600">Single horizontal line connecting biological parents.</p>
+                  </div>
+                </div>
+
+                {/* Consanguinity */}
+                <div className="p-3 bg-fog/60 rounded-xl border border-outline-variant/20 flex items-start gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-white border border-outline-variant/30 flex items-center justify-center shrink-0 flex-col gap-0.5">
+                    <div className="w-5 h-0.5 bg-pine" />
+                    <div className="w-5 h-0.5 bg-pine" />
+                  </div>
+                  <div>
+                    <span className="font-bold text-pine block">Consanguineous Union</span>
+                    <p className="text-[11px] text-slate-600">Double horizontal line denoting shared ancestry (e.g. 1st cousins).</p>
+                  </div>
+                </div>
+
+                {/* Proband */}
+                <div className="p-3 bg-fog/60 rounded-xl border border-outline-variant/20 flex items-start gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-white border border-outline-variant/30 flex items-center justify-center shrink-0">
+                    <span className="font-mono font-extrabold text-pine text-sm">↗ P</span>
+                  </div>
+                  <div>
+                    <span className="font-bold text-pine block">Proband (↗ P)</span>
+                    <p className="text-[11px] text-slate-600">Index individual initiating the screening or clinical assessment.</p>
+                  </div>
+                </div>
+
+                {/* Offspring & Sibship */}
+                <div className="p-3 bg-fog/60 rounded-xl border border-outline-variant/20 flex items-start gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-white border border-outline-variant/30 flex items-center justify-center shrink-0">
+                    <div className="flex flex-col items-center">
+                      <div className="w-0.5 h-2 bg-slate-700" />
+                      <div className="w-5 h-0.5 bg-slate-700" />
+                    </div>
+                  </div>
+                  <div>
+                    <span className="font-bold text-pine block">Offspring &amp; Siblings</span>
+                    <p className="text-[11px] text-slate-600">Children linked from parents in chronological birth order (left to right).</p>
+                  </div>
+                </div>
+
+                {/* Star Child */}
+                <div className="p-3 bg-fog/60 rounded-xl border border-outline-variant/20 flex items-start gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-white border border-outline-variant/30 flex items-center justify-center shrink-0">
+                    <svg viewBox="0 0 24 24" className="w-4 h-4 text-pine fill-mint stroke-pine stroke-2">
+                      <polygon points="12,2 15,8.5 22,9.3 17,14 18.5,21 12,17.5 5.5,21 7,14 2,9.3 9,8.5" />
+                    </svg>
+                  </div>
+                  <div>
+                    <span className="font-bold text-pine block">Future Child (★ Star Child)</span>
+                    <p className="text-[11px] text-slate-600">Projected offspring calculated from both parents&apos; screening reports.</p>
+                  </div>
+                </div>
+
+                {/* Generation Tiers */}
+                <div className="p-3 bg-fog/60 rounded-xl border border-outline-variant/20 flex items-start gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-white border border-outline-variant/30 flex items-center justify-center shrink-0 font-mono font-bold text-pine text-xs">
+                    I, II, III
+                  </div>
+                  <div>
+                    <span className="font-bold text-pine block">Generations &amp; Birth Order</span>
+                    <p className="text-[11px] text-slate-600">Roman numerals (tiers I, II, III) and numeric order (1, 2, 3...) per generation.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-between pt-3 border-t border-outline-variant/20">
+              <span className="text-[11px] text-slate-500">
+                Complies with ACMG &amp; NSGC Clinical Pedigree Guidelines
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsSymbolsGuideOpen(false)}
+                className="px-4 py-2 bg-pine text-white text-xs font-semibold rounded-xl hover:bg-pine-light transition cursor-pointer"
+              >
+                Close Guide
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

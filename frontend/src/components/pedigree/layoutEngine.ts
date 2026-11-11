@@ -34,18 +34,22 @@ export function computePedigreeLayout(
       ['spouse', 'husband_wife', 'husband', 'wife', 'partner'].includes((m.relationship_to_proband || '').toLowerCase())
     );
 
-    // Link Proband to parents
-    if (father && !proband.father_id) proband.father_id = father.id;
-    if (mother && !proband.mother_id) proband.mother_id = mother.id;
+    // Link Proband to parents (guard against self-parenting cycles!)
+    if (father && String(father.id) !== String(proband.id) && !proband.father_id) {
+      proband.father_id = father.id;
+    }
+    if (mother && String(mother.id) !== String(proband.id) && !proband.mother_id) {
+      proband.mother_id = mother.id;
+    }
 
-    // Link parents as mutual partners
-    if (father && mother) {
+    // Link parents as mutual partners if both exist and are distinct
+    if (father && mother && String(father.id) !== String(mother.id)) {
       if (!father.spouse_ids || father.spouse_ids.length === 0) father.spouse_ids = [mother.id];
       if (!mother.spouse_ids || mother.spouse_ids.length === 0) mother.spouse_ids = [father.id];
     }
 
     // Link Proband and Spouse
-    if (spouse) {
+    if (spouse && String(spouse.id) !== String(proband.id)) {
       if (!proband.spouse_ids || proband.spouse_ids.length === 0) proband.spouse_ids = [spouse.id];
       if (!spouse.spouse_ids || spouse.spouse_ids.length === 0) spouse.spouse_ids = [proband.id];
     }
@@ -62,29 +66,34 @@ export function computePedigreeLayout(
         rel === 'twin_identical' ||
         rel === 'twin_fraternal'
       ) {
-        if (father && !m.father_id) m.father_id = father.id;
-        if (mother && !m.mother_id) m.mother_id = mother.id;
+        if (father && String(father.id) !== String(m.id) && !m.father_id) m.father_id = father.id;
+        if (mother && String(mother.id) !== String(m.id) && !m.mother_id) m.mother_id = mother.id;
         if (rel.includes('twin')) {
           m.twin_group_id = m.twin_group_id || 'twin-1';
           if (rel === 'twin_identical') m.is_identical_twin = true;
         }
       } else if (rel === 'half_sibling_father') {
-        if (father && !m.father_id) m.father_id = father.id;
+        if (father && String(father.id) !== String(m.id) && !m.father_id) m.father_id = father.id;
       } else if (rel === 'half_sibling_mother') {
-        if (mother && !m.mother_id) m.mother_id = mother.id;
+        if (mother && String(mother.id) !== String(m.id) && !m.mother_id) m.mother_id = mother.id;
       } else if (
         rel === 'son' ||
         rel === 'daughter' ||
         rel === 'child' ||
         rel === 'adopted_child' ||
-        rel === 'pregnancy_loss'
+        rel === 'pregnancy_loss' ||
+        m.sex === 'star'
       ) {
-        if (proband.sex === 'female') {
-          if (!m.mother_id) m.mother_id = proband.id;
-          if (spouse && !m.father_id) m.father_id = spouse.id;
+        // If father and mother exist as the couple, link child to both
+        if (father && mother && String(father.id) !== String(mother.id)) {
+          if (!m.father_id) m.father_id = father.id;
+          if (!m.mother_id) m.mother_id = mother.id;
+        } else if (proband.sex === 'female') {
+          if (!m.mother_id && String(proband.id) !== String(m.id)) m.mother_id = proband.id;
+          if (spouse && !m.father_id && String(spouse.id) !== String(m.id)) m.father_id = spouse.id;
         } else {
-          if (!m.father_id) m.father_id = proband.id;
-          if (spouse && !m.mother_id) m.mother_id = spouse.id;
+          if (!m.father_id && String(proband.id) !== String(m.id)) m.father_id = proband.id;
+          if (spouse && !m.mother_id && String(spouse.id) !== String(m.id)) m.mother_id = spouse.id;
         }
         if (rel === 'pregnancy_loss') {
           m.sex = 'pregnancy_loss';
@@ -127,7 +136,7 @@ export function computePedigreeLayout(
       const currentGen = getGen(m.id);
 
       // From parents
-      if (m.father_id && memberMap.has(m.father_id)) {
+      if (m.father_id && String(m.father_id) !== String(m.id) && memberMap.has(m.father_id)) {
         const fatherGen = getGen(m.father_id);
         if (fatherGen !== undefined && currentGen === undefined) {
           setGen(m.id, fatherGen + 1);
@@ -138,13 +147,26 @@ export function computePedigreeLayout(
         }
       }
 
-      if (m.mother_id && memberMap.has(m.mother_id)) {
+      if (m.mother_id && String(m.mother_id) !== String(m.id) && memberMap.has(m.mother_id)) {
         const motherGen = getGen(m.mother_id);
         if (motherGen !== undefined && currentGen === undefined) {
           setGen(m.id, motherGen + 1);
           changed = true;
         } else if (motherGen === undefined && currentGen !== undefined) {
           setGen(m.mother_id, currentGen - 1);
+          changed = true;
+        }
+      }
+
+      // Parents of children must share the same generation level
+      if (m.father_id && m.mother_id && String(m.father_id) !== String(m.mother_id)) {
+        const fGen = getGen(m.father_id);
+        const mGen = getGen(m.mother_id);
+        if (fGen !== undefined && mGen === undefined) {
+          setGen(m.mother_id, fGen);
+          changed = true;
+        } else if (mGen !== undefined && fGen === undefined) {
+          setGen(m.father_id, mGen);
           changed = true;
         }
       }
@@ -219,7 +241,7 @@ export function computePedigreeLayout(
 
   // Add unions from parents of members
   members.forEach((m) => {
-    if (m.father_id && m.mother_id) {
+    if (m.father_id && m.mother_id && String(m.father_id) !== String(m.mother_id)) {
       const u = getOrCreateUnion(m.father_id, m.mother_id);
       const childNormId = String(m.id);
       if (!u.children_ids.some((cid) => String(cid) === childNormId)) {
@@ -227,7 +249,9 @@ export function computePedigreeLayout(
       }
     } else if (m.spouse_ids && m.spouse_ids.length > 0) {
       m.spouse_ids.forEach((spId) => {
-        getOrCreateUnion(m.id, spId);
+        if (String(spId) !== String(m.id)) {
+          getOrCreateUnion(m.id, spId);
+        }
       });
     }
   });

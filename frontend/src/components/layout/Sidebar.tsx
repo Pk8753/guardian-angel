@@ -63,7 +63,7 @@ export function Sidebar() {
   return (
     <>
       {/* ==================== DESKTOP SIDEBAR (Hidden on Mobile) ==================== */}
-      <aside className="hidden md:flex shrink-0 w-64 lg:w-72 h-screen bg-surface-container-lowest z-40 flex-col justify-between py-6 px-4 border-r border-outline-variant/40 shadow-[0_1px_8px_rgba(12,50,44,0.04)] overflow-y-auto select-none">
+      <aside className="hidden md:flex shrink-0 w-64 lg:w-72 h-screen bg-surface-container-lowest z-40 flex-col justify-between py-6 px-4 border-r rtl:border-r-0 rtl:border-l border-outline-variant/40 shadow-[0_1px_8px_rgba(12,50,44,0.04)] overflow-y-auto select-none">
         <div className="flex flex-col gap-6">
           {/* Brand Header */}
           <Link href="/dashboard" className="flex items-center gap-3 px-3 group">
