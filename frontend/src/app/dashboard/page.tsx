@@ -9,6 +9,7 @@ import { useAuthStore } from '@/stores/useAuthStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { t } from '@/lib/translations';
 import { PedigreeCanvas } from '@/components/pedigree/PedigreeCanvas';
+import { PatientDashboard } from '@/components/dashboard/PatientDashboard';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import {
@@ -45,7 +46,7 @@ import {
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
-  const { activeLocale } = useUIStore();
+  const { activeLocale, viewMode } = useUIStore();
   const firstName = user?.fullName ? user.fullName.split(' ')[0] : (user?.username || 'Patient');
 
   // Multiple Family Pedigrees State & Default Family Tree State
@@ -215,6 +216,7 @@ export default function DashboardPage() {
     setDeleteTreeError(null);
     setDeleteTreeModalOpen(true);
   };
+  const handleDeleteFamily = openDeleteTreeModal;
 
   const closeDeleteTreeModal = () => {
     if (isDeletingTree) return;
@@ -270,6 +272,10 @@ export default function DashboardPage() {
   const [aiReferences, setAiReferences] = useState<string[]>([]);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [dynamicQueries, setDynamicQueries] = useState<string[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [selectedModel, setSelectedModel] = useState('gemini-3.0-flash');
+  const [aiSource, setAiSource] = useState<string | null>(null);
+  const [aiLocus, setAiLocus] = useState<string | null>(null);
   const [bookingConfirmed, setBookingConfirmed] = useState(false);
   const [panelScheduled, setPanelScheduled] = useState(false);
   const [thinkingStep, setThinkingStep] = useState<string>('');
@@ -329,7 +335,13 @@ export default function DashboardPage() {
   const handleAskQuestion = async (questionText: string) => {
     if (!questionText.trim()) return;
     const userMsgText = questionText.trim();
-    setQuery('');
+    setQuery(userMsgText);
+    setIsAiLoading(true);
+    setAiLoading(true);
+    setAiAnswer(null);
+    setAiSource(null);
+    setAiLocus(null);
+    setThinkingStep('Checking premarital reports & policy documents...');
 
     const userMsg: DashboardChatMessage = {
       id: `u-${Date.now()}`,
@@ -337,67 +349,74 @@ export default function DashboardPage() {
       text: userMsgText,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
-
     setChatMessages((prev) => [...prev, userMsg]);
-    setIsAiLoading(true);
-    setThinkingStep('Checking premarital reports & policy documents...');
 
     const stepTimer = setTimeout(() => {
       setThinkingStep('Synthesizing genetic findings with clinical guidelines...');
     }, 900);
 
     try {
-      const res = await fetch('/api/ai/ask', {
+      const endpoint = selectedModel ? '/api/ai/ask-studio' : '/api/ai/ask';
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: userMsgText })
+        body: JSON.stringify({
+          query: userMsgText,
+          model: selectedModel,
+          view_mode: viewMode
+        })
       });
       clearTimeout(stepTimer);
 
       if (res.ok) {
         const data = await res.json();
+        const answerText = data.answer || 'No response generated.';
+        const sourceText = data.source || data.model || selectedModel || 'Care AI Clinical Intelligence';
+        const locusText = data.locus_reference || null;
+
+        setAiAnswer(answerText);
+        setAiSource(sourceText);
+        setAiLocus(locusText);
+
         const aiMsg: DashboardChatMessage = {
           id: `ai-${Date.now()}`,
           sender: 'ai',
-          text: data.answer || 'I could not find a clear match for your inquiry.',
-          source: data.source || (data.references && data.references[0]) || 'Care AI Clinical Intelligence',
+          text: answerText,
+          source: sourceText,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
         setChatMessages((prev) => [...prev, aiMsg]);
-        setAiAnswer(data.answer);
         if (data.references && Array.isArray(data.references)) {
           setAiReferences(data.references);
         }
-      } else {
-        const matched = defaultSuggestedQuestions.find(
-          (sq) => sq.q.toLowerCase() === userMsgText.toLowerCase()
-        );
-        const aiMsg: DashboardChatMessage = {
-          id: `ai-${Date.now()}`,
-          sender: 'ai',
-          text: matched ? matched.a : `Care AI analysis for "${userMsgText}": Based on your screening records, your carrier traits are well-documented. Dual-partner carrier testing provides complete clarity.`,
-          source: 'Care AI Screening Records',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        };
-        setChatMessages((prev) => [...prev, aiMsg]);
+        return;
       }
-    } catch (e) {
-      clearTimeout(stepTimer);
-      const matched = defaultSuggestedQuestions.find(
-        (sq) => sq.q.toLowerCase() === userMsgText.toLowerCase()
-      );
-      const aiMsg: DashboardChatMessage = {
-        id: `ai-${Date.now()}`,
-        sender: 'ai',
-        text: matched ? matched.a : `Based on your family health records, your carrier traits are well-documented. Dual-partner carrier testing provides complete clarity.`,
-        source: 'Care AI Knowledge Engine',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-      setChatMessages((prev) => [...prev, aiMsg]);
+    } catch (err) {
+      console.error('Care AI query error:', err);
     } finally {
+      clearTimeout(stepTimer);
       setIsAiLoading(false);
+      setAiLoading(false);
       setThinkingStep('');
     }
+
+    // Fallback if needed
+    const matched = defaultSuggestedQuestions.find(
+      (sq) => sq.q.toLowerCase() === userMsgText.toLowerCase()
+    );
+    const fallbackAnswer = matched
+      ? matched.a
+      : `Care AI analyzed your question regarding "${userMsgText}": Based on your family health records, your carrier traits are well-documented. Dual-partner carrier testing provides complete clarity.`;
+    setAiAnswer(fallbackAnswer);
+    setAiSource('Care AI Knowledge Engine');
+    const fallbackMsg: DashboardChatMessage = {
+      id: `ai-${Date.now()}`,
+      sender: 'ai',
+      text: fallbackAnswer,
+      source: 'Care AI Knowledge Engine',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+    setChatMessages((prev) => [...prev, fallbackMsg]);
   };
 
   // Premarital & Genetic Screening Report Upload (Zero-Storage In-Memory Parsing)
@@ -596,12 +615,35 @@ export default function DashboardPage() {
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <Navbar />
 
-          <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-7 space-y-5">
+          <main className="flex-1 overflow-y-auto p-3 sm:p-6 lg:p-7 space-y-4 sm:space-y-5 pb-24 md:pb-8">
+            {viewMode === 'patient' ? (
+              <PatientDashboard
+                user={user}
+                activeFamily={activeFamily}
+                selectedModel={selectedModel}
+                onModelChange={setSelectedModel}
+                onAskQuestion={handleAskQuestion}
+                query={query}
+                setQuery={setQuery}
+                aiAnswer={aiAnswer}
+                aiLoading={aiLoading}
+                aiSource={aiSource}
+                aiLocus={aiLocus}
+              />
+            ) : (
+              <>
             {/* ==================== 1. TOP WELCOME HERO BANNER ==================== */}
-            <div className="relative w-full bg-white rounded-2xl p-6 sm:p-7 shadow-[0_1px_4px_rgba(12,50,44,0.04)] border border-outline-variant/40 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+            <div className="relative w-full bg-white rounded-2xl p-4 sm:p-6 lg:p-7 shadow-[0_1px_4px_rgba(12,50,44,0.04)] border border-outline-variant/40 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5 sm:gap-6">
               {/* Left Welcome Copy */}
               <div className="flex flex-col max-w-2xl space-y-2">
-                <h1 className="text-2xl sm:text-3xl font-extrabold text-pine tracking-tight">
+                <div className="flex items-center gap-2 flex-wrap text-xs">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-mint/25 text-pine font-bold border border-mint text-[11px] tracking-wide">
+                    <span className="w-2 h-2 rounded-full bg-jungle animate-pulse" />
+                    {t('clinical_node_active', activeLocale)}
+                  </span>
+                </div>
+
+                <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-pine tracking-tight">
                   {t('good_morning', activeLocale)}, {firstName}
                 </h1>
 
@@ -635,10 +677,10 @@ export default function DashboardPage() {
                   )}
                 </p>
 
-                <div className="pt-2 flex items-center gap-3 flex-wrap">
+                <div className="pt-2 flex items-center gap-2 sm:gap-3 flex-wrap">
                   <Link
                     href="/pedigree?create=true"
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-pine hover:bg-pine-light text-white rounded-xl text-xs font-bold transition shadow-xs"
+                    className="inline-flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2 bg-pine hover:bg-pine-light text-white rounded-xl text-xs font-bold transition shadow-xs flex-1 sm:flex-none text-center"
                   >
                     <Plus className="w-4 h-4" />
                     <span>{t('btn_create_pedigree', activeLocale)}</span>
@@ -646,7 +688,7 @@ export default function DashboardPage() {
                   <button
                     type="button"
                     onClick={() => setIsUploadModalOpen(true)}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-mint/25 hover:bg-mint/40 text-pine border border-mint rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+                    className="inline-flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2 bg-mint/25 hover:bg-mint/40 text-pine border border-mint rounded-xl text-xs font-bold transition shadow-xs cursor-pointer flex-1 sm:flex-none text-center"
                     title="Upload Genetic Testing or Premarital Screening Report"
                   >
                     <UploadCloud className="w-4 h-4 text-pine" />
@@ -656,9 +698,9 @@ export default function DashboardPage() {
               </div>
 
               {/* Right Priority Diagnostic Badge Tile */}
-              <div className="flex items-center gap-4 bg-gradient-to-br from-fog-light to-mint/15 p-4 rounded-xl border border-outline-variant/40 shadow-xs w-full lg:w-auto shrink-0">
+              <div className="flex items-center gap-3.5 sm:gap-4 bg-gradient-to-br from-fog-light to-mint/15 p-3.5 sm:p-4 rounded-xl border border-outline-variant/40 shadow-xs w-full lg:w-auto shrink-0">
                 {/* Circular Gauge */}
-                <div className="relative w-20 h-20 flex items-center justify-center shrink-0">
+                <div className="relative w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center shrink-0">
                   <svg className="w-full h-full -rotate-90 transform" viewBox="0 0 100 100">
                     <circle
                       className="text-slate-200 fill-transparent"
@@ -681,8 +723,8 @@ export default function DashboardPage() {
                     />
                   </svg>
                   <div className="absolute flex flex-col items-center">
-                    <span className="text-xl font-black text-pine leading-none">{completenessPercentage}%</span>
-                    <span className="text-[9px] text-on-surface-variant font-bold leading-none mt-1">INDEX</span>
+                    <span className="text-lg sm:text-xl font-black text-pine leading-none">{completenessPercentage}%</span>
+                    <span className="text-[8px] sm:text-[9px] text-on-surface-variant font-bold leading-none mt-1">INDEX</span>
                   </div>
                 </div>
 
@@ -728,9 +770,9 @@ export default function DashboardPage() {
             </div>
 
             {/* ==================== 2. ROW OF 4 STAT TILES ==================== */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               {/* Tile 1: Pedigree Size */}
-              <div className="bg-white rounded-2xl p-5 border border-outline-variant/30 shadow-[0_1px_3px_rgba(12,50,44,0.03)] flex flex-col justify-between">
+              <div className="bg-white rounded-2xl p-4 sm:p-5 border border-outline-variant/30 shadow-[0_1px_3px_rgba(12,50,44,0.03)] flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between text-on-surface-variant mb-2">
                     <span className="text-[11px] font-bold uppercase tracking-wider">{t('stat_pedigree_size', activeLocale)}</span>
@@ -937,8 +979,8 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Charts Table matching Requirement 7 */}
-              <div className="overflow-x-auto">
+              {/* Desktop Table View */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead>
                     <tr className="border-b border-outline-variant/30 text-on-surface-variant text-[11px] uppercase tracking-wider bg-fog/60">
@@ -1046,6 +1088,88 @@ export default function DashboardPage() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Mobile Card View (Optimized for Mobile Phones) */}
+              <div className="md:hidden space-y-3">
+                {familiesLoading ? (
+                  <div className="py-6 text-center text-slate-400 text-xs">Loading your pedigree charts...</div>
+                ) : families.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center space-y-2 p-6 bg-slate-50/60 rounded-xl border border-dashed border-slate-200 text-center">
+                    <GitBranch className="w-8 h-8 text-slate-300" />
+                    <p className="font-semibold text-slate-700 text-xs">No Family Pedigrees Created Yet</p>
+                    <Link
+                      href="/pedigree?create=true"
+                      className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 bg-teal-800 hover:bg-teal-900 text-white rounded-xl text-xs font-bold transition shadow-xs"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Create Family Pedigree</span>
+                    </Link>
+                  </div>
+                ) : (
+                  families.map((fam) => (
+                    <div key={fam.family_id} className="p-3.5 rounded-xl bg-slate-50/80 border border-slate-200/80 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="px-2 py-0.5 bg-teal-50 border border-teal-200 rounded font-mono font-bold text-xs text-teal-800">
+                          {fam.family_id}
+                        </span>
+                        {fam.share_enabled ? (
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold text-[10px]">
+                            Shared
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-semibold text-[10px]">
+                            Private
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
+                        <h4 className="text-xs font-bold text-slate-900">
+                          {fam.family_name || fam.name || `Family ${fam.family_id}`}
+                        </h4>
+                        {fam.trait_or_disorder_name && (
+                          <p className="text-[11px] text-slate-500 mt-0.5">{fam.trait_or_disorder_name}</p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] text-slate-600 pt-1.5 border-t border-slate-200/60">
+                        <span>Proband: <strong className="text-slate-800">{fam.proband_name || 'Proband'}</strong></span>
+                        <span className="px-2 py-0.5 bg-white rounded border border-slate-200 font-bold text-[10px]">
+                          {fam.member_count ?? 1} members
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-1">
+                        <Link
+                          href={`/pedigree?family_id=${fam.family_id}`}
+                          className="flex-1 py-2 px-3 bg-teal-800 hover:bg-teal-900 text-white rounded-lg text-xs font-bold transition text-center shadow-xs flex items-center justify-center gap-1.5"
+                        >
+                          <span>Open Chart</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </Link>
+                        {fam.share_token && (
+                          <Link
+                            href={`/pedigree/share/${fam.share_token}`}
+                            target="_blank"
+                            className="p-2 text-slate-600 bg-white border border-slate-200 rounded-lg hover:text-teal-800 hover:bg-slate-100 transition"
+                            title="View Shareable Link"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </Link>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteFamily(fam.family_id, fam.family_name || fam.name)}
+                          className="p-2 text-rose-500 bg-white border border-slate-200 rounded-lg hover:text-rose-700 hover:bg-rose-50 transition"
+                          title="Delete Chart"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
 
             {/* ==================== 3. MAIN 2-COLUMN SECTION ==================== */}
@@ -1053,7 +1177,7 @@ export default function DashboardPage() {
               {/* -------------------- LEFT COLUMN (8 COLS) -------------------- */}
               <div className="lg:col-span-8 space-y-5">
                 {/* Lineage Pedigree Model Card */}
-                <div className="bg-white rounded-2xl p-6 border border-outline-variant/30 shadow-[0_1px_4px_rgba(12,50,44,0.04)] space-y-4">
+                <div className="bg-white rounded-2xl p-4 sm:p-6 border border-outline-variant/30 shadow-[0_1px_4px_rgba(12,50,44,0.04)] space-y-4">
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
@@ -1095,11 +1219,14 @@ export default function DashboardPage() {
 
                   {/* Real Interactive SVG Tree Canvas */}
                   {activeFamilyLoading ? (
-                    <div className="w-full h-[620px] bg-fog rounded-2xl border border-outline-variant/40 flex items-center justify-center text-on-surface-variant text-xs">
+                    <div className="w-full h-[360px] sm:h-[480px] lg:h-[620px] bg-fog rounded-2xl border border-outline-variant/40 flex items-center justify-center text-on-surface-variant text-xs">
                       Loading family pedigree model...
                     </div>
                   ) : members.length > 0 ? (
-                    <div className="w-full h-[620px] rounded-2xl overflow-hidden relative">
+                    <div className="w-full h-[360px] sm:h-[480px] lg:h-[620px] rounded-2xl overflow-hidden relative">
+                      <div className="sm:hidden absolute top-2 right-2 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm px-2 py-0.5 rounded text-[10px] text-slate-600 font-medium z-10 pointer-events-none shadow-2xs">
+                        Pinch &amp; drag to explore
+                      </div>
                       <PedigreeCanvas
                         members={members}
                         isConsanguineous={isConsanguineous}
@@ -1107,9 +1234,12 @@ export default function DashboardPage() {
                       />
                     </div>
                   ) : (
-                    <div className="w-full h-[400px] bg-fog rounded-2xl border border-outline-variant/40 flex flex-col items-center justify-center text-center p-6 space-y-3">
+                    <div className="w-full h-[320px] sm:h-[400px] bg-fog rounded-2xl border border-outline-variant/40 flex flex-col items-center justify-center text-center p-6 space-y-3">
                       <GitBranch className="w-10 h-10 text-outline-variant" />
                       <h3 className="text-sm font-bold text-pine">No Relatives in Default Tree</h3>
+                      <p className="text-xs text-on-surface-variant max-w-sm">
+                        Open the full interactive editor to add parents, siblings, children, and partners to your pedigree chart.
+                      </p>
                       <button
                         type="button"
                         onClick={() => setIsUploadModalOpen(true)}
@@ -1133,7 +1263,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Understanding Consanguinity & Hereditary Lineages Literacy Card */}
-                <div className="bg-white rounded-2xl p-6 border border-outline-variant/30 shadow-[0_1px_4px_rgba(12,50,44,0.04)] space-y-4">
+                <div className="bg-white rounded-2xl p-4 sm:p-6 border border-outline-variant/30 shadow-[0_1px_4px_rgba(12,50,44,0.04)] space-y-4">
                   <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-pine">
                     <ShieldCheck className="w-4 h-4 text-jungle" />
                     <span>GENOMIC LITERACY</span>
@@ -1143,9 +1273,9 @@ export default function DashboardPage() {
                     Understanding Shared Family Bloodlines &amp; Hereditary Health
                   </h3>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-5 items-center">
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 sm:gap-5 items-center">
                     {/* Family Photo Representation */}
-                    <div className="sm:col-span-5 rounded-xl overflow-hidden shadow-sm h-44 border border-outline-variant/40 relative bg-fog">
+                    <div className="sm:col-span-5 rounded-xl overflow-hidden shadow-sm h-36 sm:h-44 border border-outline-variant/40 relative bg-fog">
                       <img
                         src="https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=600&auto=format&fit=crop&q=80"
                         alt="Family Health"
@@ -1179,9 +1309,9 @@ export default function DashboardPage() {
               </div>
 
               {/* -------------------- RIGHT COLUMN (4 COLS) -------------------- */}
-              <div className="lg:col-span-4 space-y-5">
+              <div className="lg:col-span-4 space-y-4 sm:space-y-5">
                 {/* Ask Care AI Messenger Card (Positioned directly next to Lineage Pedigree Model) */}
-                <div className="bg-white rounded-2xl p-5 border border-outline-variant/30 shadow-[0_1px_4px_rgba(12,50,44,0.04)] space-y-3.5">
+                <div className="bg-white rounded-2xl p-4 sm:p-5 border border-outline-variant/30 shadow-[0_1px_4px_rgba(12,50,44,0.04)] space-y-3.5">
                   <div className="flex items-center justify-between">
                     <div>
                       <h2 className="text-sm font-bold text-pine flex items-center gap-1.5">
@@ -1318,7 +1448,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Action Directives Card (Positioned below Ask Care AI) */}
-                <div className="bg-white rounded-2xl p-6 border border-outline-variant/30 shadow-[0_1px_4px_rgba(12,50,44,0.04)] space-y-4">
+                <div className="bg-white rounded-2xl p-4 sm:p-6 border border-outline-variant/30 shadow-[0_1px_4px_rgba(12,50,44,0.04)] space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="w-2.5 h-2.5 rounded-full bg-jungle" />
@@ -1332,7 +1462,7 @@ export default function DashboardPage() {
                   </div>
 
                   {/* Sub-card 1: Pre-Marital Gene Panel */}
-                  <div className="p-4 rounded-xl bg-fog/60 border border-outline-variant/30 space-y-3">
+                  <div className="p-3.5 sm:p-4 rounded-xl bg-fog/60 border border-outline-variant/30 space-y-3">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-lg bg-waterhole/10 border border-waterhole/20 text-waterhole flex items-center justify-center font-bold">
@@ -1370,7 +1500,7 @@ export default function DashboardPage() {
                   </div>
 
                   {/* Sub-card 2: Doctor Video Consultation */}
-                  <div className="p-4 rounded-xl bg-fog/60 border border-outline-variant/30 space-y-3">
+                  <div className="p-3.5 sm:p-4 rounded-xl bg-fog/60 border border-outline-variant/30 space-y-3">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
                         <img
@@ -1428,8 +1558,12 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 </div>
+
+
               </div>
             </div>
+              </>
+            )}
           </main>
         </div>
       </div>
