@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useLoginContext } from '../../_hooks/useLoginContext';
+import { DantoraHelixCanvas } from './DantoraHelixCanvas';
 
 export function HeroSection() {
   const { auth, mobile } = useLoginContext();
@@ -11,6 +12,9 @@ export function HeroSection() {
       id="hero"
       className="relative overflow-hidden bg-gradient-to-br from-[#0c322c] via-[#0f2a24] to-[#192072] text-white"
     >
+      {/* Dantora Diagonal Chromosome Fluid DNA & All-Around Circular Bokeh Canvas */}
+      <DantoraHelixCanvas />
+
       {/* Subtle SVG Grid & Abstract Hex/Node Network Texture */}
       <svg
         className="absolute inset-0 w-full h-full opacity-[0.09] pointer-events-none"
