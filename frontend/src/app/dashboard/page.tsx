@@ -216,6 +216,7 @@ export default function DashboardPage() {
     setDeleteTreeError(null);
     setDeleteTreeModalOpen(true);
   };
+  const handleDeleteFamily = openDeleteTreeModal;
 
   const closeDeleteTreeModal = () => {
     if (isDeletingTree) return;
