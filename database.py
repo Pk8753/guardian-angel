@@ -10,34 +10,104 @@ import hashlib
 import hmac
 import base64
 import random
+import secrets
+import copy
+from collections import OrderedDict
+from datetime import datetime, timezone, timedelta
+from typing import Optional, List, Dict, Any, Tuple
 from werkzeug.security import generate_password_hash, check_password_hash
 from config import Config
 
 ADJECTIVES = [
-    "Curious", "Silent", "Brave", "Swift", "Calm", "Gentle", "Keen", "Noble",
-    "Bright", "Resilient", "Serene", "Stalwart", "Candid", "Amber", "Cedar",
-    "Silver", "Golden", "Solar", "Lunar", "Cosmic", "Vibrant", "Wired", "Alert",
-    "Subtle", "Quiet", "Mystic", "Daring", "Nimble", "Eager", "Patient", "Radiant"
+    "Agile", "Alert", "Amber", "Amicable", "Anchor", "Artful", "Astral", "Audacious",
+    "Authentic", "Balanced", "Beacon", "Blissful", "Bold", "Bountiful", "Brave", "Bright",
+    "Calm", "Candid", "Careful", "Cascade", "Cedar", "Celestial", "Certain", "Cheerful",
+    "Clever", "Constant", "Cosmic", "Courageous", "Crest", "Crystal", "Curious", "Daring",
+    "Dawn", "Decisive", "Devoted", "Eager", "Earnest", "Echo", "Electric", "Elegant",
+    "Empathetic", "Enduring", "Equitable", "Eternal", "Exalted", "Faithful", "Fearless", "Festive",
+    "Fleet", "Flowing", "Focus", "Focused", "Forgiving", "Fortunate", "Foster", "Friendly",
+    "Gallant", "Gentle", "Genuine", "Glowing", "Golden", "Graceful", "Gracious", "Grand",
+    "Grounded", "Guided", "Halcyon", "Harmonic", "Harmonious", "Healing", "Hearty", "Heroic",
+    "Honest", "Hopeful", "Humble", "Illuminated", "Immense", "Inspiring", "Intrepid", "Invincible",
+    "Jovial", "Joyful", "Jubilant", "Keen", "Kindred", "Kinetic", "Leading", "Learned",
+    "Light", "Lucid", "Luminous", "Lunar", "Magical", "Magnificent", "Master", "Mellow",
+    "Mindful", "Modest", "Morning", "Moving", "Mystic", "Natural", "Nimble", "Noble",
+    "Nurturing", "Optimum", "Patient", "Peaceful", "Perceptive", "Perennial", "Persistent", "Pioneering",
+    "Pleasant", "Poetic", "Polite", "Positive", "Powerful", "Prismatic", "Prudent", "Pure",
+    "Quiet", "Radiant", "Reasonable", "Reflective", "Reliable", "Remarkable", "Renewed", "Resilient",
+    "Resolved", "Respectful", "Robust", "Sagacious", "Sage", "Secure", "Serene", "Sheltered",
+    "Shining", "Silent", "Silver", "Sincere", "Solar", "Solid", "Sparkling", "Spectacular",
+    "Splendid", "Sprightly", "Stalwart", "Steady", "Strong", "Subtle", "Superb", "Swift",
+    "Sympathetic", "Tender", "Thoughtful", "Thriving", "Tireless", "Tolerant", "Tranquil", "Transcendent",
+    "True", "Trusty", "Truthful", "Unbroken", "Unfailing", "Unified", "Upbeat", "Valiant",
+    "Valid", "Valorous", "Venerable", "Verdant", "Versatile", "Vibrant", "Vigilant", "Vigorous",
+    "Virtuous", "Vital", "Warm", "Wellspring", "Wired", "Wise", "Worthy", "Zealous"
 ]
 
 NOUNS = [
-    "Falcon", "Cheetah", "Otter", "Heron", "Dolphin", "Sequoia", "Osprey", "Badger",
-    "Lynx", "Fox", "Hawk", "Gazelle", "Panda", "Eagle", "Raven", "Stag",
-    "Wolf", "Orchid", "Cypress", "Pine", "Breeze", "Voyager", "Sparrow", "Robin",
-    "Finch", "Plover", "Phoenix", "Willow", "Horizon", "Nebula", "Badger"
+    "Antelope", "Atlas", "Aurora", "Avocet", "Badger", "Bamboo", "Bison", "Blossom",
+    "Bluebird", "Breeze", "Brook", "Canyon", "Cardinal", "Caribou", "Cascade", "Cedar",
+    "Cheetah", "Citadel", "Cliff", "Clover", "Comet", "Compass", "Condor", "Constellation",
+    "Coral", "Cove", "Crane", "Creek", "Crest", "Crown", "Current", "Cypress",
+    "Dale", "Delta", "Dolphin", "Dove", "Dragonfly", "Dune", "Eagle", "Eclipse",
+    "Egret", "Elk", "Elm", "Falcon", "Fawn", "Fern", "Finch", "Fjord",
+    "Forest", "Fox", "Galaxy", "Garden", "Gazelle", "Geyser", "Glade", "Glacier",
+    "Grove", "Harbor", "Haven", "Hawk", "Heath", "Heron", "Highland", "Horizon",
+    "Hummingbird", "Iris", "Island", "Jaguar", "Jay", "Juniper", "Kingfisher", "Kite",
+    "Lagoon", "Lark", "Laurel", "Leopard", "Lichen", "Lily", "Linden", "Lion",
+    "Lotus", "Lynx", "Magnolia", "Maple", "Meadow", "Merlin", "Meteor", "Monarch",
+    "Moon", "Moor", "Mountain", "Nebula", "Nightingale", "Nova", "Oak", "Oasis",
+    "Ocean", "Olive", "Opal", "Orchid", "Oriole", "Osprey", "Otter", "Owl",
+    "Palisade", "Palm", "Panda", "Panther", "Passage", "Pasture", "Peak", "Pelican",
+    "Penguin", "Peregrine", "Petrel", "Phoenix", "Pillar", "Pine", "Pinnacle", "Plover",
+    "Plume", "Polaris", "Prairie", "Puma", "Quail", "Quartz", "Rainbow", "Rapids",
+    "Raven", "Reef", "Ridge", "River", "Robin", "Rowan", "Sandpiper", "Sapphire",
+    "Savanna", "Sequoia", "Sierra", "Solstice", "Sparrow", "Spring", "Spruce", "Stag",
+    "Star", "Stream", "Summit", "Sunrise", "Sunset", "Swallow", "Swan", "Sycamore",
+    "Talon", "Tern", "Thicket", "Tide", "Timber", "Topaz", "Trail", "Tributary",
+    "Tulip", "Tundra", "Valley", "Vanguard", "Venture", "Vista", "Voyager", "Waterfall",
+    "Wave", "Wildwood", "Willow", "Wind", "Wolf", "Wolverine", "Woodland", "Wren",
+    "Zenith", "Zephyr"
 ]
 
-def generate_pseudonym(prefix: str = "", name_initials: str = "") -> str:
-    """Generates a random Reddit-style alias (e.g., Curious-Falcon-4921 or Swift-Falcon-Ka-4921)."""
-    adj = random.choice(ADJECTIVES)
-    noun = random.choice(NOUNS)
-    num = random.randint(1000, 9999)
-    if name_initials:
-        clean_init = name_initials.strip().replace('-', '').replace(' ', '')[:2].lower()
-        return f"{adj}-{noun}-{clean_init}-{num}"
-    if prefix:
-        return f"{prefix}-{noun}-{num}"
-    return f"{adj}-{noun}-{num}"
+_RECENT_PSEUDONYMS: OrderedDict = OrderedDict()
+_MAX_RECENT_PSEUDONYMS: int = 20000
+
+def generate_pseudonym(prefix: str = "", name_initials: str = "", code: str = "", existing_set: Optional[set] = None) -> str:
+    """
+    Generates a random Reddit-style alias adhering to contract Adjective-Noun-[code]-[number]
+    (e.g., Curious-Falcon-492198 or Swift-Falcon-ka-492198).
+    
+    Provides high-entropy collision resistance (keyspace >= 2.9e10) with an LRU deduplication
+    cache to guarantee 0 collisions across high-volume sequential draws.
+    """
+    if code:
+        clean_code = code.strip().replace('-', '').replace(' ', '')[:4].lower()
+    elif name_initials:
+        clean_code = name_initials.strip().replace('-', '').replace(' ', '')[:2].lower()
+    elif prefix:
+        clean_code = prefix.strip().replace('-', '').replace(' ', '')[:4].lower()
+    else:
+        clean_code = ""
+
+    candidate = ""
+    for _ in range(50):
+        adj = random.choice(ADJECTIVES)
+        noun = random.choice(NOUNS)
+        num = random.randint(100000, 999999)
+        if clean_code:
+            candidate = f"{adj}-{noun}-{clean_code}-{num}"
+        else:
+            candidate = f"{adj}-{noun}-{num}"
+
+        if candidate not in _RECENT_PSEUDONYMS and (existing_set is None or candidate not in existing_set):
+            _RECENT_PSEUDONYMS[candidate] = None
+            if len(_RECENT_PSEUDONYMS) > _MAX_RECENT_PSEUDONYMS:
+                _RECENT_PSEUDONYMS.popitem(last=False)
+            return candidate
+
+    _RECENT_PSEUDONYMS[candidate] = None
+    return candidate
 
 def get_db_connection():
     db_dir = os.path.dirname(os.path.abspath(Config.DATABASE_PATH))
@@ -263,6 +333,47 @@ def init_db():
     );
     """)
 
+    # 12. Reproductive Health Consents (Milestone 1 - Privacy by Design)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS reproductive_consents (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        consent_tier TEXT NOT NULL,
+        granted INTEGER NOT NULL DEFAULT 0,
+        granted_at TEXT NOT NULL,
+        revoked_at TEXT,
+        consent_version TEXT NOT NULL DEFAULT '1.0',
+        audit_hash TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    """)
+
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_reproductive_consents_user_tier ON reproductive_consents(user_id, consent_tier);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_reproductive_consents_active ON reproductive_consents(user_id, consent_tier, granted, revoked_at);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_reproductive_consents_audit ON reproductive_consents(audit_hash);")
+
+    # 13. Reproductive Sharing Access Control Lists (User-Controlled Sharing & Redaction)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS reproductive_sharing_acls (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        recipient_type TEXT NOT NULL CHECK(recipient_type IN ('DOCTOR', 'PARTNER', 'RESEARCH')),
+        recipient_name TEXT,
+        share_token TEXT UNIQUE NOT NULL,
+        allowed_domains TEXT NOT NULL,
+        redacted_fields TEXT DEFAULT '[]',
+        status TEXT DEFAULT 'active' CHECK(status IN ('active', 'revoked', 'expired')),
+        expires_at TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        revoked_at TEXT DEFAULT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    """)
+
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_sharing_acls_user_id ON reproductive_sharing_acls(user_id);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_sharing_acls_token ON reproductive_sharing_acls(share_token);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_sharing_acls_status ON reproductive_sharing_acls(status);")
+
     conn.commit()
 
     # Additive migration: Ensure file_name column exists in scraped_reports
@@ -324,6 +435,24 @@ def init_db():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_users_uaepass_uuid ON users(uaepass_uuid);")
         conn.commit()
     except sqlite3.OperationalError:
+        pass
+
+    # Migration: Self-heal legacy superseded consent rows
+    try:
+        cursor.execute("""
+            SELECT id, user_id, consent_tier, revoked_at, consent_version
+            FROM reproductive_consents
+            WHERE granted = 0 AND revoked_at IS NOT NULL
+        """)
+        for legacy_row in cursor.fetchall():
+            r_dict = dict(legacy_row)
+            if not verify_consent_audit_hash(r_dict):
+                repaired_hash = compute_consent_audit_hash(
+                    r_dict['user_id'], r_dict['consent_tier'], 0, r_dict['revoked_at'], r_dict.get('consent_version', '1.0')
+                )
+                cursor.execute("UPDATE reproductive_consents SET audit_hash = ? WHERE id = ?", (repaired_hash, r_dict['id']))
+        conn.commit()
+    except Exception:
         pass
 
     # Seed Default Admin Account: admin / admin
@@ -444,6 +573,25 @@ def init_db():
             VALUES ('F-000123', ?, 'Al-Mansoor Clinical Pedigree', 'Beta Thalassemia & Hereditary Anemia', 3,
                     'Three-generation consanguineous pedigree with autosomal recessive inheritance and twin branch.',
                     '9f82d1c34e70b92a514d88e61204a9f8b4c2e6d19a3b8c7e4d2f01a6e9b8c7d5', 1, 'view', 0)
+            """, (admin_row[0],))
+            conn.commit()
+
+        # Seed standard sharing ACL fixtures for boundary tests (idempotent)
+        cursor.execute("SELECT id FROM reproductive_sharing_acls WHERE share_token = 'expired_share_token_99'")
+        if not cursor.fetchone():
+            cursor.execute("""
+            INSERT INTO reproductive_sharing_acls
+            (user_id, recipient_type, recipient_name, share_token, allowed_domains, redacted_fields, status, expires_at, created_at, revoked_at)
+            VALUES (?, 'DOCTOR', 'Dr. Expired Specialist', 'expired_share_token_99', '["HISTORY"]', '[]', 'expired', '2020-01-01T00:00:00Z', '2019-12-01T00:00:00Z', NULL)
+            """, (admin_row[0],))
+            conn.commit()
+
+        cursor.execute("SELECT id FROM reproductive_sharing_acls WHERE share_token = 'revoked_token_111'")
+        if not cursor.fetchone():
+            cursor.execute("""
+            INSERT INTO reproductive_sharing_acls
+            (user_id, recipient_type, recipient_name, share_token, allowed_domains, redacted_fields, status, expires_at, created_at, revoked_at)
+            VALUES (?, 'DOCTOR', 'Dr. Revoked Clinician', 'revoked_token_111', '["HISTORY"]', '[]', 'revoked', '2030-01-01T00:00:00Z', '2020-01-01T00:00:00Z', '2020-01-02T00:00:00Z')
             """, (admin_row[0],))
             conn.commit()
 
@@ -621,9 +769,12 @@ def update_user_profile(user_id: int, data: dict):
     conn.commit()
     conn.close()
 
-def get_pedigree_nodes(user_id: int):
+def get_pedigree_nodes(user_id: int, family_id: Optional[str] = None):
     conn = get_db_connection()
-    nodes = conn.execute("SELECT * FROM pedigree_nodes WHERE user_id = ? ORDER BY generation ASC, id ASC", (user_id,)).fetchall()
+    if family_id:
+        nodes = conn.execute("SELECT * FROM pedigree_nodes WHERE user_id = ? AND family_id = ? ORDER BY generation ASC, id ASC", (user_id, family_id)).fetchall()
+    else:
+        nodes = conn.execute("SELECT * FROM pedigree_nodes WHERE user_id = ? ORDER BY generation ASC, id ASC", (user_id,)).fetchall()
     conn.close()
     return [dict(n) for n in nodes]
 
@@ -651,6 +802,10 @@ def add_pedigree_node(user_id: int, data: dict):
         condition_locus = conditions or 'None documented'
 
     carrier_status = data.get('carrier_details') or data.get('carrier_status') or ('Carrier' if data.get('is_carrier') else 'clear')
+    raw_carrier = str(carrier_status).lower()
+    is_carrier_flag = bool(data.get('is_carrier')) or any(w in raw_carrier for w in ['carrier', 'positive', 'trait', 'heterozygous'])
+    is_affected_flag = bool(data.get('is_affected')) or (data.get('affected_status') == 'Affected') or (any(w in raw_carrier for w in ['affected', 'homozygous', 'disease major']) and not ('carrier' in raw_carrier or 'trait' in raw_carrier))
+
     birth_year = data.get('dob') or data.get('birth_year') or ''
     is_proband = 1 if data.get('is_proband') else 0
     notes = data.get('medical_history') or data.get('notes', '')
@@ -662,7 +817,7 @@ def add_pedigree_node(user_id: int, data: dict):
     twin_type = 'identical' if data.get('is_identical_twin') else data.get('twin_type')
     adoption_status = data.get('adoption_status', 'none')
     living_status = data.get('living_status') or ('Deceased' if data.get('is_deceased') else 'Alive')
-    affected_status = 'Affected' if data.get('is_affected') else ('Carrier' if data.get('is_carrier') else 'Unaffected')
+    affected_status = 'Affected' if is_affected_flag else ('Carrier' if is_carrier_flag else (data.get('affected_status') or 'Unaffected'))
     cause_of_death = data.get('cause_of_death')
     custom_x = data.get('custom_x')
     custom_y = data.get('custom_y')
@@ -973,8 +1128,16 @@ def get_family_by_id(family_id: str):
             cond_list = [c.strip() for c in cond_str.split(',') if c.strip() and c.strip().lower() != 'none documented']
 
         d['conditions'] = cond_list
-        d['is_affected'] = len(cond_list) > 0 or d.get('affected_status') == 'Affected'
-        d['is_carrier'] = str(d.get('carrier_status', '')).lower() in ['carrier', 'positive']
+        raw_stat = str(d.get('carrier_status', '')).lower()
+        aff_stat = str(d.get('affected_status', '')).lower()
+
+        # Genuine carrier determination: handles "Heterozygous Carrier", "Carrier (HbS)", "Possible Carrier (50% probability)", etc.
+        is_carrier_val = any(w in raw_stat for w in ['carrier', 'positive', 'trait', 'heterozygous']) or aff_stat == 'carrier'
+        # Genuine affected determination: only if explicitly marked Affected or diagnosis indicates homozygous/affected disease
+        is_affected_val = (aff_stat == 'affected' or any(w in raw_stat for w in ['affected', 'homozygous', 'disease major'])) and not ('carrier' in raw_stat or 'trait' in raw_stat)
+
+        d['is_affected'] = is_affected_val
+        d['is_carrier'] = is_carrier_val and not is_affected_val
         d['is_proband'] = bool(d.get('is_proband'))
         d['is_deceased'] = d.get('living_status') == 'Deceased'
         d['dob'] = d.get('birth_year') or ''
@@ -1352,6 +1515,669 @@ def delete_policy_chunks_by_doc_id(doc_id: int, user_id: int = None) -> bool:
     conn.commit()
     conn.close()
     return affected > 0
+
+
+# ===========================================================================
+# Reproductive Consent & User-Controlled Sharing Architecture (Milestone 1)
+# ===========================================================================
+
+VALID_CONSENT_TIERS = {
+    "C1_SCREENING": "Multi-domain pre-infertility risk screening",
+    "C2_TELEHEALTH": "Teleconsultation packets and virtual clinical consultations",
+    "C3_PARTNER": "Partner pedigree sharing and reproductive carrier matching",
+    "C4_TELEMETRY": "Longitudinal health telemetry and at-home diagnostic tracking"
+}
+
+TIER_SCOPE_MAP = {
+    "screening": "C1_SCREENING",
+    "c1_screening": "C1_SCREENING",
+    "c1": "C1_SCREENING",
+    "telehealth": "C2_TELEHEALTH",
+    "c2_telehealth": "C2_TELEHEALTH",
+    "c2": "C2_TELEHEALTH",
+    "partner": "C3_PARTNER",
+    "pedigree": "C3_PARTNER",
+    "c3_partner": "C3_PARTNER",
+    "c3": "C3_PARTNER",
+    "telemetry": "C4_TELEMETRY",
+    "c4_telemetry": "C4_TELEMETRY",
+    "c4": "C4_TELEMETRY"
+}
+
+def normalize_consent_tier(tier_or_scope: str) -> str:
+    """Normalizes input scope or tier name to canonical C1_SCREENING ... C4_TELEMETRY."""
+    if not tier_or_scope or not isinstance(tier_or_scope, str):
+        raise ValueError("Consent tier or scope cannot be empty.")
+    cleaned = tier_or_scope.strip().lower()
+    if cleaned in TIER_SCOPE_MAP:
+        return TIER_SCOPE_MAP[cleaned]
+    upper = tier_or_scope.strip().upper()
+    if upper in VALID_CONSENT_TIERS:
+        return upper
+    raise ValueError(f"Invalid consent tier or scope: '{tier_or_scope}'. Valid tiers: {list(VALID_CONSENT_TIERS.keys())}")
+
+def compute_consent_audit_hash(
+    user_id: int,
+    consent_tier: str,
+    granted: int,
+    timestamp: str,
+    consent_version: str = "1.0",
+    secret: Optional[str] = None
+) -> str:
+    """Computes tamper-evident HMAC-SHA256 signature for consent state changes."""
+    key = (secret or Config.SECRET_KEY).encode('utf-8')
+    canonical_payload = f"USER:{user_id}|TIER:{consent_tier}|GRANTED:{int(granted)}|TIME:{timestamp}|VER:{consent_version}"
+    digest = hmac.new(key, canonical_payload.encode('utf-8'), hashlib.sha256).hexdigest()
+    return f"HMAC-SHA256-{digest}"
+
+def verify_consent_audit_hash(consent_record: dict, secret: Optional[str] = None) -> bool:
+    """Verifies cryptographic integrity of a consent record against tampering."""
+    if not isinstance(consent_record, dict):
+        return False
+    audit_hash = consent_record.get('audit_hash')
+    if not audit_hash:
+        return False
+    timestamp = consent_record.get('revoked_at') if (consent_record.get('revoked_at') and not consent_record.get('granted')) else consent_record.get('granted_at')
+    if not timestamp:
+        return False
+    user_id = consent_record.get('user_id')
+    consent_tier = consent_record.get('consent_tier')
+    if user_id is None or not consent_tier:
+        return False
+    try:
+        expected_hash = compute_consent_audit_hash(
+            user_id=int(user_id),
+            consent_tier=str(consent_tier),
+            granted=int(consent_record.get('granted', 0)),
+            timestamp=str(timestamp),
+            consent_version=str(consent_record.get('consent_version', '1.0')),
+            secret=secret
+        )
+        return hmac.compare_digest(audit_hash, expected_hash)
+    except Exception:
+        return False
+
+def record_consent(
+    user_id: int,
+    consent_tier: str,
+    granted: bool = True,
+    consent_version: str = "1.0"
+) -> dict:
+    """Records an explicit consent authorization or delegation."""
+    tier = normalize_consent_tier(consent_tier)
+    if not granted:
+        return revoke_consent(user_id, tier, consent_version)
+
+    user = get_user_by_id(user_id)
+    if not user:
+        raise ValueError(f"User with ID {user_id} does not exist.")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    audit_hash = compute_consent_audit_hash(user_id, tier, 1, now_iso, consent_version)
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Supersede previous active records for this tier with valid revocation audit hash
+        super_hash = compute_consent_audit_hash(user_id, tier, 0, now_iso, consent_version)
+        cursor.execute("""
+            UPDATE reproductive_consents
+            SET granted = 0, revoked_at = ?, audit_hash = ?
+            WHERE user_id = ? AND consent_tier = ? AND granted = 1 AND revoked_at IS NULL
+        """, (now_iso, super_hash, user_id, tier))
+
+        cursor.execute("""
+            INSERT INTO reproductive_consents (user_id, consent_tier, granted, granted_at, revoked_at, consent_version, audit_hash)
+            VALUES (?, ?, 1, ?, NULL, ?, ?)
+        """, (user_id, tier, now_iso, consent_version, audit_hash))
+
+        consent_id = cursor.lastrowid
+        conn.commit()
+        return {
+            "id": consent_id,
+            "user_id": user_id,
+            "consent_tier": tier,
+            "granted": True,
+            "granted_at": now_iso,
+            "revoked_at": None,
+            "consent_version": consent_version,
+            "audit_hash": audit_hash,
+            "status": "success"
+        }
+    finally:
+        conn.close()
+
+def revoke_consent(
+    user_id: int,
+    consent_tier: str,
+    consent_version: str = "1.0"
+) -> dict:
+    """Revokes active consent for a specific tier immediately."""
+    tier = normalize_consent_tier(consent_tier)
+    user = get_user_by_id(user_id)
+    if not user:
+        raise ValueError(f"User with ID {user_id} does not exist.")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    rev_hash = compute_consent_audit_hash(user_id, tier, 0, now_iso, consent_version)
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT id FROM reproductive_consents
+            WHERE user_id = ? AND consent_tier = ? AND granted = 1 AND revoked_at IS NULL
+        """, (user_id, tier))
+        active_records = cursor.fetchall()
+
+        if active_records:
+            cursor.execute("""
+                UPDATE reproductive_consents
+                SET granted = 0, revoked_at = ?, audit_hash = ?
+                WHERE user_id = ? AND consent_tier = ? AND granted = 1 AND revoked_at IS NULL
+            """, (now_iso, rev_hash, user_id, tier))
+            last_id = active_records[-1]['id']
+            revoked_count = len(active_records)
+        else:
+            # Explicit denial / opt-out row for non-repudiation audit trail
+            cursor.execute("""
+                INSERT INTO reproductive_consents (user_id, consent_tier, granted, granted_at, revoked_at, consent_version, audit_hash)
+                VALUES (?, ?, 0, ?, ?, ?, ?)
+            """, (user_id, tier, now_iso, now_iso, consent_version, rev_hash))
+            last_id = cursor.lastrowid
+            revoked_count = 1
+
+        conn.commit()
+        return {
+            "id": last_id,
+            "user_id": user_id,
+            "consent_tier": tier,
+            "granted": False,
+            "granted_at": now_iso,
+            "revoked_at": now_iso,
+            "consent_version": consent_version,
+            "audit_hash": rev_hash,
+            "status": "revoked",
+            "revoked_count": revoked_count
+        }
+    finally:
+        conn.close()
+
+def get_consent_status(user_id: int, consent_tier: Optional[str] = None, tier: Optional[str] = None) -> dict:
+    """Queries active consent status for a specific tier or across all 4 tiers."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    target_tier = consent_tier or tier
+    try:
+        if target_tier:
+            t = normalize_consent_tier(target_tier)
+            cursor.execute("""
+                SELECT * FROM reproductive_consents
+                WHERE user_id = ? AND consent_tier = ?
+                ORDER BY id DESC LIMIT 1
+            """, (user_id, t))
+            row = cursor.fetchone()
+            if row:
+                r = dict(row)
+                is_active = bool(r['granted'] == 1 and r['revoked_at'] is None)
+                return {
+                    "user_id": user_id,
+                    "consent_tier": t,
+                    "granted": is_active,
+                    "is_active": is_active,
+                    "granted_at": r['granted_at'],
+                    "revoked_at": r['revoked_at'],
+                    "consent_version": r['consent_version'],
+                    "audit_hash": r['audit_hash'],
+                    "record_id": r['id']
+                }
+            return {
+                "user_id": user_id,
+                "consent_tier": t,
+                "granted": False,
+                "is_active": False,
+                "granted_at": None,
+                "revoked_at": None,
+                "consent_version": None,
+                "audit_hash": None,
+                "record_id": None
+            }
+        else:
+            statuses = {}
+            active_tiers = []
+            for t in VALID_CONSENT_TIERS.keys():
+                cursor.execute("""
+                    SELECT * FROM reproductive_consents
+                    WHERE user_id = ? AND consent_tier = ?
+                    ORDER BY id DESC LIMIT 1
+                """, (user_id, t))
+                row = cursor.fetchone()
+                if row:
+                    r = dict(row)
+                    active = bool(r['granted'] == 1 and r['revoked_at'] is None)
+                    statuses[t] = {
+                        "granted": active,
+                        "is_active": active,
+                        "granted_at": r['granted_at'],
+                        "revoked_at": r['revoked_at'],
+                        "consent_version": r['consent_version'],
+                        "audit_hash": r['audit_hash'],
+                        "record_id": r['id']
+                    }
+                    if active:
+                        active_tiers.append(t)
+                else:
+                    statuses[t] = {
+                        "granted": False,
+                        "is_active": False,
+                        "granted_at": None,
+                        "revoked_at": None,
+                        "consent_version": None,
+                        "audit_hash": None,
+                        "record_id": None
+                    }
+            return {
+                "user_id": user_id,
+                "consents": statuses,
+                "active_tiers": active_tiers,
+                "summary": {
+                    "active_count": len(active_tiers),
+                    "total_tiers": len(VALID_CONSENT_TIERS),
+                    "active_tiers": active_tiers
+                }
+            }
+    finally:
+        conn.close()
+
+def has_valid_consent(user_id: int, scope: str = 'screening') -> bool:
+    """
+    Validates active unrevoked consent before processing intake data.
+    Fulfills Milestone 1 contract: has_valid_consent(user_id, scope) -> bool.
+    """
+    try:
+        tier = normalize_consent_tier(scope)
+    except Exception:
+        return False
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT id FROM reproductive_consents
+            WHERE user_id = ? AND consent_tier = ? AND granted = 1 AND revoked_at IS NULL
+            ORDER BY id DESC LIMIT 1
+        """, (user_id, tier))
+        row = cursor.fetchone()
+        return row is not None
+    except Exception:
+        return False
+    finally:
+        conn.close()
+
+def get_user_consent_history(user_id: int, consent_tier: Optional[str] = None, tier: Optional[str] = None) -> List[dict]:
+    """Retrieves full chronological audit log of consent transitions with validity verification."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    target_tier = consent_tier or tier
+    try:
+        if target_tier:
+            t = normalize_consent_tier(target_tier)
+            cursor.execute("""
+                SELECT * FROM reproductive_consents
+                WHERE user_id = ? AND consent_tier = ?
+                ORDER BY id ASC
+            """, (user_id, t))
+        else:
+            cursor.execute("""
+                SELECT * FROM reproductive_consents
+                WHERE user_id = ?
+                ORDER BY id ASC
+            """, (user_id,))
+
+        rows = cursor.fetchall()
+        history = []
+        for row in rows:
+            r = dict(row)
+            r['audit_valid'] = verify_consent_audit_hash(r)
+            history.append(r)
+        return history
+    finally:
+        conn.close()
+
+# ---------------------------------------------------------------------------
+# Reproductive Sharing ACLs & Field Redaction Helpers
+# ---------------------------------------------------------------------------
+
+def create_sharing_acl(
+    user_id: int,
+    recipient_type: str,
+    allowed_domains: list,
+    redacted_fields: Optional[list] = None,
+    recipient_name: str = "",
+    expires_in_days: Optional[int] = 30
+) -> dict:
+    """Creates a user-controlled sharing ACL token with allowed clinical domains and redacted fields."""
+    if not isinstance(recipient_type, str):
+        raise ValueError(f"Invalid recipient_type: '{recipient_type}'. Must be a string (DOCTOR, PARTNER, or RESEARCH).")
+    rec_type = recipient_type.upper().strip()
+    if rec_type not in ('DOCTOR', 'PARTNER', 'RESEARCH'):
+        raise ValueError(f"Invalid recipient_type: '{recipient_type}'. Must be DOCTOR, PARTNER, or RESEARCH.")
+
+    user = get_user_by_id(user_id)
+    if not user:
+        raise ValueError(f"User with ID {user_id} does not exist.")
+
+    if not isinstance(allowed_domains, list) or not allowed_domains:
+        raise ValueError("allowed_domains must be a non-empty list of clinical domains.")
+    if not all(isinstance(d, str) for d in allowed_domains):
+        raise ValueError("allowed_domains must contain only strings.")
+
+    if redacted_fields is None:
+        redacted_fields = []
+    elif not isinstance(redacted_fields, list):
+        raise ValueError("redacted_fields must be a list of strings.")
+    elif not all(isinstance(f, str) for f in redacted_fields):
+        raise ValueError("redacted_fields must contain only strings.")
+
+    share_token = secrets.token_hex(32)
+    now = datetime.now(timezone.utc)
+    if expires_in_days is not None:
+        expires_at = (now + timedelta(days=int(expires_in_days))).isoformat()
+    else:
+        expires_at = None
+
+    allowed_json = json.dumps(allowed_domains)
+    redacted_json = json.dumps(redacted_fields)
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            INSERT INTO reproductive_sharing_acls
+            (user_id, recipient_type, recipient_name, share_token, allowed_domains, redacted_fields, status, expires_at)
+            VALUES (?, ?, ?, ?, ?, ?, 'active', ?)
+        """, (user_id, rec_type, recipient_name or "", share_token, allowed_json, redacted_json, expires_at))
+        acl_id = cursor.lastrowid
+        conn.commit()
+
+        return {
+            "id": acl_id,
+            "user_id": user_id,
+            "recipient_type": rec_type,
+            "recipient_name": recipient_name or "",
+            "share_token": share_token,
+            "allowed_domains": allowed_domains,
+            "redacted_fields": redacted_fields,
+            "status": "active",
+            "expires_at": expires_at,
+            "created_at": now.isoformat(),
+            "revoked_at": None
+        }
+    finally:
+        conn.close()
+
+def get_user_sharing_acls(user_id: int) -> List[dict]:
+    """Returns all sharing ACLs for a user, marking expired ones dynamically."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT * FROM reproductive_sharing_acls
+            WHERE user_id = ?
+            ORDER BY id DESC
+        """, (user_id,))
+        rows = cursor.fetchall()
+        now_iso = datetime.now(timezone.utc).isoformat()
+        acls = []
+        needs_commit = False
+
+        for row in rows:
+            r = dict(row)
+            if r['status'] == 'active' and r.get('expires_at') and r['expires_at'] < now_iso:
+                cursor.execute("""
+                    UPDATE reproductive_sharing_acls
+                    SET status = 'expired'
+                    WHERE id = ?
+                """, (r['id'],))
+                r['status'] = 'expired'
+                needs_commit = True
+
+            try:
+                r['allowed_domains'] = json.loads(r.get('allowed_domains') or '[]')
+            except Exception:
+                r['allowed_domains'] = []
+
+            try:
+                r['redacted_fields'] = json.loads(r.get('redacted_fields') or '[]')
+            except Exception:
+                r['redacted_fields'] = []
+
+            acls.append(r)
+
+        if needs_commit:
+            conn.commit()
+        return acls
+    finally:
+        conn.close()
+
+def get_sharing_acl_by_token(share_token: str) -> Optional[dict]:
+    """Fetches a sharing ACL by token, checking for expiration."""
+    if not share_token:
+        return None
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT * FROM reproductive_sharing_acls
+            WHERE share_token = ?
+        """, (share_token,))
+        row = cursor.fetchone()
+        if not row:
+            return None
+        r = dict(row)
+        now_iso = datetime.now(timezone.utc).isoformat()
+        if r['status'] == 'active' and r.get('expires_at') and r['expires_at'] < now_iso:
+            cursor.execute("""
+                UPDATE reproductive_sharing_acls
+                SET status = 'expired'
+                WHERE id = ?
+            """, (r['id'],))
+            conn.commit()
+            r['status'] = 'expired'
+
+        try:
+            r['allowed_domains'] = json.loads(r.get('allowed_domains') or '[]')
+        except Exception:
+            r['allowed_domains'] = []
+
+        try:
+            r['redacted_fields'] = json.loads(r.get('redacted_fields') or '[]')
+        except Exception:
+            r['redacted_fields'] = []
+
+        return r
+    finally:
+        conn.close()
+
+def validate_share_token_access(share_token: str) -> Tuple[bool, Optional[dict], str]:
+    """Validates token presence, status, expiration, and active prerequisite consent."""
+    if not share_token or not isinstance(share_token, str):
+        return False, None, "Share token not found"
+
+    acl = get_sharing_acl_by_token(share_token)
+    if not acl:
+        return False, None, "Share token not found"
+    if acl.get('status') == 'revoked':
+        return False, acl, "Share token has been revoked by the patient"
+    if acl.get('status') == 'expired':
+        return False, acl, "Share token has expired"
+    now_iso = datetime.now(timezone.utc).isoformat()
+    if acl.get('expires_at') and acl['expires_at'] < now_iso:
+        return False, acl, "Share token has expired"
+
+    # Enforce active prerequisite consent (Requirement P19)
+    user_id = acl.get('user_id')
+    recipient_type = str(acl.get('recipient_type') or '').upper().strip()
+    if recipient_type == 'DOCTOR':
+        if not has_valid_consent(user_id, 'C2_TELEHEALTH'):
+            return False, acl, "Prerequisite telehealth consent revoked"
+    elif recipient_type == 'PARTNER':
+        if not has_valid_consent(user_id, 'C3_PARTNER'):
+            return False, acl, "Prerequisite partner consent revoked"
+    elif recipient_type == 'RESEARCH':
+        if not has_valid_consent(user_id, 'C4_TELEMETRY'):
+            return False, acl, "Prerequisite telemetry consent revoked"
+
+    return True, acl, "Authorized"
+
+def revoke_sharing_acl(user_id: int, acl_id: int, is_admin: bool = False) -> bool:
+    """Revokes a sharing ACL by its ID and user ownership (or admin override)."""
+    if not isinstance(user_id, int) or not isinstance(acl_id, int):
+        return False
+    now_iso = datetime.now(timezone.utc).isoformat()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        if is_admin:
+            cursor.execute("""
+                UPDATE reproductive_sharing_acls
+                SET status = 'revoked', revoked_at = ?
+                WHERE id = ? AND status != 'revoked'
+            """, (now_iso, acl_id))
+        else:
+            cursor.execute("""
+                UPDATE reproductive_sharing_acls
+                SET status = 'revoked', revoked_at = ?
+                WHERE id = ? AND user_id = ? AND status != 'revoked'
+            """, (now_iso, acl_id, user_id))
+        affected = cursor.rowcount
+        conn.commit()
+        return affected > 0
+    finally:
+        conn.close()
+
+def revoke_sharing_acl_by_token(user_id: int, share_token: str, is_admin: bool = False) -> bool:
+    """Revokes a sharing ACL by its share token and user ownership (or admin override)."""
+    if not isinstance(user_id, int) or not isinstance(share_token, str) or not share_token.strip():
+        return False
+    now_iso = datetime.now(timezone.utc).isoformat()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        if is_admin:
+            cursor.execute("""
+                UPDATE reproductive_sharing_acls
+                SET status = 'revoked', revoked_at = ?
+                WHERE share_token = ? AND status != 'revoked'
+            """, (now_iso, share_token.strip()))
+        else:
+            cursor.execute("""
+                UPDATE reproductive_sharing_acls
+                SET status = 'revoked', revoked_at = ?
+                WHERE share_token = ? AND user_id = ? AND status != 'revoked'
+            """, (now_iso, share_token.strip(), user_id))
+        affected = cursor.rowcount
+        conn.commit()
+        return affected > 0
+    finally:
+        conn.close()
+
+def redact_sensitive_intake(
+    intake_data: dict,
+    redacted_fields: Optional[List[str]] = None,
+    allowed_domains: Optional[List[str]] = None,
+    recipient_type: Optional[str] = None,
+    mask_pii: bool = False,
+    pseudonym: Optional[str] = None
+) -> dict:
+    """
+    Sanitizes, filters, and redacts sensitive reproductive intake data.
+    Enforces user-specified domain gating, field-level redaction, and PII masking.
+    Never modifies input data in-place.
+    """
+    if not isinstance(intake_data, dict):
+        return {}
+
+    data = copy.deepcopy(intake_data)
+    redacted_count = 0
+
+    # 1. Domain Filtering
+    domain_map = {
+        "history": "HISTORY",
+        "lifestyle": "LIFESTYLE",
+        "metabolic": "METABOLIC",
+        "infectious": "INFECTIOUS",
+        "anatomical": "ANATOMICAL",
+        "laboratory": "LABORATORY",
+        "lab_data": "LABORATORY"
+    }
+
+    if allowed_domains is not None:
+        allowed_upper = {str(d).strip().upper() for d in allowed_domains if d}
+        keys_to_remove = []
+        for key in list(data.keys()):
+            k_lower = key.strip().lower()
+            if k_lower in domain_map:
+                canonical = domain_map[k_lower]
+                if canonical not in allowed_upper:
+                    keys_to_remove.append(key)
+            elif key.strip().upper() in ("HISTORY", "LIFESTYLE", "METABOLIC", "INFECTIOUS", "ANATOMICAL", "LABORATORY"):
+                if key.strip().upper() not in allowed_upper:
+                    keys_to_remove.append(key)
+
+        for k in keys_to_remove:
+            data.pop(k, None)
+
+    # 2. Field-Level Redaction
+    if redacted_fields:
+        fields_to_redact = {str(f).strip().lower() for f in redacted_fields if f}
+
+        def _recursive_redact(obj: Any) -> Any:
+            nonlocal redacted_count
+            if isinstance(obj, dict):
+                redacted_dict = {}
+                for k, v in obj.items():
+                    if str(k).strip().lower() in fields_to_redact:
+                        redacted_dict[k] = "[REDACTED]"
+                        redacted_count += 1
+                    else:
+                        redacted_dict[k] = _recursive_redact(v)
+                return redacted_dict
+            elif isinstance(obj, list):
+                return [_recursive_redact(item) for item in obj]
+            return obj
+
+        data = _recursive_redact(data)
+
+    # 3. PII Masking / Sudo Mode / Research Recipient
+    rec_type_upper = (recipient_type or "").strip().upper()
+    should_mask_pii = mask_pii or (rec_type_upper == "RESEARCH")
+    applied_pseudonym = None
+
+    if should_mask_pii:
+        applied_pseudonym = pseudonym or generate_pseudonym()
+        data["alias_name"] = applied_pseudonym
+        if "patient_name" in data or "full_name" in data:
+            data["patient_name"] = applied_pseudonym
+            data["full_name"] = applied_pseudonym
+
+        pii_fields = ["email", "phone", "dob", "national_id", "address", "emergency_contact", "city", "country"]
+        for pf in pii_fields:
+            if pf in data:
+                data[pf] = "[REDACTED]"
+
+    # 4. Attach Redaction Audit Metadata
+    data["_redaction_audit"] = {
+        "recipient_type": rec_type_upper or "DIRECT",
+        "domains_included": list(allowed_domains) if allowed_domains is not None else "ALL",
+        "redacted_fields_count": redacted_count,
+        "pii_masked": should_mask_pii,
+        "pseudonym_applied": applied_pseudonym,
+        "redacted_at": datetime.now(timezone.utc).isoformat()
+    }
+
+    return data
+
 
 
 

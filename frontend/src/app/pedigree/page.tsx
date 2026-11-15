@@ -9,6 +9,8 @@ import { PedigreeCanvas } from '@/components/pedigree/PedigreeCanvas';
 import { FamilyWizardModal } from '@/components/pedigree/FamilyWizardModal';
 import { ExportToolbar } from '@/components/pedigree/ExportToolbar';
 import { PedigreeMember, FamilyRecord } from '@/components/pedigree/types';
+import { useUIStore } from '@/stores/useUIStore';
+import { t } from '@/lib/translations';
 import {
   Plus,
   Users,
@@ -34,6 +36,7 @@ import {
 } from 'lucide-react';
 
 export default function PedigreePage() {
+  const { activeLocale } = useUIStore();
   const [families, setFamilies] = useState<FamilyRecord[]>([]);
   const [activeFamily, setActiveFamily] = useState<FamilyRecord | null>(null);
   const [selectedMember, setSelectedMember] = useState<PedigreeMember | null>(null);
@@ -589,12 +592,12 @@ export default function PedigreePage() {
                     <span
                       className="text-xs font-bold text-pine uppercase tracking-wider"
                     >
-                      Family Health Guidance
+                      {t('pedigree_studio_title', activeLocale)}
                     </span>
                   </div>
 
                   <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                    Your visual family health tree. Automatically organizes generations, highlights shared health traits, and shows hereditary risks in simple diagrams.
+                    {t('pedigree_studio_subtitle', activeLocale)}
                   </p>
                 </div>
               </div>
@@ -618,10 +621,10 @@ export default function PedigreePage() {
                 <button
                   type="button"
                   onClick={handleOpenCreateTreeFlow}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-pine hover:bg-pine-light rounded-xl shadow-xs transition"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-pine hover:bg-pine-light rounded-xl shadow-xs transition cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Create Family Pedigree</span>
+                  <span>{t('btn_create_pedigree', activeLocale)}</span>
                 </button>
               </div>
             </div>
@@ -632,29 +635,29 @@ export default function PedigreePage() {
             <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 p-3.5 rounded-2xl bg-white border border-slate-200/80 shadow-xs">
               {/* Search locus, phenotype, OMIM ID */}
               <div className="relative flex-1 max-w-sm">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Search className="w-4 h-4 absolute left-3 rtl:left-auto rtl:right-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Search trait, condition, or family relative..."
+                  placeholder={t('search_placeholder', activeLocale)}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-700 focus:bg-white"
+                  className="w-full pl-9 pr-3 rtl:pl-3 rtl:pr-9 text-start py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-700 focus:bg-white"
                 />
               </div>
 
               {/* Generational Tier Filter Pills */}
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0">
                 {[
-                  { id: 'all', label: 'All Generations' },
-                  { id: 'gen1', label: 'Gen I (Grandparents)' },
-                  { id: 'gen2', label: 'Gen II (Parents & You)' },
-                  { id: 'gen3', label: 'Gen III (Children)' }
+                  { id: 'all', label: t('pedigree_filter_all', activeLocale) },
+                  { id: 'gen1', label: t('pedigree_filter_gen1', activeLocale) },
+                  { id: 'gen2', label: t('pedigree_filter_gen2', activeLocale) },
+                  { id: 'gen3', label: t('pedigree_filter_gen3', activeLocale) }
                 ].map((tier) => (
                   <button
                     type="button"
                     key={tier.id}
                     onClick={() => setTierFilter(tier.id as any)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
                       tierFilter === tier.id
                         ? 'bg-pine text-white shadow-xs'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -684,10 +687,10 @@ export default function PedigreePage() {
                     setWizardStep(2);
                     setIsWizardOpen(true);
                   }}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl shadow-xs transition"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl shadow-xs transition cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>+ Add Family Member</span>
+                  <span>{t('pedigree_btn_add_member', activeLocale)}</span>
                 </button>
               </div>
             </div>
@@ -970,11 +973,128 @@ export default function PedigreePage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="h-64 flex flex-col items-center justify-center text-center p-6 text-slate-400 space-y-2">
-                    <Info className="w-7 h-7 opacity-50" />
-                    <p className="text-xs">
-                      Click on any family member in the chart to see their health details, carrier traits, or add relatives.
-                    </p>
+                  <div className="h-full min-h-[580px] flex flex-col justify-between space-y-4 text-xs">
+                    {/* Header */}
+                    <div className="space-y-3">
+                      <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                            {t('pedigree_dossier_active_chart', activeLocale)}
+                          </span>
+                          <span className="font-mono text-[10px] font-bold text-pine bg-mint/30 px-2 py-0.5 rounded-md border border-mint">
+                            {activeFamily ? activeFamily.family_id : 'NO TREE'}
+                          </span>
+                        </div>
+                        <h4 className="font-bold text-slate-800 text-sm">
+                          {activeFamily ? activeFamily.family_name : t('pedigree_empty_selection_title', activeLocale)}
+                        </h4>
+                        <p className="text-[11px] text-slate-500 leading-relaxed">
+                          {t('pedigree_empty_selection_desc', activeLocale)}
+                        </p>
+                      </div>
+
+                      {/* 4 Quick Stat Pills */}
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col">
+                          <span className="text-[10px] font-bold uppercase text-slate-400">
+                            {t('pedigree_dossier_total_members', activeLocale)}
+                          </span>
+                          <span className="text-lg font-extrabold text-pine mt-0.5">
+                            {members.length}
+                          </span>
+                        </div>
+                        <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col">
+                          <span className="text-[10px] font-bold uppercase text-slate-400">
+                            {t('pedigree_dossier_generations', activeLocale)}
+                          </span>
+                          <span className="text-lg font-extrabold text-pine mt-0.5">
+                            {new Set(members.map((m) => m.generation).filter(Boolean)).size || (members.length > 0 ? 3 : 0)}
+                          </span>
+                        </div>
+                        <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col">
+                          <span className="text-[10px] font-bold uppercase text-slate-400">
+                            {t('pedigree_dossier_carriers_count', activeLocale)}
+                          </span>
+                          <span className="text-lg font-extrabold text-amber-700 mt-0.5">
+                            {members.filter((m) => m.is_carrier || (m.carrier_details && m.carrier_details.toLowerCase().includes('carrier'))).length}
+                          </span>
+                        </div>
+                        <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col">
+                          <span className="text-[10px] font-bold uppercase text-slate-400">
+                            {t('pedigree_dossier_consanguinity_status', activeLocale)}
+                          </span>
+                          <span className="text-xs font-bold text-pine mt-1 truncate">
+                            {activeFamily?.is_consanguineous ? 'F = 0.0625' : 'None Reported'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Proband shortcut if available */}
+                      {(() => {
+                        const proband = members.find((m) => m.is_proband || m.relationship_to_proband === 'self');
+                        if (proband) {
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedMember(proband)}
+                              className="w-full p-2.5 rounded-xl bg-mint/20 hover:bg-mint/30 border border-mint/60 text-pine flex items-center justify-between text-start transition cursor-pointer shadow-2xs"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="w-6 h-6 rounded-lg bg-pine text-white flex items-center justify-center font-bold text-xs">
+                                  {proband.sex === 'male' ? 'M' : proband.sex === 'female' ? 'F' : 'U'}
+                                </span>
+                                <div>
+                                  <span className="text-xs font-bold block">{proband.full_name || proband.pseudonym}</span>
+                                  <span className="text-[10px] text-slate-500">{t('pedigree_dossier_proband_shortcut', activeLocale)}</span>
+                                </div>
+                              </div>
+                              <ArrowRight className="w-3.5 h-3.5 text-pine rtl:rotate-180" />
+                            </button>
+                          );
+                        }
+                        return null;
+                      })()}
+
+                      {/* Quick Actions Shortcuts */}
+                      <div className="space-y-1.5 pt-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          {t('pedigree_dossier_quick_actions', activeLocale)}
+                        </span>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingMember(null);
+                              setInitialRelation(null);
+                              setWizardStep(2);
+                              setIsWizardOpen(true);
+                            }}
+                            className="py-2 px-3 bg-mint/25 hover:bg-mint/40 text-pine border border-mint rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1 cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>{t('pedigree_btn_add_member', activeLocale)}</span>
+                          </button>
+                          <Link
+                            href="/dashboard?upload=true"
+                            className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold transition flex items-center justify-center gap-1"
+                          >
+                            <Upload className="w-3.5 h-3.5" />
+                            <span>{t('btn_upload_screening_report', activeLocale)}</span>
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Hereditary Guidance Box */}
+                    <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200 text-amber-900 space-y-1">
+                      <div className="flex items-center gap-1.5 font-bold text-[11px]">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-700" />
+                        <span>{t('pedigree_guidance_box_title', activeLocale)}</span>
+                      </div>
+                      <p className="text-[11px] leading-relaxed text-amber-800">
+                        {t('pedigree_guidance_box_text', activeLocale)}
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>
