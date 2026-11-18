@@ -41,7 +41,9 @@ from database import (
     get_patient_profile, upsert_patient_profile, save_quick_assessment, get_quick_assessment,
     create_couple_assessment, get_couple_assessments, get_couple_assessment_by_id, delete_couple_assessment,
     save_document, get_documents, delete_document, get_genetic_conditions, get_genetic_condition_by_slug,
-    get_providers, get_provider_by_id, create_appointment, get_appointments_for_patient, cancel_appointment
+    get_providers, get_provider_by_id, create_appointment, get_appointments_for_patient, cancel_appointment,
+    save_consent_permission, get_consent_permissions, revoke_consent_permission,
+    save_comprehension_feedback, get_patient_impact_metrics
 )
 from clinical_engine import compute_clinical_state
 from gcp_services import gcp_storage, vertex_ai
@@ -867,7 +869,7 @@ def api_ai_ask():
         if p_id:
             spouse = next((p for p in nodes if str(p.get('id')) == p_id), None)
         if not spouse:
-            spouse = next((n for n in nodes if str(n.get('relationship', '')).lower() in ['spouse', 'partner', 'husband', 'wife', 'fiance', 'fiancee'] and str(n.get('id')) != str(proband.get('id'))), None)
+            spouse = next((n for n in nodes if str(n.get('relationship', '')).lower() in ['spouse', 'partner', 'husband', 'wife', 'husband_wife', 'fiance', 'fiancee'] and str(n.get('id')) != str(proband.get('id'))), None)
         if spouse:
             if proband.get('sex') == 'male' and spouse.get('sex') == 'female':
                 male_node, female_node = proband, spouse
@@ -1267,7 +1269,7 @@ def api_ai_analyze_assessment():
         if p_id:
             spouse = next((p for p in nodes if str(p.get('id')) == p_id), None)
         if not spouse:
-            spouse = next((n for n in nodes if str(n.get('relationship', '')).lower() in ['spouse', 'partner', 'husband', 'wife', 'fiance', 'fiancee'] and str(n.get('id')) != str(proband.get('id'))), None)
+            spouse = next((n for n in nodes if str(n.get('relationship', '')).lower() in ['spouse', 'partner', 'husband', 'wife', 'husband_wife', 'fiance', 'fiancee'] and str(n.get('id')) != str(proband.get('id'))), None)
         if spouse:
             if proband.get('sex') == 'male' and spouse.get('sex') == 'female':
                 male_node, female_node = proband, spouse
@@ -1587,6 +1589,7 @@ def api_patient_dashboard_state():
     docs = get_documents(user_id)
     conditions = get_genetic_conditions()
     providers = get_providers()
+    consents = get_consent_permissions(user_id)
 
     # Parse JSON fields safely for frontend consumption
     qa_parsed = None
@@ -1637,7 +1640,8 @@ def api_patient_dashboard_state():
             "appointments": appts,
             "documents": docs,
             "conditions": conditions,
-            "providers": providers
+            "providers": providers,
+            "consent_permissions": consents
         }
     })
 
@@ -1844,6 +1848,77 @@ def api_cancel_appointment(appointment_id):
     if not ok:
         return jsonify({"status": "error", "message": "Appointment not found or already cancelled"}), 404
     return jsonify({"status": "success", "message": "Appointment cancelled successfully"})
+
+
+@app.route('/api/patient/consent', methods=['GET', 'POST'])
+@login_required
+def api_patient_consent():
+    """Get or save granular patient consent permissions."""
+    user_id = session['user_id']
+    if request.method == 'GET':
+        perms = get_consent_permissions(user_id)
+        return jsonify({"status": "success", "consent_permissions": perms})
+
+    data = request.get_json(silent=True) or {}
+    target_type = data.get('target_type')  # 'partner' or 'counselor'
+    target_id = data.get('target_id')
+    scope = data.get('scope', 'combined_summary_only')  # 'combined_summary_only' or 'full_report'
+    status = data.get('status', 'active')  # 'active' or 'revoked'
+
+    if not target_type or target_type not in ('partner', 'counselor'):
+        return jsonify({"status": "error", "message": "target_type must be 'partner' or 'counselor'"}), 400
+
+    perm_id = save_consent_permission(
+        user_id=user_id,
+        target_type=target_type,
+        target_id=int(target_id) if target_id else None,
+        scope=scope,
+        status=status
+    )
+    return jsonify({
+        "status": "success",
+        "message": "Consent preference saved securely.",
+        "permission_id": perm_id
+    }), 201
+
+
+@app.route('/api/patient/consent/<int:perm_id>/revoke', methods=['POST'])
+@login_required
+def api_revoke_patient_consent(perm_id):
+    """1-tap revocation of a consent permission."""
+    user_id = session['user_id']
+    ok = revoke_consent_permission(user_id, perm_id)
+    if not ok:
+        return jsonify({"status": "error", "message": "Consent permission not found or already revoked."}), 404
+    return jsonify({"status": "success", "message": "Access permission revoked immediately."})
+
+
+@app.route('/api/patient/comprehension', methods=['POST'])
+@login_required
+def api_patient_comprehension():
+    """Save 1-tap patient comprehension feedback ('clear', 'somewhat', 'needs_counselor')."""
+    user_id = session['user_id']
+    data = request.get_json(silent=True) or {}
+    rating = data.get('rating')
+    assessment_type = data.get('assessment_type', 'self')
+
+    if not rating or rating not in ('clear', 'somewhat', 'needs_counselor'):
+        return jsonify({"status": "error", "message": "Rating must be 'clear', 'somewhat', or 'needs_counselor'"}), 400
+
+    fb_id = save_comprehension_feedback(user_id=user_id, rating=rating, assessment_type=assessment_type)
+    return jsonify({
+        "status": "success",
+        "message": "Thank you for your feedback! Your response helps us ensure clear explanations.",
+        "feedback_id": fb_id
+    }), 201
+
+
+@app.route('/api/patient/impact-metrics', methods=['GET'])
+def api_patient_impact_metrics():
+    """Aggregated non-coercive impact metrics for clinical/admin oversight."""
+    metrics = get_patient_impact_metrics()
+    return jsonify({"status": "success", "metrics": metrics})
+
 
 # ==================== GENETIC & PREMARITAL REPORT SCRAPING & PII MASKING ====================
 

@@ -567,10 +567,10 @@ export default function CoupleAssessmentPage() {
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="px-2.5 py-0.5 rounded-full bg-mint/25 text-pine text-[11px] font-bold tracking-wider uppercase border border-mint">
-                  Pre-Conception Genomic Node
+                  Couple Health Compatibility
                 </span>
                 <span className="text-slate-400 text-xs">&bull;</span>
-                <span className="text-slate-500 text-xs font-mono">CRYPT-ID: #CP-8492</span>
+                <span className="text-slate-600 text-xs font-medium">100% Confidential &bull; UAE Healthcare Standards</span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-extrabold text-pine tracking-tight">
                 {t('couple_assessment_title', activeLocale)} &mdash; {partnerAName} &amp; {partnerBName}
@@ -744,6 +744,49 @@ export default function CoupleAssessmentPage() {
                           </div>
                         )}
                       </div>
+
+                      {/* Auto-Escalation to Accredited Human Counseling Banner */}
+                      {Boolean(
+                        (active.answers?.known_traits && !['None / Unknown', 'None reported', 'None', ''].includes(active.answers.known_traits)) ||
+                        active.plain_summary?.toLowerCase().includes('carrier') ||
+                        active.plain_summary?.toLowerCase().includes('elevated') ||
+                        active.plain_summary?.toLowerCase().includes('thalassemia') ||
+                        active.plain_summary?.toLowerCase().includes('sickle') ||
+                        active.plain_summary?.toLowerCase().includes('sma') ||
+                        active.relationship_type?.includes('First Cousin')
+                      ) && (
+                        <div className="mt-3 p-3.5 rounded-xl bg-gradient-to-r from-amber-50 via-emerald-50/60 to-teal-50 border border-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="flex items-start gap-2.5">
+                            <div className="w-8 h-8 rounded-lg bg-amber-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
+                              <Stethoscope className="w-4 h-4" />
+                            </div>
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-bold text-xs text-amber-950">
+                                  Recommended: Speak with an Accredited Counselor
+                                </span>
+                                <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                                  Supportive Guidance
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-700 leading-snug">
+                                Guidance from an expert ensures peace of mind and explores modern family pathways (such as PGT-M with IVF, non-invasive screening, or targeted pediatric care).
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedProfileId(active.id);
+                              setIsBookingModalOpen(true);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-pine hover:bg-pine-light text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer shrink-0 self-start sm:self-auto"
+                          >
+                            <Calendar className="w-3.5 h-3.5 text-mint" />
+                            <span>Book Consultation for this Match</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })()}

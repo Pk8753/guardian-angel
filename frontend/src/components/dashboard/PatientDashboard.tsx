@@ -84,6 +84,32 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
   const [uploadSuccessMsg, setUploadSuccessMsg] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
+  // Comprehension Feedback State
+  const [comprehensionSubmitted, setComprehensionSubmitted] = useState<string | null>(null);
+  const [isSubmittingComprehension, setIsSubmittingComprehension] = useState<boolean>(false);
+
+  const handleComprehensionFeedback = async (rating: 'clear' | 'somewhat' | 'questions') => {
+    setIsSubmittingComprehension(true);
+    try {
+      const res = await fetch('/api/patient/comprehension', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rating,
+          topic: 'patient_dashboard_overview',
+          notes: rating === 'questions' ? 'User requested counselor assistance' : null
+        })
+      });
+      if (res.ok) {
+        setComprehensionSubmitted(rating);
+      }
+    } catch (e) {
+      console.error('Failed to submit comprehension feedback', e);
+    } finally {
+      setIsSubmittingComprehension(false);
+    }
+  };
+
   // Genomic Literacy Accordion / Tab State
   const [activeLiteracyTab, setActiveLiteracyTab] = useState<'carrier' | 'consanguinity' | 'choices' | 'myths'>('carrier');
 
@@ -285,7 +311,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                   Personal Health Vault
                 </span>
-                <span className="text-teal-300 text-xs font-semibold">&bull; Private &amp; Zero-Knowledge</span>
+                <span className="text-teal-300 text-xs font-semibold">&bull; 100% Private &amp; Confidential</span>
               </div>
               <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight">
                 Welcome back, {firstName} 👋
@@ -319,6 +345,109 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
           </div>
         </div>
       )}
+
+      {/* ==================== 1B. RISK VS. DIAGNOSIS CLARITY BANNER ==================== */}
+      <div className="rounded-2xl sm:rounded-3xl bg-gradient-to-r from-teal-50/90 via-emerald-50/60 to-blue-50/70 border border-teal-200/90 p-4 sm:p-5 shadow-2xs">
+        <div className="flex items-start gap-3.5">
+          <div className="w-9 h-9 rounded-xl bg-teal-800 text-white flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
+            <ShieldCheck className="w-5 h-5 text-emerald-300" />
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-xs sm:text-sm font-bold text-teal-950">
+                Understanding Your Results: Risk vs. Diagnosis
+              </h2>
+              <span className="px-2 py-0.5 rounded-full bg-teal-800/10 text-teal-900 text-[10px] font-bold border border-teal-300/50">
+                Essential Distinction
+              </span>
+            </div>
+            <p className="text-xs font-semibold text-teal-900 leading-snug">
+              &ldquo;Being a carrier does not mean you are sick, and an estimate is not a diagnosis.&rdquo;
+            </p>
+            <p className="text-[11px] sm:text-xs text-slate-600 leading-relaxed pt-0.5">
+              This overview is based on your questionnaire responses. Only certified laboratory screening can confirm carrier status. Healthy single-gene carriers live vibrant, completely normal lives without symptoms. Knowing your carrier status empowers you with clarity to make informed family choices calmly.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* ==================== 1C. 4-STEP CARE TRACKER ==================== */}
+      <div className="bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-xs space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-2 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-teal-50 text-teal-800 flex items-center justify-center font-bold text-xs">
+              🧭
+            </div>
+            <h3 className="text-xs sm:text-sm font-bold text-slate-900">Your Family Health Journey</h3>
+          </div>
+          <span className="text-[11px] text-slate-500 font-medium">Clear milestones from initial check to full peace of mind</span>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-1">
+          {/* Step 1 */}
+          <div className={`p-3 rounded-2xl border transition ${hasQuickAssessment ? 'bg-emerald-50/70 border-emerald-300 text-emerald-950' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${hasQuickAssessment ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                {hasQuickAssessment ? '✓' : '1'}
+              </span>
+              <span className="text-[10px] font-bold uppercase tracking-wider">{hasQuickAssessment ? 'Completed' : 'Step 1'}</span>
+            </div>
+            <div className="font-bold text-xs">1. Quick Check</div>
+            <p className="text-[11px] text-slate-500 leading-snug mt-0.5">Family history &amp; kinship assessment</p>
+          </div>
+
+          {/* Step 2 */}
+          {(() => {
+            const hasAppt = appointments.filter((a: any) => a.status !== 'cancelled').length > 0;
+            return (
+              <div className={`p-3 rounded-2xl border transition ${hasAppt ? 'bg-emerald-50/70 border-emerald-300 text-emerald-950' : hasQuickAssessment ? 'bg-teal-50/70 border-teal-300 text-teal-950' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${hasAppt ? 'bg-emerald-600 text-white' : hasQuickAssessment ? 'bg-teal-700 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                    {hasAppt ? '✓' : '2'}
+                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider">{hasAppt ? 'Booked' : hasQuickAssessment ? 'Available' : 'Step 2'}</span>
+                </div>
+                <div className="font-bold text-xs">2. Counselor Session</div>
+                <p className="text-[11px] text-slate-500 leading-snug mt-0.5">Discuss questions with UAE genetic counselor</p>
+              </div>
+            );
+          })()}
+
+          {/* Step 3 */}
+          {(() => {
+            const hasDocs = documents.length > 0;
+            return (
+              <div className={`p-3 rounded-2xl border transition ${hasDocs ? 'bg-emerald-50/70 border-emerald-300 text-emerald-950' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${hasDocs ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                    {hasDocs ? '✓' : '3'}
+                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider">{hasDocs ? 'Uploaded' : 'Step 3'}</span>
+                </div>
+                <div className="font-bold text-xs">3. Confirmatory Lab Test</div>
+                <p className="text-[11px] text-slate-500 leading-snug mt-0.5">Premarital screening / CBC &amp; electrophoresis</p>
+              </div>
+            );
+          })()}
+
+          {/* Step 4 */}
+          {(() => {
+            const step4Active = (documents.length > 0 || coupleAssessments.length > 0) && profileRisk === 'hi';
+            return (
+              <div className={`p-3 rounded-2xl border transition ${step4Active ? 'bg-amber-50/70 border-amber-300 text-amber-950' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${step4Active ? 'bg-amber-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                    4
+                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider">{step4Active ? 'Guidance Ready' : 'Peace of Mind'}</span>
+                </div>
+                <div className="font-bold text-xs">4. Specialist Care (if needed)</div>
+                <p className="text-[11px] text-slate-500 leading-snug mt-0.5">PGT-M, IVF planning or pediatric follow-up</p>
+              </div>
+            );
+          })()}
+        </div>
+      </div>
 
       {/* ==================== 2. CURRENT STATE OF ANALYSIS DETAIL CARDS ==================== */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -377,18 +506,18 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         </div>
       </div>
 
-      {/* ==================== 3. FOUR PERSONALIZED ACTIONABLE NEXT STEPS ==================== */}
+      {/* ==================== 3. NEUTRAL "YOUR OPTIONS" SECTION (ZERO COERCION) ==================== */}
       <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200/80 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
           <div>
             <h2 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
               <span className="w-7 h-7 rounded-lg bg-teal-800 text-white flex items-center justify-center text-xs font-bold">
-                🎯
+                🌿
               </span>
-              <span>Your Actionable Next Steps</span>
+              <span>Your Options &mdash; Explore At Your Own Pace</span>
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Practical, reassuring recommendations tailored to your current analysis and family history.
+              There is no single right path. These non-judgmental options are available whenever you and your family are ready.
             </p>
           </div>
         </div>
@@ -487,6 +616,75 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
             </Link>
           </div>
         </div>
+      </div>
+
+      {/* ==================== 1-TAP COMPREHENSION FEEDBACK ==================== */}
+      <div className="bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-6 border border-slate-200/80 shadow-xs space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h3 className="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
+              <span>💬</span>
+              <span>Did this explanation make sense?</span>
+            </h3>
+            <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
+              Your quick feedback helps us keep genetic information simple and easy to understand for everyone.
+            </p>
+          </div>
+        </div>
+
+        {comprehensionSubmitted ? (
+          <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>
+                {comprehensionSubmitted === 'clear' && "Thank you for letting us know! We're glad this information is clear and reassuring."}
+                {comprehensionSubmitted === 'somewhat' && "Thank you! Our guides and counselors are always available if you'd like more details."}
+                {comprehensionSubmitted === 'questions' && "We understand genetics can feel complex. A friendly counselor is ready to walk you through everything."}
+              </span>
+            </div>
+            {comprehensionSubmitted === 'questions' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setBookingAssessmentType('self');
+                  setIsBookingModalOpen(true);
+                }}
+                className="px-3 py-1.5 rounded-xl bg-teal-800 hover:bg-teal-900 text-white font-bold text-xs shrink-0 cursor-pointer self-start sm:self-auto"
+              >
+                Book Counselor Call
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <button
+              type="button"
+              disabled={isSubmittingComprehension}
+              onClick={() => handleComprehensionFeedback('clear')}
+              className="px-3.5 py-2 rounded-xl bg-slate-50 hover:bg-emerald-50 hover:text-emerald-900 hover:border-emerald-300 border border-slate-200 text-xs font-bold text-slate-700 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              <span>😊 Yes, clearly</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={isSubmittingComprehension}
+              onClick={() => handleComprehensionFeedback('somewhat')}
+              className="px-3.5 py-2 rounded-xl bg-slate-50 hover:bg-amber-50 hover:text-amber-900 hover:border-amber-300 border border-slate-200 text-xs font-bold text-slate-700 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              <span>🤔 Somewhat</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={isSubmittingComprehension}
+              onClick={() => handleComprehensionFeedback('questions')}
+              className="px-3.5 py-2 rounded-xl bg-slate-50 hover:bg-blue-50 hover:text-blue-900 hover:border-blue-300 border border-slate-200 text-xs font-bold text-slate-700 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            >
+              <span>💬 I still have questions &rarr; Ask Counselor</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ==================== 4. UPCOMING APPOINTMENTS SECTION ==================== */}

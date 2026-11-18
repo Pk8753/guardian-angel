@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Navbar } from '@/components/layout/Navbar';
 import { AuthGuard } from '@/components/layout/AuthGuard';
+import { useAuthStore } from '@/stores/useAuthStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { t } from '@/lib/translations';
 import {
@@ -26,6 +28,15 @@ import {
 } from 'lucide-react';
 
 export default function PrivacySecurityPage() {
+  const router = useRouter();
+  const { user } = useAuthStore();
+
+  useEffect(() => {
+    if (user && user.role === 'patient') {
+      router.replace('/privacy-profile');
+    }
+  }, [user, router]);
+
   const { isSudoMode, toggleSudoMode, activeLocale } = useUIStore();
   const [rotated, setRotated] = useState(false);
 
