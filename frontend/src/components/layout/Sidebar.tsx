@@ -12,8 +12,9 @@ import { SettingsModal } from '@/components/settings/SettingsModal';
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { logout } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const { activeLocale, setSettingsModalOpen } = useUIStore();
+  const isProvider = user?.role === 'provider' || user?.isAdmin;
 
   const navItems = [
     {
@@ -86,13 +87,19 @@ export function Sidebar() {
             </div>
           </Link>
 
-          {/* Certified Node Badge */}
+          {/* Certified Node & Role Badge */}
           <div className="px-3">
             <div className="p-3 rounded-xl bg-surface-container-low border border-outline-variant/40 flex items-center gap-3">
-              <span className="material-symbols-outlined text-jungle text-[20px]">verified_user</span>
+              <span className="material-symbols-outlined text-jungle text-[20px]">
+                {isProvider ? 'stethoscope' : 'verified_user'}
+              </span>
               <div className="flex flex-col">
-                <span className="text-xs font-bold text-pine">{t('engine_title', activeLocale)}</span>
-                <span className="text-[11px] text-on-surface-variant">{t('engine_sub', activeLocale)}</span>
+                <span className="text-xs font-bold text-pine">
+                  {isProvider ? 'Clinical Genetics Console' : t('engine_title', activeLocale)}
+                </span>
+                <span className="text-[11px] text-on-surface-variant">
+                  {isProvider ? 'Provider Specialized View' : 'Patient Family Health Vault'}
+                </span>
               </div>
             </div>
           </div>

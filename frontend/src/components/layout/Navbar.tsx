@@ -24,6 +24,14 @@ export function Navbar() {
   const { user, logout } = useAuthStore();
   const [isDropdownOpen, setIsDropdownOpen] = React.useState(false);
 
+  const isProvider = user?.role === 'provider' || user?.isAdmin;
+
+  React.useEffect(() => {
+    if (user && user.role !== 'provider' && !user.isAdmin && viewMode !== 'patient') {
+      setViewMode('patient');
+    }
+  }, [user, viewMode, setViewMode]);
+
   const realName = user?.fullName || user?.username || 'Patient';
   const aliasName = user?.aliasName || 'Anonymous-Patient';
   const displayName = isSudoMode ? aliasName : realName;
@@ -52,37 +60,44 @@ export function Navbar() {
         </div>
       </div>
 
-      {/* DUAL-LENS PERSONA TOGGLE (Patient vs Provider View) - PINNED AT TOP ON BOTH MOBILE & DESKTOP */}
-      <div className="flex items-center gap-0.5 bg-surface-container-low p-1 rounded-full border border-outline-variant/40 shadow-2xs text-[11px] font-bold shrink-0">
-        <button
-          type="button"
-          onClick={() => setViewMode('patient')}
-          className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 rounded-full cursor-pointer transition-all ${
-            viewMode === 'patient'
-              ? 'bg-teal-700 text-white shadow-xs font-extrabold'
-              : 'text-on-surface-variant hover:text-teal-800'
-          }`}
-          title="Switch to Patient / Plain-English View"
-        >
-          <span className="text-xs">👤</span>
-          <span className="text-xs">Patient</span>
-          <span className="hidden sm:inline">View</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setViewMode('provider')}
-          className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 rounded-full cursor-pointer transition-all ${
-            viewMode === 'provider'
-              ? 'bg-slate-900 text-white shadow-xs font-extrabold'
-              : 'text-on-surface-variant hover:text-slate-900'
-          }`}
-          title="Switch to Clinical Provider / Genetics Specialist View"
-        >
-          <span className="text-xs">🩺</span>
-          <span className="text-xs">Provider</span>
-          <span className="hidden sm:inline">View</span>
-        </button>
-      </div>
+      {/* DUAL-LENS PERSONA TOGGLE (Provider/Admin view-switch; Patients locked into Patient View) */}
+      {isProvider ? (
+        <div className="flex items-center gap-0.5 bg-surface-container-low p-1 rounded-full border border-outline-variant/40 shadow-2xs text-[11px] font-bold shrink-0">
+          <button
+            type="button"
+            onClick={() => setViewMode('patient')}
+            className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 rounded-full cursor-pointer transition-all ${
+              viewMode === 'patient'
+                ? 'bg-teal-700 text-white shadow-xs font-extrabold'
+                : 'text-on-surface-variant hover:text-teal-800'
+            }`}
+            title="Switch to Patient / Plain-English View"
+          >
+            <span className="text-xs">👤</span>
+            <span className="text-xs">Patient</span>
+            <span className="hidden sm:inline">View</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('provider')}
+            className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 rounded-full cursor-pointer transition-all ${
+              viewMode === 'provider'
+                ? 'bg-slate-900 text-white shadow-xs font-extrabold'
+                : 'text-on-surface-variant hover:text-slate-900'
+            }`}
+            title="Switch to Clinical Provider / Genetics Specialist View"
+          >
+            <span className="text-xs">🩺</span>
+            <span className="text-xs">Provider</span>
+            <span className="hidden sm:inline">View</span>
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-1.5 px-3 py-1 bg-mint/20 border border-mint/50 rounded-full text-pine text-xs font-bold shrink-0 shadow-2xs">
+          <span>👤</span>
+          <span>Patient View</span>
+        </div>
+      )}
 
       {/* Right Controls */}
       <div className="flex items-center gap-1.5 sm:gap-3">

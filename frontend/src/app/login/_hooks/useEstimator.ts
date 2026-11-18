@@ -16,9 +16,18 @@ export function useEstimator() {
 
   const [flippedTiles, setFlippedTiles] = React.useState<FlippedTiles>({});
   const [isFormulaExpanded, setIsFormulaExpanded] = React.useState<boolean>(false);
+  const [uploadedDocs, setUploadedDocs] = React.useState<Array<{ file_name: string; file_url?: string; owner_type?: string }>>([]);
 
   const toggleTile = React.useCallback((key: string) => {
     setFlippedTiles((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
+
+  const addUploadedDoc = React.useCallback((doc: { file_name: string; file_url?: string; owner_type?: string }) => {
+    setUploadedDocs((prev) => [...prev, doc]);
+  }, []);
+
+  const removeUploadedDoc = React.useCallback((fileName: string) => {
+    setUploadedDocs((prev) => prev.filter((d) => d.file_name !== fileName));
   }, []);
 
   const handleResetEstimator = React.useCallback(() => {
@@ -31,6 +40,7 @@ export function useEstimator() {
     setScrIdx(null);
     setSameCarrier(false);
     setFlippedTiles({});
+    setUploadedDocs([]);
   }, []);
 
   const assessment = React.useMemo(() => {
@@ -67,6 +77,10 @@ export function useEstimator() {
     toggleTile,
     isFormulaExpanded,
     setIsFormulaExpanded,
+    uploadedDocs,
+    setUploadedDocs,
+    addUploadedDoc,
+    removeUploadedDoc,
     handleResetEstimator,
     assessment,
   };

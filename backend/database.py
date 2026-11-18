@@ -374,7 +374,112 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_sharing_acls_token ON reproductive_sharing_acls(share_token);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_sharing_acls_status ON reproductive_sharing_acls(status);")
 
+    # 14. Patient Profiles (Blueprint)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS patient_profiles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER UNIQUE NOT NULL,
+        has_quick_assessment INTEGER DEFAULT 0,
+        risk_level TEXT DEFAULT 'Pending',
+        plain_summary TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    """)
+
+    # 15. Quick Assessments
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS quick_assessments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        answers_json TEXT NOT NULL,
+        risk_estimate TEXT NOT NULL,
+        next_steps_json TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_quick_assessments_user_id ON quick_assessments(user_id);")
+
+    # 16. Couple Assessments (1-to-Many)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS couple_assessments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        partner_label TEXT NOT NULL,
+        relationship_type TEXT NOT NULL,
+        answers_json TEXT,
+        risk_estimate TEXT,
+        plain_summary TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_couple_assessments_user_id ON couple_assessments(user_id);")
+
+    # 17. Documents
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS documents (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        quick_assessment_id INTEGER,
+        couple_assessment_id INTEGER,
+        owner_type TEXT DEFAULT 'self',
+        file_name TEXT NOT NULL,
+        file_url TEXT NOT NULL,
+        uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (quick_assessment_id) REFERENCES quick_assessments(id) ON DELETE SET NULL,
+        FOREIGN KEY (couple_assessment_id) REFERENCES couple_assessments(id) ON DELETE SET NULL
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_documents_user_id ON documents(user_id);")
+
+    # 18. Genetic Conditions Catalog
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS genetic_conditions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        slug TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        category TEXT NOT NULL,
+        plain_summary TEXT NOT NULL,
+        next_steps_info TEXT NOT NULL
+    );
+    """)
+
+    # 19. Genetic Counselors & Providers
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS providers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        full_name TEXT NOT NULL,
+        credentials TEXT NOT NULL,
+        specialty TEXT NOT NULL,
+        location TEXT NOT NULL,
+        languages_json TEXT NOT NULL,
+        bio TEXT NOT NULL,
+        available_slots_json TEXT NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+    """)
+
     conn.commit()
+
+    # Migration: Ensure appointments columns exist
+    appointment_columns = [
+        ("patient_id", "INTEGER"),
+        ("provider_id", "INTEGER"),
+        ("assessment_type", "TEXT DEFAULT 'self'"),
+        ("couple_assessment_id", "INTEGER"),
+        ("scheduled_at", "TEXT"),
+        ("created_at", "TEXT"),
+    ]
+    for col_name, col_def in appointment_columns:
+        try:
+            cursor.execute(f"ALTER TABLE appointments ADD COLUMN {col_name} {col_def};")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass
 
     # Additive migration: Ensure file_name column exists in scraped_reports
     try:
@@ -595,6 +700,9 @@ def init_db():
             """, (admin_row[0],))
             conn.commit()
 
+    # Seed Patient Genetics (6 conditions) & Providers (5 counselors)
+    seed_patient_genetics_and_providers(cursor, conn)
+
     conn.close()
 
 
@@ -708,6 +816,12 @@ def create_user(username: str, password: str, email: str, full_name: str, dob: s
         INSERT INTO user_profiles (user_id, dob, blood_type, phone, city, country, kinship_degree, phenotypic_notes, emergency_contact)
         VALUES (?, ?, '', '', ?, '', 'Unassessed', 'No phenotypes or variants recorded yet.', '')
         """, (user_id, dob or '', location or ''))
+
+        # Blueprint patient profile initialization
+        cursor.execute("""
+        INSERT INTO patient_profiles (user_id, has_quick_assessment, risk_level, plain_summary)
+        VALUES (?, 0, 'Pending', 'No assessment taken yet.')
+        """, (user_id,))
         
         # Default proband node only (the user themselves)
         birth_year = dob.split('-')[0] if '-' in dob else (dob.split('/')[-1] if '/' in dob else '')
@@ -2177,6 +2291,437 @@ def redact_sensitive_intake(
     }
 
     return data
+
+
+# =====================================================================
+# Patient Journey, Blueprint Tables & Seeding
+# =====================================================================
+
+def generate_sample_counselor_slots():
+    """Generates sample appointment slots for the next 14 days."""
+    slots = []
+    base_date = datetime.now(timezone.utc)
+    for day_offset in range(1, 15):
+        day = base_date + timedelta(days=day_offset)
+        date_str = day.strftime('%Y-%m-%d')
+        display_date = day.strftime('%a, %b %d')
+        for time_slot in ["10:00 AM", "11:30 AM", "2:00 PM", "4:00 PM"]:
+            slots.append({
+                "date": date_str,
+                "display_date": display_date,
+                "time": time_slot,
+                "full_label": f"{display_date} at {time_slot}"
+            })
+    return slots
+
+
+def seed_patient_genetics_and_providers(cursor, conn):
+    """
+    Idempotent seeder for:
+    1. 6 UAE-Relevant Genetic Conditions (Plain-language for patients)
+    2. 5 Sample Genetic Counselors / Providers with 14-day booking slots
+    3. Default patient profile for admin/user
+    """
+    conditions_data = [
+        (
+            "beta-thalassemia",
+            "Beta-Thalassemia",
+            "Blood Condition",
+            "An inherited blood condition that affects how the body makes hemoglobin (the protein that carries oxygen). Many people carry the trait without knowing it; simple pre-marital blood screening helps couples plan safely.",
+            "A simple routine blood test (CBC with hemoglobin electrophoresis) checks carrier status. If both partners carry the trait, genetic counseling and PGT-M or prenatal screening provide clear pathways for having healthy children."
+        ),
+        (
+            "sickle-cell-disease",
+            "Sickle Cell Disease",
+            "Blood Condition",
+            "A condition where red blood cells can become stiff and crescent-shaped, sometimes slowing blood flow. If both parents are carriers, a counselor can explain clear options for having a healthy family.",
+            "Carrier testing is standard in UAE pre-marital screening. Couples who are both carriers have a 75% chance in each pregnancy of having a child without the condition, with safe medical choices available."
+        ),
+        (
+            "g6pd-deficiency",
+            "G6PD Deficiency",
+            "Enzyme / Blood Condition",
+            "A very common condition in the region where red blood cells are sensitive to certain foods (like fava beans) or specific medications. Most people live completely normal lives once they know what to avoid.",
+            "A straightforward enzyme test confirms G6PD levels. Management simply involves avoiding known triggers such as fava beans, mothballs, and certain antibiotics."
+        ),
+        (
+            "cystic-fibrosis",
+            "Cystic Fibrosis (CF)",
+            "Lung & Digestive Condition",
+            "An inherited condition that causes mucus in the lungs and digestive system to become thicker than usual. Early carrier screening helps families understand their chances and options.",
+            "DNA carrier testing checks for common CFTR mutations. Genetic counselors guide couples on pre-conception planning and early newborn care."
+        ),
+        (
+            "spinal-muscular-atrophy",
+            "Spinal Muscular Atrophy (SMA)",
+            "Nerve & Muscle Condition",
+            "A condition that affects the nerves controlling muscle movement. Carrier testing is a simple blood test that gives couples clear answers before pregnancy.",
+            "Carrier status is detected via SMN1 gene testing. When identified early, modern treatments and pre-implantation screening ensure healthy outcomes."
+        ),
+        (
+            "inherited-hearing-loss",
+            "Inherited Hearing Loss",
+            "Sensory Condition",
+            "Some forms of hearing loss are passed down in families even when both parents have normal hearing. Early awareness allows for timely support and family planning.",
+            "GJB2 (Connexin 26) gene panel screening detects common variants. Early intervention and speech therapies ensure children reach their full communicative potential."
+        )
+    ]
+
+    for slug, name, category, plain_summary, next_steps_info in conditions_data:
+        cursor.execute("SELECT id FROM genetic_conditions WHERE slug = ?", (slug,))
+        row = cursor.fetchone()
+        if not row:
+            cursor.execute("""
+            INSERT INTO genetic_conditions (slug, name, category, plain_summary, next_steps_info)
+            VALUES (?, ?, ?, ?, ?)
+            """, (slug, name, category, plain_summary, next_steps_info))
+        else:
+            cursor.execute("""
+            UPDATE genetic_conditions
+            SET name = ?, category = ?, plain_summary = ?, next_steps_info = ?
+            WHERE slug = ?
+            """, (name, category, plain_summary, next_steps_info, slug))
+
+    # 5 Sample Counselors
+    slots_json = json.dumps(generate_sample_counselor_slots())
+    providers_data = [
+        (
+            "Dr. Mariam Al Mansoori, MSc, CGC",
+            "MSc, CGC",
+            "Pre-Marital & Family Planning Genetics",
+            "Abu Dhabi (In-Person & Video)",
+            json.dumps(["Arabic", "English"]),
+            "Specializes in guiding couples through pre-marital screening results with clear, practical next steps."
+        ),
+        (
+            "Dr. Tariq Al Hashimi, MD, PhD",
+            "MD, PhD",
+            "Inherited Blood Conditions (Thalassemia & Sickle Cell)",
+            "Dubai (In-Person & Video)",
+            json.dumps(["Arabic", "English"]),
+            "12+ years helping UAE families understand blood trait compatibility and modern family-planning options."
+        ),
+        (
+            "Nadia Khoury, MSc, Genetic Counselor",
+            "MSc, Genetic Counselor",
+            "Carrier Screening & Fertility Genetics",
+            "Dubai (Video & In-Person)",
+            json.dumps(["Arabic", "English", "French"]),
+            "Focuses on translating complex lab reports into calm, easy-to-understand action plans for couples."
+        ),
+        (
+            "Dr. Fatima Al Suwaidi, MSc, CGC",
+            "MSc, CGC",
+            "Pediatric & Rare Inherited Conditions",
+            "Sharjah (In-Person & Video)",
+            json.dumps(["Arabic", "English"]),
+            "Supports families with known family histories in exploring early screening and preventive care."
+        ),
+        (
+            "Dr. Omar Al Nuaimi, MD",
+            "MD",
+            "General Clinical Genetics & Consanguinity Counseling",
+            "Al Ain (In-Person & Video)",
+            json.dumps(["Arabic", "English"]),
+            "Provides confidential, judgment-free consultations for individuals and extended families."
+        )
+    ]
+
+    for full_name, credentials, specialty, location, langs_json, bio in providers_data:
+        cursor.execute("SELECT id FROM providers WHERE full_name = ?", (full_name,))
+        row = cursor.fetchone()
+        if not row:
+            cursor.execute("""
+            INSERT INTO providers (full_name, credentials, specialty, location, languages_json, bio, available_slots_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (full_name, credentials, specialty, location, langs_json, bio, slots_json))
+        else:
+            cursor.execute("""
+            UPDATE providers
+            SET credentials = ?, specialty = ?, location = ?, languages_json = ?, bio = ?, available_slots_json = ?
+            WHERE full_name = ?
+            """, (credentials, specialty, location, langs_json, bio, slots_json, full_name))
+
+    # Initialize patient_profiles for admin and user if missing
+    cursor.execute("SELECT id FROM users WHERE username = 'admin'")
+    admin_u = cursor.fetchone()
+    if admin_u:
+        cursor.execute("SELECT id FROM patient_profiles WHERE user_id = ?", (admin_u[0],))
+        if not cursor.fetchone():
+            cursor.execute("""
+            INSERT INTO patient_profiles (user_id, has_quick_assessment, risk_level, plain_summary)
+            VALUES (?, 1, 'mid', 'Single carrier for Beta-Thalassemia Trait. Everyday health is normal; partner screening provides complete clarity before family planning.')
+            """, (admin_u[0],))
+
+    cursor.execute("SELECT id FROM users WHERE username = 'user'")
+    std_u = cursor.fetchone()
+    if std_u:
+        cursor.execute("SELECT id FROM patient_profiles WHERE user_id = ?", (std_u[0],))
+        if not cursor.fetchone():
+            cursor.execute("""
+            INSERT INTO patient_profiles (user_id, has_quick_assessment, risk_level, plain_summary)
+            VALUES (?, 1, 'mid', 'Single carrier for Beta-Thalassemia Trait. Everyday health is normal; partner screening provides complete clarity before family planning.')
+            """, (std_u[0],))
+
+    conn.commit()
+
+
+# -------------------------------------------------------------
+# Blueprint Patient Data Access Layer
+# -------------------------------------------------------------
+
+def get_patient_profile(user_id: int):
+    """Retrieve patient profile by user ID."""
+    conn = get_db_connection()
+    row = conn.execute("SELECT * FROM patient_profiles WHERE user_id = ?", (user_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def upsert_patient_profile(user_id: int, has_quick_assessment: int = 1, risk_level: str = "Pending", plain_summary: str = ""):
+    """Insert or update patient profile summary."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM patient_profiles WHERE user_id = ?", (user_id,))
+    row = cursor.fetchone()
+    now_ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    if row:
+        cursor.execute("""
+            UPDATE patient_profiles
+            SET has_quick_assessment = ?, risk_level = ?, plain_summary = ?, updated_at = ?
+            WHERE user_id = ?
+        """, (has_quick_assessment, risk_level, plain_summary, now_ts, user_id))
+    else:
+        cursor.execute("""
+            INSERT INTO patient_profiles (user_id, has_quick_assessment, risk_level, plain_summary, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+        """, (user_id, has_quick_assessment, risk_level, plain_summary, now_ts))
+    conn.commit()
+    conn.close()
+    return get_patient_profile(user_id)
+
+
+def save_quick_assessment(user_id: int, answers_json: str, risk_estimate: str, next_steps_json: str = "[]"):
+    """Persist completed quick assessment for a user."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    now_ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    cursor.execute("""
+        INSERT INTO quick_assessments (user_id, answers_json, risk_estimate, next_steps_json, created_at)
+        VALUES (?, ?, ?, ?, ?)
+    """, (user_id, answers_json, risk_estimate, next_steps_json, now_ts))
+    qa_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return qa_id
+
+
+def get_quick_assessment(user_id: int):
+    """Get latest quick assessment for user."""
+    conn = get_db_connection()
+    row = conn.execute("SELECT * FROM quick_assessments WHERE user_id = ? ORDER BY id DESC LIMIT 1", (user_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def create_couple_assessment(user_id: int, partner_label: str, relationship_type: str, answers_json: str = "{}", risk_estimate: str = "{}", plain_summary: str = ""):
+    """Create a new couple assessment profile for potential match."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    now_ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    cursor.execute("""
+        INSERT INTO couple_assessments (user_id, partner_label, relationship_type, answers_json, risk_estimate, plain_summary, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (user_id, partner_label, relationship_type, answers_json, risk_estimate, plain_summary, now_ts))
+    ca_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return ca_id
+
+
+def get_couple_assessments(user_id: int):
+    """Retrieve all couple assessment profiles for a user."""
+    conn = get_db_connection()
+    rows = conn.execute("SELECT * FROM couple_assessments WHERE user_id = ? ORDER BY id DESC", (user_id,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_couple_assessment_by_id(assessment_id: int, user_id: int = None):
+    """Retrieve a single couple assessment."""
+    conn = get_db_connection()
+    if user_id:
+        row = conn.execute("SELECT * FROM couple_assessments WHERE id = ? AND user_id = ?", (assessment_id, user_id)).fetchone()
+    else:
+        row = conn.execute("SELECT * FROM couple_assessments WHERE id = ?", (assessment_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def delete_couple_assessment(assessment_id: int, user_id: int):
+    """Delete a couple assessment."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM couple_assessments WHERE id = ? AND user_id = ?", (assessment_id, user_id))
+    affected = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return affected > 0
+
+
+def save_document(user_id: int, file_name: str, file_url: str, owner_type: str = "self", quick_assessment_id: int = None, couple_assessment_id: int = None):
+    """Save an uploaded document linked to self or partner, and optional assessment."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    now_ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    cursor.execute("""
+        INSERT INTO documents (user_id, quick_assessment_id, couple_assessment_id, owner_type, file_name, file_url, uploaded_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (user_id, quick_assessment_id, couple_assessment_id, owner_type, file_name, file_url, now_ts))
+    doc_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return doc_id
+
+
+def get_documents(user_id: int, owner_type: str = None):
+    """Get documents for a user, optionally filtered by owner_type."""
+    conn = get_db_connection()
+    if owner_type:
+        rows = conn.execute("SELECT * FROM documents WHERE user_id = ? AND owner_type = ? ORDER BY id DESC", (user_id, owner_type)).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM documents WHERE user_id = ? ORDER BY id DESC", (user_id,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def delete_document(doc_id: int, user_id: int):
+    """Delete an uploaded document."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM documents WHERE id = ? AND user_id = ?", (doc_id, user_id))
+    affected = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return affected > 0
+
+
+def get_genetic_conditions():
+    """Get all 6 UAE-relevant genetic conditions."""
+    conn = get_db_connection()
+    rows = conn.execute("SELECT * FROM genetic_conditions ORDER BY id ASC").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_genetic_condition_by_slug(slug: str):
+    """Get single genetic condition by slug."""
+    conn = get_db_connection()
+    row = conn.execute("SELECT * FROM genetic_conditions WHERE slug = ?", (slug,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_providers():
+    """Get all 5 sample genetic counselors with available slots."""
+    conn = get_db_connection()
+    rows = conn.execute("SELECT * FROM providers ORDER BY id ASC").fetchall()
+    conn.close()
+    result = []
+    for r in rows:
+        d = dict(r)
+        if isinstance(d.get("languages_json"), str):
+            try:
+                d["languages"] = json.loads(d["languages_json"])
+            except Exception:
+                d["languages"] = []
+        if isinstance(d.get("available_slots_json"), str):
+            try:
+                d["available_slots"] = json.loads(d["available_slots_json"])
+            except Exception:
+                d["available_slots"] = []
+        result.append(d)
+    return result
+
+
+def get_provider_by_id(provider_id: int):
+    """Get counselor provider by ID."""
+    conn = get_db_connection()
+    row = conn.execute("SELECT * FROM providers WHERE id = ?", (provider_id,)).fetchone()
+    conn.close()
+    if not row:
+        return None
+    d = dict(row)
+    if isinstance(d.get("languages_json"), str):
+        try:
+            d["languages"] = json.loads(d["languages_json"])
+        except Exception:
+            d["languages"] = []
+    if isinstance(d.get("available_slots_json"), str):
+        try:
+            d["available_slots"] = json.loads(d["available_slots_json"])
+        except Exception:
+            d["available_slots"] = []
+    return d
+
+
+def create_appointment(patient_id: int, provider_id: int, assessment_type: str = "self", couple_assessment_id: int = None, scheduled_at: str = None, notes: str = "", duration: str = "30 Mins"):
+    """Book a new genetic counselor appointment."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    now_ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+    # Fetch provider name to populate counselor_name for backward compatibility
+    counselor_name = "Genetic Counselor"
+    if provider_id:
+        p_row = conn.execute("SELECT full_name FROM providers WHERE id = ?", (provider_id,)).fetchone()
+        if p_row:
+            counselor_name = p_row[0]
+
+    cursor.execute("""
+        INSERT INTO appointments (
+            user_id, patient_id, provider_id, counselor_name, assessment_type, couple_assessment_id,
+            scheduled_at, date_time, duration, status, notes, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', ?, ?)
+    """, (patient_id, patient_id, provider_id, counselor_name, assessment_type, couple_assessment_id, scheduled_at, scheduled_at, duration, notes, now_ts))
+    appt_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return appt_id
+
+
+def get_appointments_for_patient(patient_id: int):
+    """Get all appointments booked by a patient."""
+    conn = get_db_connection()
+    rows = conn.execute("""
+        SELECT a.*, p.full_name as provider_name, p.credentials as provider_credentials,
+               p.specialty as provider_specialty, p.location as provider_location,
+               ca.partner_label as couple_partner_label
+        FROM appointments a
+        LEFT JOIN providers p ON a.provider_id = p.id
+        LEFT JOIN couple_assessments ca ON a.couple_assessment_id = ca.id
+        WHERE (a.patient_id = ? OR a.user_id = ?)
+        ORDER BY a.id DESC
+    """, (patient_id, patient_id)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def cancel_appointment(appointment_id: int, patient_id: int):
+    """Cancel a scheduled appointment."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE appointments
+        SET status = 'cancelled'
+        WHERE id = ? AND (patient_id = ? OR user_id = ?)
+    """, (appointment_id, patient_id, patient_id))
+    affected = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return affected > 0
+
 
 
 

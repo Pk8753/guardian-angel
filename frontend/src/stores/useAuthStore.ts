@@ -10,6 +10,7 @@ export interface UserSession {
   email?: string;
   dob?: string;
   location?: string;
+  role?: string;
 }
 
 interface AuthState {
@@ -24,12 +25,14 @@ export const normalizeUser = (raw: any): UserSession | null => {
   if (!raw) return null;
   const fullName = raw.fullName || raw.full_name || raw.name || raw.username || 'Patient';
   const aliasName = raw.aliasName || raw.alias_name || 'Anonymous-Patient';
+  const role = raw.role || (raw.isAdmin || (typeof raw.username === 'string' && raw.username.toLowerCase() === 'admin') ? 'admin' : 'patient');
   return {
     id: raw.id,
     username: raw.username,
     fullName,
     aliasName,
     email: raw.email || '',
+    role,
     isAdmin: raw.isAdmin ?? (typeof raw.username === 'string' && raw.username.toLowerCase() === 'admin'),
     isFreshUser: raw.isFreshUser ?? false,
     dob: raw.dob,

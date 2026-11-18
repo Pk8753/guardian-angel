@@ -30,7 +30,12 @@ import {
   GitBranch,
   FileText,
   Trash2,
-  X
+  X,
+  Calendar,
+  Check,
+  UserCheck,
+  Plus,
+  ChevronRight
 } from 'lucide-react';
 
 interface CitationDetail {
@@ -62,6 +67,30 @@ export default function CoupleAssessmentPage() {
   const [activeFamilyId, setActiveFamilyId] = useState<string | null>(null);
   const [activeCitationPreview, setActiveCitationPreview] = useState<CitationDetail | null>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
+
+  // Multiple Couple Profiles (One-to-Many)
+  const [coupleProfiles, setCoupleProfiles] = useState<any[]>([]);
+  const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
+  const [isLoadingProfiles, setIsLoadingProfiles] = useState<boolean>(true);
+
+  // Friendly Introductory Popup / Modal: "Help us know more about your potential spouse"
+  const [isNewMatchModalOpen, setIsNewMatchModalOpen] = useState<boolean>(false);
+  const [matchPartnerLabel, setMatchPartnerLabel] = useState<string>('');
+  const [matchRelationshipType, setMatchRelationshipType] = useState<string>('First Cousin (Paternal)');
+  const [matchScreeningStatus, setMatchScreeningStatus] = useState<string>('Not yet screened');
+  const [matchKnownTrait, setMatchKnownTrait] = useState<string>('None / Unknown');
+  const [matchFamilyHistory, setMatchFamilyHistory] = useState<string>('No known genetic conditions');
+  const [matchDocName, setMatchDocName] = useState<string>('');
+  const [isSavingMatch, setIsSavingMatch] = useState<boolean>(false);
+
+  // Counselor Booking Modal
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState<boolean>(false);
+  const [providers, setProviders] = useState<any[]>([]);
+  const [selectedProviderId, setSelectedProviderId] = useState<number | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<string>('');
+  const [bookingNotes, setBookingNotes] = useState<string>('');
+  const [isBookingSubmitting, setIsBookingSubmitting] = useState<boolean>(false);
+  const [bookingSuccessMsg, setBookingSuccessMsg] = useState<string | null>(null);
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
@@ -203,6 +232,175 @@ export default function CoupleAssessmentPage() {
   };
 
   const hasLoadedAssessmentRef = useRef(false);
+
+  // Load couple assessment profiles from database
+  const loadCoupleProfiles = async () => {
+    try {
+      const res = await fetch('/api/couple-assessments');
+      if (res.ok) {
+        const data = await res.json();
+        const list = data.couple_assessments || [];
+        setCoupleProfiles(list);
+        if (list.length > 0 && selectedProfileId === null) {
+          setSelectedProfileId(list[0].id);
+          setPartnerBName(list[0].partner_label);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load couple profiles:', e);
+    } finally {
+      setIsLoadingProfiles(false);
+    }
+  };
+
+  // Load sample counselors for booking
+  const loadProviders = async () => {
+    try {
+      const res = await fetch('/api/patient/providers');
+      if (res.ok) {
+        const data = await res.json();
+        const list = data.providers || [];
+        setProviders(list);
+        if (list.length > 0) {
+          setSelectedProviderId(list[0].id);
+          if (list[0].available_slots && list[0].available_slots.length > 0) {
+            setSelectedSlot(list[0].available_slots[0].full_label || list[0].available_slots[0].time);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load providers:', e);
+    }
+  };
+
+  useEffect(() => {
+    loadCoupleProfiles();
+    loadProviders();
+
+    // Check if openModal was requested in URL
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('openModal') === 'true') {
+        setIsNewMatchModalOpen(true);
+      }
+    }
+  }, []);
+
+  const handleSelectProfile = (profile: any) => {
+    setSelectedProfileId(profile.id);
+    setPartnerBName(profile.partner_label);
+  };
+
+  // Handle Create New Match
+  const handleCreateNewMatch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!matchPartnerLabel.trim()) return;
+
+    setIsSavingMatch(true);
+
+    const answers = {
+      relationship_type: matchRelationshipType,
+      screening_status: matchScreeningStatus,
+      known_traits: matchKnownTrait,
+      family_history: matchFamilyHistory,
+    };
+
+    // Calculate plain summary
+    let summary = `Compatibility evaluation for ${matchPartnerLabel} (${matchRelationshipType}).`;
+    if (matchKnownTrait !== 'None / Unknown') {
+      summary += ` Partner carries trait for ${matchKnownTrait}. If both partners carry matching traits, there is a 75% probability in each pregnancy of having an unaffected child. Modern pathways like premarital testing and PGT-M provide complete peace of mind.`;
+    } else {
+      summary += ` Autosomal recessive trait analysis shows that routine premarital screening gives couples complete clarity. Over 95%+ of pregnancies between relatives result in healthy, thriving children.`;
+    }
+
+    const docs = matchDocName.trim()
+      ? [{ file_name: matchDocName.trim(), file_url: `/data/documents/${matchDocName.trim()}` }]
+      : [];
+
+    try {
+      const res = await fetch('/api/couple-assessments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          partner_label: matchPartnerLabel.trim(),
+          relationship_type: matchRelationshipType,
+          answers,
+          risk_estimate: {
+            trait: matchKnownTrait,
+            recessive_probability: matchKnownTrait !== 'None / Unknown' ? '25%' : '<3%',
+            healthy_baby_rate: '75%+'
+          },
+          plain_summary: summary,
+          documents: docs
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        await loadCoupleProfiles();
+        if (data.assessment_id) {
+          setSelectedProfileId(data.assessment_id);
+          setPartnerBName(matchPartnerLabel.trim());
+        }
+        setIsNewMatchModalOpen(false);
+        setMatchPartnerLabel('');
+        setMatchDocName('');
+      }
+    } catch (e) {
+      console.error('Failed to save couple assessment:', e);
+    } finally {
+      setIsSavingMatch(false);
+    }
+  };
+
+  // Handle Delete Profile
+  const handleDeleteProfile = async (profileId: number) => {
+    if (!confirm('Are you sure you want to remove this couple assessment profile?')) return;
+    try {
+      const res = await fetch(`/api/couple-assessments/${profileId}`, { method: 'DELETE' });
+      if (res.ok) {
+        await loadCoupleProfiles();
+        setSelectedProfileId(null);
+      }
+    } catch (e) {
+      console.error('Failed to delete couple profile', e);
+    }
+  };
+
+  // Handle Counselor Appointment Booking
+  const handleBookAppointment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedProviderId || !selectedSlot) return;
+
+    setIsBookingSubmitting(true);
+    try {
+      const res = await fetch('/api/appointments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider_id: selectedProviderId,
+          assessment_type: 'couple',
+          couple_assessment_id: selectedProfileId,
+          scheduled_at: selectedSlot,
+          notes: bookingNotes
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.status === 'success') {
+        setBookingSuccessMsg(`Your couple counseling session on ${selectedSlot} is confirmed!`);
+        setTimeout(() => {
+          setIsBookingModalOpen(false);
+          setBookingSuccessMsg(null);
+          setBookingNotes('');
+        }, 1800);
+      }
+    } catch (e) {
+      console.error('Booking failed', e);
+    } finally {
+      setIsBookingSubmitting(false);
+    }
+  };
 
   useEffect(() => {
     if (hasLoadedAssessmentRef.current) return;
@@ -385,6 +583,14 @@ export default function CoupleAssessmentPage() {
             <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
               <button
                 type="button"
+                onClick={() => setIsNewMatchModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-pine hover:bg-pine-light rounded-xl shadow-xs transition cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Start New Couple Assessment</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => loadAssessment(true)}
                 disabled={isLoading}
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-pine bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-xs transition cursor-pointer disabled:opacity-50"
@@ -401,15 +607,148 @@ export default function CoupleAssessmentPage() {
                 <Download className="w-3.5 h-3.5 text-pine" />
                 <span>Export Clinical Brief</span>
               </button>
+            </div>
+          </div>
+
+          {/* Multiple Couple Assessment Profiles Manager (One-to-Many) */}
+          <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Heart className="w-5 h-5 text-rose-500 fill-rose-100" />
+                  <h2 className="text-base font-bold text-pine">Your Couple Assessments</h2>
+                  <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold">
+                    {coupleProfiles.length} {coupleProfiles.length === 1 ? 'profile' : 'profiles'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Manage and compare compatibility assessments for different potential spouses.
+                </p>
+              </div>
+
               <button
                 type="button"
-                onClick={() => alert('Session scheduled with Medical Genetics Board.')}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-pine hover:bg-pine-light rounded-xl shadow-xs transition"
+                onClick={() => setIsNewMatchModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-pine text-white text-xs font-bold rounded-xl hover:bg-pine-light transition shadow-xs cursor-pointer shrink-0"
               >
-                <Stethoscope className="w-3.5 h-3.5" />
-                <span>Review with Geneticist</span>
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Another Potential Match</span>
               </button>
             </div>
+
+            {/* Profiles List / Tabs */}
+            {isLoadingProfiles ? (
+              <div className="py-6 text-center text-xs text-slate-400">Loading couple assessments...</div>
+            ) : coupleProfiles.length === 0 ? (
+              <div className="p-6 bg-fog rounded-xl text-center space-y-2 border border-dashed border-slate-200">
+                <p className="text-xs font-bold text-pine">No Couple Assessments Saved Yet</p>
+                <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                  Help us know more about your potential spouse to receive a warm, personalized compatibility overview and clear next steps.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setIsNewMatchModalOpen(true)}
+                  className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 bg-pine text-white text-xs font-bold rounded-xl hover:bg-pine-light transition cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Start First Couple Assessment</span>
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {/* Profile Selector Chips */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                  {coupleProfiles.map((p) => {
+                    const isSelected = p.id === (selectedProfileId || coupleProfiles[0]?.id);
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => handleSelectProfile(p)}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shrink-0 border cursor-pointer ${
+                          isSelected
+                            ? 'bg-pine text-white border-pine shadow-xs'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        <Heart className={`w-3.5 h-3.5 ${isSelected ? 'text-mint fill-mint' : 'text-slate-400'}`} />
+                        <span>{p.partner_label}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-normal ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                          {p.relationship_type || 'Relative'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Selected Profile Detailed Card */}
+                {(() => {
+                  const active = coupleProfiles.find((p) => p.id === (selectedProfileId || coupleProfiles[0]?.id)) || coupleProfiles[0];
+                  if (!active) return null;
+                  return (
+                    <div className="p-4 bg-fog/70 rounded-xl border border-slate-200 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="text-sm font-bold text-pine">
+                              Match Evaluation: {active.partner_label}
+                            </h3>
+                            <span className="px-2 py-0.5 rounded-full bg-mint/30 text-pine text-[11px] font-semibold">
+                              {active.relationship_type}
+                            </span>
+                            <span className="text-[11px] text-slate-400">
+                              Created {new Date(active.created_at).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-600 leading-relaxed max-w-2xl">
+                            {active.plain_summary}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedProfileId(active.id);
+                              setIsBookingModalOpen(true);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-pine text-white text-xs font-bold rounded-xl hover:bg-pine-light transition shadow-xs cursor-pointer"
+                          >
+                            <Calendar className="w-3.5 h-3.5" />
+                            <span>Book Counselor for {active.partner_label}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteProfile(active.id)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                            title="Remove this profile"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Trait & Documents Sub-row */}
+                      <div className="pt-2 border-t border-slate-200/60 flex flex-wrap items-center gap-4 text-xs text-slate-600">
+                        <div>
+                          <span className="text-slate-400">Known Trait: </span>
+                          <span className="font-semibold text-slate-700">{active.answers?.known_traits || 'None reported'}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-400">Screening Status: </span>
+                          <span className="font-semibold text-slate-700">{active.answers?.screening_status || 'Pending'}</span>
+                        </div>
+                        {active.documents && active.documents.length > 0 && (
+                          <div className="flex items-center gap-1 text-pine font-medium">
+                            <FileText className="w-3.5 h-3.5" />
+                            <span>{active.documents.length} document(s) linked</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
           </div>
 
           {/* Empty State when no reports or pedigree added yet */}
@@ -1014,6 +1353,355 @@ export default function CoupleAssessmentPage() {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Guided Intake Modal: "Help us know more about your potential spouse." */}
+      {isNewMatchModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-mint/30 flex items-center justify-center text-pine shrink-0">
+                  <Heart className="w-5 h-5 text-pine fill-pine/20" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-pine leading-snug">
+                    Help us know more about your potential spouse
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Confidential &amp; judgment-free premarital compatibility assessment.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsNewMatchModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateNewMatch} className="space-y-4">
+              {/* Partner Label */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Potential Spouse&apos;s First Name or Reference Label *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Fatima, Match 1, Potential Partner"
+                  value={matchPartnerLabel}
+                  onChange={(e) => setMatchPartnerLabel(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pine/30 focus:border-pine transition"
+                />
+              </div>
+
+              {/* Relationship Type */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  How are you related to your potential spouse?
+                </label>
+                <select
+                  value={matchRelationshipType}
+                  onChange={(e) => setMatchRelationshipType(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-pine/30 focus:border-pine transition"
+                >
+                  <option value="First Cousin (Paternal)">First Cousin (Paternal - Uncle or Aunt on Father&apos;s side)</option>
+                  <option value="First Cousin (Maternal)">First Cousin (Maternal - Uncle or Aunt on Mother&apos;s side)</option>
+                  <option value="Second Cousin">Second Cousin (Parents are cousins)</option>
+                  <option value="Distantly Related / Same Tribe">Distantly Related / Same Tribe or Extended Family</option>
+                  <option value="Not Related">Not Related</option>
+                </select>
+              </div>
+
+              {/* Premarital Screening Status */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Has your potential spouse completed pre-marital screening?
+                </label>
+                <select
+                  value={matchScreeningStatus}
+                  onChange={(e) => setMatchScreeningStatus(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-pine/30 focus:border-pine transition"
+                >
+                  <option value="Completed Pre-Marital Screening">Completed Pre-Marital Screening (Has report)</option>
+                  <option value="Screening Scheduled / In Progress">Screening Scheduled / In Progress</option>
+                  <option value="Not yet screened">Not yet screened</option>
+                  <option value="Prefer not to say">Prefer not to say</option>
+                </select>
+              </div>
+
+              {/* Known Carrier Trait */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Are there any known carrier traits in your potential spouse?
+                </label>
+                <select
+                  value={matchKnownTrait}
+                  onChange={(e) => setMatchKnownTrait(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-pine/30 focus:border-pine transition"
+                >
+                  <option value="None / Unknown">None / Not known</option>
+                  <option value="Beta-Thalassemia Trait">Beta-Thalassemia Trait</option>
+                  <option value="Sickle Cell Trait">Sickle Cell Trait</option>
+                  <option value="G6PD Deficiency">G6PD Deficiency</option>
+                  <option value="Cystic Fibrosis (CF) Trait">Cystic Fibrosis (CF) Trait</option>
+                  <option value="Spinal Muscular Atrophy (SMA) Trait">Spinal Muscular Atrophy (SMA) Trait</option>
+                  <option value="Inherited Hearing Loss Trait">Inherited Hearing Loss Trait</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              {/* Family History */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Family History of Inherited Conditions
+                </label>
+                <select
+                  value={matchFamilyHistory}
+                  onChange={(e) => setMatchFamilyHistory(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-pine/30 focus:border-pine transition"
+                >
+                  <option value="No known genetic conditions">No known genetic conditions in family</option>
+                  <option value="Family history of blood condition (Thalassemia / Sickle Cell)">Family history of blood condition (Thalassemia / Sickle Cell)</option>
+                  <option value="Family history of hearing loss">Family history of hearing loss</option>
+                  <option value="Family history of childhood muscle weakness">Family history of childhood muscle weakness</option>
+                  <option value="Other inherited condition">Other inherited condition</option>
+                </select>
+              </div>
+
+              {/* Document Upload for Partner */}
+              <div className="pt-2 border-t border-slate-100">
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Upload Partner Screening Document (Optional)
+                </label>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="e.g. fatima_screening_report.pdf"
+                      value={matchDocName}
+                      onChange={(e) => setMatchDocName(e.target.value)}
+                      className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pine/30"
+                    />
+                    <label className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl cursor-pointer transition shrink-0 flex items-center gap-1.5">
+                      <UploadCloud className="w-3.5 h-3.5 text-pine" />
+                      <span>Browse</span>
+                      <input
+                        type="file"
+                        accept=".pdf,.png,.jpg,.jpeg"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) setMatchDocName(file.name);
+                        }}
+                      />
+                    </label>
+                  </div>
+                  {/* Sample Document Quick Picker */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[11px] text-slate-400">Quick sample:</span>
+                    <button
+                      type="button"
+                      onClick={() => setMatchDocName('partner_premarital_screening.pdf')}
+                      className="text-[11px] text-pine underline hover:text-pine-light cursor-pointer"
+                    >
+                      partner_premarital_screening.pdf
+                    </button>
+                    <span className="text-slate-300">&bull;</span>
+                    <button
+                      type="button"
+                      onClick={() => setMatchDocName('partner_hemoglobin_electrophoresis.pdf')}
+                      className="text-[11px] text-pine underline hover:text-pine-light cursor-pointer"
+                    >
+                      partner_hemoglobin_electrophoresis.pdf
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsNewMatchModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingMatch}
+                  className="px-5 py-2.5 bg-pine text-white text-xs font-bold rounded-xl hover:bg-pine-light transition shadow-xs disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                >
+                  {isSavingMatch ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Saving Profile...</span>
+                    </>
+                  ) : (
+                    <span>Save Assessment &amp; View Results</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Counselor Appointment Booking Modal */}
+      {isBookingModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-mint/30 flex items-center justify-center text-pine shrink-0">
+                  <Stethoscope className="w-5 h-5 text-pine" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-pine leading-snug">
+                    Book Couple Genetic Counseling Session
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Session linked to: <span className="font-semibold text-slate-700">{partnerBName || 'Partner'}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsBookingModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {bookingSuccessMsg ? (
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-center space-y-2">
+                <Check className="w-8 h-8 text-emerald-600 mx-auto" />
+                <h4 className="text-sm font-bold text-emerald-800">Booking Confirmed!</h4>
+                <p className="text-xs text-emerald-700">{bookingSuccessMsg}</p>
+              </div>
+            ) : (
+              <form onSubmit={handleBookAppointment} className="space-y-4">
+                {/* Select Provider */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-2">
+                    Choose a Certified Genetic Counselor
+                  </label>
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {providers.map((prov) => {
+                      const isSelected = prov.id === selectedProviderId;
+                      return (
+                        <div
+                          key={prov.id}
+                          onClick={() => {
+                            setSelectedProviderId(prov.id);
+                            if (prov.available_slots && prov.available_slots.length > 0) {
+                              setSelectedSlot(prov.available_slots[0].full_label || prov.available_slots[0].time);
+                            }
+                          }}
+                          className={`p-3 rounded-xl border text-xs cursor-pointer transition ${
+                            isSelected
+                              ? 'bg-mint/15 border-pine ring-1 ring-pine'
+                              : 'bg-slate-50/70 border-slate-200 hover:bg-slate-100/60'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-pine">{prov.full_name}</span>
+                            <span className="text-[10px] text-slate-500">{prov.location}</span>
+                          </div>
+                          <p className="text-[11px] text-slate-600 mt-0.5">{prov.specialty}</p>
+                          <p className="text-[10px] text-slate-400 mt-1">
+                            Languages: {Array.isArray(prov.languages) ? prov.languages.join(', ') : 'Arabic, English'}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Select Time Slot */}
+                {(() => {
+                  const currProv = providers.find((p) => p.id === selectedProviderId);
+                  const slots = currProv?.available_slots || [];
+                  return (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        Select Available Appointment Slot
+                      </label>
+                      {slots.length === 0 ? (
+                        <p className="text-xs text-slate-400">No open slots available for this provider.</p>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1">
+                          {slots.slice(0, 8).map((slot: any, idx: number) => {
+                            const label = slot.full_label || `${slot.day_name} ${slot.date} at ${slot.time}`;
+                            const isSelected = selectedSlot === label;
+                            return (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => setSelectedSlot(label)}
+                                className={`p-2 rounded-lg text-left text-[11px] font-medium border transition cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-pine text-white border-pine shadow-xs'
+                                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                                }`}
+                              >
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Notes */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Questions or Notes for the Counselor (Optional)
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="e.g. We would like to discuss our carrier screening results and IVF with PGT-M options."
+                    value={bookingNotes}
+                    onChange={(e) => setBookingNotes(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pine/30"
+                  />
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setIsBookingModalOpen(false)}
+                    className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isBookingSubmitting || !selectedSlot}
+                    className="px-5 py-2.5 bg-pine text-white text-xs font-bold rounded-xl hover:bg-pine-light transition shadow-xs disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                  >
+                    {isBookingSubmitting ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Confirming...</span>
+                      </>
+                    ) : (
+                      <span>Confirm Appointment</span>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}
