@@ -37,13 +37,7 @@ from database import (
     record_consent, revoke_consent, get_consent_status, has_valid_consent, get_user_consent_history,
     create_sharing_acl, get_user_sharing_acls, get_sharing_acl_by_token, validate_share_token_access,
     revoke_sharing_acl, revoke_sharing_acl_by_token, redact_sensitive_intake,
-    encrypt_payload, decrypt_payload,
-    get_patient_profile, upsert_patient_profile, save_quick_assessment, get_quick_assessment,
-    create_couple_assessment, get_couple_assessments, get_couple_assessment_by_id, delete_couple_assessment,
-    save_document, get_documents, delete_document, get_genetic_conditions, get_genetic_condition_by_slug,
-    get_providers, get_provider_by_id, create_appointment, get_appointments_for_patient, get_appointments_for_provider, cancel_appointment,
-    save_consent_permission, get_consent_permissions, revoke_consent_permission,
-    save_comprehension_feedback, get_patient_impact_metrics
+    encrypt_payload, decrypt_payload
 )
 from clinical_engine import compute_clinical_state
 from gcp_services import gcp_storage, vertex_ai
@@ -63,36 +57,9 @@ app.config.from_object(Config)
 # Initialize database on startup
 init_db()
 
-@app.before_request
-def handle_session_header():
-    """Support per-tab multi-session isolation via X-Session-User-Id header."""
-    session_user_header = request.headers.get('X-Session-User-Id')
-    if session_user_header:
-        try:
-            hdr_user_id = int(session_user_header)
-            u = get_user_by_id(hdr_user_id)
-            if u:
-                session['user_id'] = hdr_user_id
-                session['username'] = u['username']
-                session['role'] = u['role']
-        except (ValueError, TypeError):
-            pass
-
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        session_user_header = request.headers.get('X-Session-User-Id')
-        if session_user_header:
-            try:
-                hdr_user_id = int(session_user_header)
-                u = get_user_by_id(hdr_user_id)
-                if u:
-                    session['user_id'] = hdr_user_id
-                    session['username'] = u['username']
-                    session['role'] = u['role']
-            except (ValueError, TypeError):
-                pass
-
         if 'user_id' not in session:
             if request.path.startswith('/api/'):
                 return jsonify({"status": "error", "message": "Authentication required. Please sign in to access your secure health vault."}), 401
@@ -320,46 +287,10 @@ def login():
                 location=location
             )
             if user_id:
-                # If guest assessment was passed along during signup, persist it immediately
-                qa_data = data.get('quick_assessment')
-                if qa_data and isinstance(qa_data, dict):
-                    try:
-                        answers = qa_data.get('answers') or {}
-                        risk_est = qa_data.get('risk_estimate') or {}
-                        next_st = qa_data.get('next_steps') or []
-                        plain_summ = qa_data.get('plain_summary') or ''
-                        risk_lvl = risk_est.get('riskBandLevel') or risk_est.get('risk_level') or 'mid'
-                        if not plain_summ:
-                            plain_summ = "Completed premarital risk estimation. Everyday health is normal; routine screening offers peace of mind."
-                        qa_id = save_quick_assessment(
-                            user_id=user_id,
-                            answers_json=json.dumps(answers),
-                            risk_estimate=json.dumps(risk_est),
-                            next_steps_json=json.dumps(next_st)
-                        )
-                        upsert_patient_profile(
-                            user_id=user_id,
-                            has_quick_assessment=1,
-                            risk_level=risk_lvl,
-                            plain_summary=plain_summ
-                        )
-                        for doc in qa_data.get('documents', []):
-                            if isinstance(doc, dict) and doc.get('file_name'):
-                                save_document(
-                                    user_id=user_id,
-                                    file_name=doc.get('file_name'),
-                                    file_url=doc.get('file_url', f"/data/documents/{doc.get('file_name')}"),
-                                    owner_type=doc.get('owner_type', 'self'),
-                                    quick_assessment_id=qa_id
-                                )
-                    except Exception as e:
-                        logger.warning(f"Error auto-linking quick assessment on register: {e}")
-
                 return jsonify({
                     "status": "success",
                     "message": "Your account has been created successfully! Please sign in with your credentials to access your health vault.",
-                    "username": username,
-                    "user_id": user_id
+                    "username": username
                 }), 201
             else:
                 return jsonify({"status": "error", "message": "Failed to create vault account. Please try again."}), 500
@@ -378,42 +309,6 @@ def login():
                      (username.lower() == 'user' and password == 'user') or
                      (username.lower() == 'admin' and password == 'admin')):
             session['user_id'] = user['id']
-
-            # If guest assessment was passed along during signin, persist it
-            qa_data = data.get('quick_assessment')
-            if qa_data and isinstance(qa_data, dict):
-                try:
-                    answers = qa_data.get('answers') or {}
-                    risk_est = qa_data.get('risk_estimate') or {}
-                    next_st = qa_data.get('next_steps') or []
-                    plain_summ = qa_data.get('plain_summary') or ''
-                    risk_lvl = risk_est.get('riskBandLevel') or risk_est.get('risk_level') or 'mid'
-                    if not plain_summ:
-                        plain_summ = "Completed premarital risk estimation. Everyday health is normal; routine screening offers peace of mind."
-                    qa_id = save_quick_assessment(
-                        user_id=user['id'],
-                        answers_json=json.dumps(answers),
-                        risk_estimate=json.dumps(risk_est),
-                        next_steps_json=json.dumps(next_st)
-                    )
-                    upsert_patient_profile(
-                        user_id=user['id'],
-                        has_quick_assessment=1,
-                        risk_level=risk_lvl,
-                        plain_summary=plain_summ
-                    )
-                    for doc in qa_data.get('documents', []):
-                        if isinstance(doc, dict) and doc.get('file_name'):
-                            save_document(
-                                user_id=user['id'],
-                                file_name=doc.get('file_name'),
-                                file_url=doc.get('file_url', f"/data/documents/{doc.get('file_name')}"),
-                                owner_type=doc.get('owner_type', 'self'),
-                                quick_assessment_id=qa_id
-                            )
-                except Exception as e:
-                    logger.warning(f"Error auto-linking quick assessment on signin: {e}")
-
             u_dict = dict(user)
             return jsonify({
                 "status": "success",
@@ -423,8 +318,7 @@ def login():
                     "username": u_dict['username'],
                     "full_name": u_dict.get('full_name') or u_dict['username'],
                     "alias_name": u_dict.get('alias_name') or 'Silent-Falcon-9214',
-                    "email": u_dict.get('email') or '',
-                    "role": u_dict.get('role') or ('admin' if u_dict['username'].lower() == 'admin' else 'patient')
+                    "email": u_dict.get('email') or ''
                 }
             })
         else:
@@ -456,7 +350,6 @@ def api_me():
             "full_name": u_dict.get('full_name') or u_dict['username'],
             "alias_name": u_dict.get('alias_name') or '',
             "email": u_dict.get('email') or '',
-            "role": u_dict.get('role') or ('admin' if u_dict['username'].lower() == 'admin' else 'patient'),
             "isAdmin": u_dict['username'].lower() == 'admin'
         }
     })
@@ -710,15 +603,7 @@ def profile_view():
         return jsonify({"status": "success", "message": "Patient clinical details successfully updated."})
 
     profile = get_user_profile(user_id)
-    p_dict = dict(profile) if profile else {"user_id": user_id}
-    u = get_user_by_id(user_id)
-    if u:
-        p_dict["username"] = u["username"]
-        p_dict["email"] = p_dict.get("email") or u["email"]
-        p_dict["full_name"] = p_dict.get("full_name") or u["full_name"]
-        p_dict["role"] = u["role"]
-        p_dict["user_id"] = user_id
-    return jsonify({"status": "success", "profile": p_dict})
+    return jsonify({"status": "success", "profile": dict(profile) if profile else {}})
 
 # ==================== API ENDPOINTS ====================
 
@@ -904,7 +789,7 @@ def api_ai_ask():
         if p_id:
             spouse = next((p for p in nodes if str(p.get('id')) == p_id), None)
         if not spouse:
-            spouse = next((n for n in nodes if str(n.get('relationship', '')).lower() in ['spouse', 'partner', 'husband', 'wife', 'husband_wife', 'fiance', 'fiancee'] and str(n.get('id')) != str(proband.get('id'))), None)
+            spouse = next((n for n in nodes if str(n.get('relationship', '')).lower() in ['spouse', 'partner', 'husband', 'wife', 'fiance', 'fiancee'] and str(n.get('id')) != str(proband.get('id'))), None)
         if spouse:
             if proband.get('sex') == 'male' and spouse.get('sex') == 'female':
                 male_node, female_node = proband, spouse
@@ -1304,7 +1189,7 @@ def api_ai_analyze_assessment():
         if p_id:
             spouse = next((p for p in nodes if str(p.get('id')) == p_id), None)
         if not spouse:
-            spouse = next((n for n in nodes if str(n.get('relationship', '')).lower() in ['spouse', 'partner', 'husband', 'wife', 'husband_wife', 'fiance', 'fiancee'] and str(n.get('id')) != str(proband.get('id'))), None)
+            spouse = next((n for n in nodes if str(n.get('relationship', '')).lower() in ['spouse', 'partner', 'husband', 'wife', 'fiance', 'fiancee'] and str(n.get('id')) != str(proband.get('id'))), None)
         if spouse:
             if proband.get('sex') == 'male' and spouse.get('sex') == 'female':
                 male_node, female_node = proband, spouse
@@ -1522,446 +1407,6 @@ def view_shared_pedigree(share_token):
     if not fam or fam.get('share_enabled') == 0:
         return jsonify({"status": "error", "message": "Invalid or revoked share token"}), 404
     return jsonify({"status": "success", "family": fam})
-
-# =====================================================================
-# Patient Journey, Dynamic Profile, Assessments, Documents & Appointments
-# =====================================================================
-
-@app.route('/api/patient/quick-assessment/persist', methods=['POST'])
-@login_required
-def api_patient_quick_assessment_persist():
-    """
-    Persists guest/in-progress quick assessment and links it to logged-in user.
-    Auto-builds/updates patient_profile and saves any attached documents.
-    """
-    user_id = session['user_id']
-    data = request.get_json(silent=True) or {}
-    
-    answers = data.get('answers') or {}
-    risk_estimate = data.get('risk_estimate') or {}
-    next_steps = data.get('next_steps') or []
-    plain_summary = data.get('plain_summary') or ''
-    docs = data.get('documents') or []
-
-    # If plain_summary not supplied, build a calm, reassuring patient summary
-    risk_level = risk_estimate.get('riskBandLevel') or risk_estimate.get('risk_level') or 'mid'
-    if not plain_summary:
-        if risk_level == 'hi':
-            plain_summary = "Higher chance identified due to shared family carrier traits. With pre-marital screening and modern family choices, healthy children are completely achievable."
-        elif risk_level == 'mid':
-            plain_summary = "Moderate consideration due to family kinship. Routine pre-marital carrier testing gives complete clarity before pregnancy."
-        else:
-            plain_summary = "General population risk level. Over 95%+ of pregnancies between relatives result in healthy, thriving children."
-
-    # 1. Save quick assessment record
-    qa_id = save_quick_assessment(
-        user_id=user_id,
-        answers_json=json.dumps(answers) if isinstance(answers, dict) else str(answers),
-        risk_estimate=json.dumps(risk_estimate) if isinstance(risk_estimate, dict) else str(risk_estimate),
-        next_steps_json=json.dumps(next_steps) if isinstance(next_steps, list) else str(next_steps)
-    )
-
-    # 2. Update patient profile
-    profile = upsert_patient_profile(
-        user_id=user_id,
-        has_quick_assessment=1,
-        risk_level=risk_level,
-        plain_summary=plain_summary
-    )
-
-    # 3. Save any attached documents
-    saved_doc_ids = []
-    for doc in docs:
-        if isinstance(doc, dict) and doc.get('file_name'):
-            doc_id = save_document(
-                user_id=user_id,
-                file_name=doc.get('file_name', 'Quick_Assessment_Report.pdf'),
-                file_url=doc.get('file_url', '/data/documents/sample.pdf'),
-                owner_type=doc.get('owner_type', 'self'),
-                quick_assessment_id=qa_id
-            )
-            saved_doc_ids.append(doc_id)
-
-    return jsonify({
-        "status": "success",
-        "message": "Quick assessment saved to clinical vault.",
-        "quick_assessment_id": qa_id,
-        "profile": profile,
-        "saved_documents": len(saved_doc_ids)
-    }), 201
-
-
-@app.route('/api/patient/dashboard-state', methods=['GET'])
-@login_required
-def api_patient_dashboard_state():
-    """
-    Hydrates full patient dashboard in a single round-trip:
-    1. Quick Assessment status & results
-    2. Patient profile & plain-language summary
-    3. Couple Assessments list
-    4. Upcoming Appointments
-    5. Uploaded Documents
-    6. UAE Genetic Conditions catalog
-    7. Genetic Counselors / Providers
-    """
-    user_id = session['user_id']
-    user = get_user_by_id(user_id)
-    if not user:
-        return jsonify({"status": "error", "message": "User not found"}), 404
-
-    profile = get_patient_profile(user_id)
-    if not profile:
-        profile = {
-            "user_id": user_id,
-            "has_quick_assessment": 0,
-            "risk_level": "Pending",
-            "plain_summary": "Welcome to Guardian Angel! Take a quick 2-minute assessment to understand your family health risks and receive personalized guidance."
-        }
-
-    qa = get_quick_assessment(user_id)
-    couples = get_couple_assessments(user_id)
-    appts = get_appointments_for_patient(user_id)
-    docs = get_documents(user_id)
-    conditions = get_genetic_conditions()
-    providers = get_providers()
-    consents = get_consent_permissions(user_id)
-
-    # Parse JSON fields safely for frontend consumption
-    qa_parsed = None
-    if qa:
-        qa_parsed = dict(qa)
-        try:
-            qa_parsed['answers'] = json.loads(qa.get('answers_json') or '{}')
-        except Exception:
-            qa_parsed['answers'] = {}
-        try:
-            qa_parsed['risk_estimate'] = json.loads(qa.get('risk_estimate') or '{}')
-        except Exception:
-            qa_parsed['risk_estimate'] = {}
-        try:
-            qa_parsed['next_steps'] = json.loads(qa.get('next_steps_json') or '[]')
-        except Exception:
-            qa_parsed['next_steps'] = []
-
-    couples_parsed = []
-    for c in couples:
-        cd = dict(c)
-        try:
-            cd['answers'] = json.loads(c.get('answers_json') or '{}')
-        except Exception:
-            cd['answers'] = {}
-        try:
-            cd['risk_estimate'] = json.loads(c.get('risk_estimate') or '{}')
-        except Exception:
-            cd['risk_estimate'] = {}
-        couples_parsed.append(cd)
-
-    user_info = {
-        "id": user['id'],
-        "username": user['username'],
-        "fullName": user['full_name'],
-        "email": user['email'],
-        "role": user['role'],
-        "aliasName": user['alias_name']
-    }
-
-    return jsonify({
-        "status": "success",
-        "data": {
-            "user": user_info,
-            "profile": profile,
-            "quick_assessment": qa_parsed,
-            "couple_assessments": couples_parsed,
-            "appointments": appts,
-            "documents": docs,
-            "conditions": conditions,
-            "providers": providers,
-            "consent_permissions": consents
-        }
-    })
-
-
-@app.route('/api/couple-assessments', methods=['GET', 'POST'])
-@login_required
-def api_couple_assessments():
-    """
-    CRUD for Couple Assessments (One-to-Many).
-    Patients can evaluate and manage multiple potential match profiles.
-    """
-    user_id = session['user_id']
-    if request.method == 'GET':
-        assessments = get_couple_assessments(user_id)
-        parsed = []
-        for a in assessments:
-            ad = dict(a)
-            try:
-                ad['answers'] = json.loads(a.get('answers_json') or '{}')
-            except Exception:
-                ad['answers'] = {}
-            try:
-                ad['risk_estimate'] = json.loads(a.get('risk_estimate') or '{}')
-            except Exception:
-                ad['risk_estimate'] = {}
-            parsed.append(ad)
-        return jsonify({"status": "success", "couple_assessments": parsed})
-
-    # POST: Create a new Couple Assessment
-    data = request.get_json(silent=True) or {}
-    partner_label = (data.get('partner_label') or data.get('partner_name') or 'Potential Match').strip()
-    relationship_type = (data.get('relationship_type') or 'First Cousin').strip()
-    answers = data.get('answers') or {}
-    risk_estimate = data.get('risk_estimate') or {}
-    plain_summary = (data.get('plain_summary') or '').strip()
-    docs = data.get('documents') or []
-
-    # Generate calm, comforting summary if none provided
-    if not plain_summary:
-        plain_summary = f"Compatibility evaluation for {partner_label} ({relationship_type}). Autosomal recessive trait analysis shows that even when both partners carry a matching trait, there is a 75% probability in each pregnancy that the child will be born free of the condition. Modern pathways like premarital testing and PGT-M provide complete peace of mind."
-
-    ca_id = create_couple_assessment(
-        user_id=user_id,
-        partner_label=partner_label,
-        relationship_type=relationship_type,
-        answers_json=json.dumps(answers) if isinstance(answers, dict) else str(answers),
-        risk_estimate=json.dumps(risk_estimate) if isinstance(risk_estimate, dict) else str(risk_estimate),
-        plain_summary=plain_summary
-    )
-
-    # Save partner documents if provided
-    for doc in docs:
-        if isinstance(doc, dict) and doc.get('file_name'):
-            save_document(
-                user_id=user_id,
-                file_name=doc.get('file_name'),
-                file_url=doc.get('file_url', f"/data/documents/{doc.get('file_name')}"),
-                owner_type='partner',
-                couple_assessment_id=ca_id
-            )
-
-    return jsonify({
-        "status": "success",
-        "message": f"Couple assessment profile for {partner_label} created successfully.",
-        "assessment_id": ca_id
-    }), 201
-
-
-@app.route('/api/couple-assessments/<int:assessment_id>', methods=['GET', 'DELETE'])
-@login_required
-def api_couple_assessment_detail(assessment_id):
-    """View or delete a couple assessment."""
-    user_id = session['user_id']
-    if request.method == 'GET':
-        assessment = get_couple_assessment_by_id(assessment_id, user_id)
-        if not assessment:
-            return jsonify({"status": "error", "message": "Assessment not found"}), 404
-        ad = dict(assessment)
-        try:
-            ad['answers'] = json.loads(assessment.get('answers_json') or '{}')
-        except Exception:
-            ad['answers'] = {}
-        try:
-            ad['risk_estimate'] = json.loads(assessment.get('risk_estimate') or '{}')
-        except Exception:
-            ad['risk_estimate'] = {}
-        return jsonify({"status": "success", "assessment": ad})
-
-    # DELETE
-    ok = delete_couple_assessment(assessment_id, user_id)
-    if not ok:
-        return jsonify({"status": "error", "message": "Assessment not found or access denied"}), 404
-    return jsonify({"status": "success", "message": "Assessment deleted successfully"})
-
-
-@app.route('/api/documents', methods=['GET', 'POST'])
-@app.route('/api/documents/upload', methods=['POST'])
-@login_required
-def api_documents():
-    """Manage uploaded patient and partner documents."""
-    user_id = session['user_id']
-    if request.method == 'GET':
-        owner_type = request.args.get('owner_type')
-        docs = get_documents(user_id, owner_type)
-        return jsonify({"status": "success", "documents": docs})
-
-    data = request.get_json(silent=True) or {}
-    file_name = (data.get('file_name') or 'Genomic_Screening_Report.pdf').strip()
-    file_url = (data.get('file_url') or f'/data/documents/{file_name}').strip()
-    owner_type = data.get('owner_type', 'self')
-    qa_id = data.get('quick_assessment_id')
-    ca_id = data.get('couple_assessment_id')
-
-    doc_id = save_document(
-        user_id=user_id,
-        file_name=file_name,
-        file_url=file_url,
-        owner_type=owner_type,
-        quick_assessment_id=qa_id,
-        couple_assessment_id=ca_id
-    )
-
-    return jsonify({
-        "status": "success",
-        "message": f"Document '{file_name}' saved to health vault.",
-        "document_id": doc_id,
-        "document": {
-            "id": doc_id,
-            "file_name": file_name,
-            "file_url": file_url,
-            "owner_type": owner_type
-        }
-    }), 201
-
-
-@app.route('/api/documents/<int:doc_id>', methods=['DELETE'])
-@login_required
-def api_delete_document(doc_id):
-    """Delete an uploaded document."""
-    user_id = session['user_id']
-    ok = delete_document(doc_id, user_id)
-    if not ok:
-        return jsonify({"status": "error", "message": "Document not found or access denied"}), 404
-    return jsonify({"status": "success", "message": "Document removed from vault"})
-
-
-@app.route('/api/patient/conditions', methods=['GET'])
-def api_patient_conditions():
-    """Returns 6 UAE-relevant genetic conditions with plain-language explanations."""
-    conditions = get_genetic_conditions()
-    return jsonify({"status": "success", "conditions": conditions})
-
-
-@app.route('/api/patient/providers', methods=['GET'])
-def api_patient_providers():
-    """Returns 5 sample UAE genetic counselors with available booking slots."""
-    providers = get_providers()
-    return jsonify({"status": "success", "providers": providers})
-
-
-@app.route('/api/appointments', methods=['GET', 'POST'])
-@login_required
-def api_appointments():
-    """Manage counselor appointments."""
-    user_id = session['user_id']
-    user = get_user_by_id(user_id)
-    is_provider = user and dict(user).get('role') == 'provider'
-
-    if request.method == 'GET':
-        if is_provider or request.args.get('view') == 'provider':
-            appts = get_appointments_for_provider(user_id)
-        else:
-            appts = get_appointments_for_patient(user_id)
-        return jsonify({"status": "success", "appointments": appts})
-
-    data = request.get_json(silent=True) or {}
-    provider_id = data.get('provider_id')
-    assessment_type = data.get('assessment_type', 'self')
-    couple_assessment_id = data.get('couple_assessment_id')
-    scheduled_at = (data.get('scheduled_at') or data.get('slot') or '').strip()
-    notes = (data.get('notes') or '').strip()
-    duration = data.get('duration', '30 Mins')
-    share_personal_details = 1 if data.get('share_personal_details', True) in [True, 1, '1', 'true'] else 0
-
-    if not provider_id or not scheduled_at:
-        return jsonify({"status": "error", "message": "Provider and time slot are required."}), 400
-
-    appt_id = create_appointment(
-        patient_id=user_id,
-        provider_id=int(provider_id),
-        assessment_type=assessment_type,
-        couple_assessment_id=int(couple_assessment_id) if couple_assessment_id else None,
-        scheduled_at=scheduled_at,
-        notes=notes,
-        duration=duration,
-        share_personal_details=share_personal_details
-    )
-
-    return jsonify({
-        "status": "success",
-        "message": f"Appointment confirmed for {scheduled_at}.",
-        "appointment_id": appt_id
-    }), 201
-
-
-@app.route('/api/appointments/<int:appointment_id>/cancel', methods=['POST'])
-@login_required
-def api_cancel_appointment(appointment_id):
-    """Cancel a booked appointment."""
-    user_id = session['user_id']
-    ok = cancel_appointment(appointment_id, user_id)
-    if not ok:
-        return jsonify({"status": "error", "message": "Appointment not found or already cancelled"}), 404
-    return jsonify({"status": "success", "message": "Appointment cancelled successfully"})
-
-
-@app.route('/api/patient/consent', methods=['GET', 'POST'])
-@login_required
-def api_patient_consent():
-    """Get or save granular patient consent permissions."""
-    user_id = session['user_id']
-    if request.method == 'GET':
-        perms = get_consent_permissions(user_id)
-        return jsonify({"status": "success", "consent_permissions": perms})
-
-    data = request.get_json(silent=True) or {}
-    target_type = data.get('target_type')  # 'partner' or 'counselor'
-    target_id = data.get('target_id')
-    scope = data.get('scope', 'combined_summary_only')  # 'combined_summary_only' or 'full_report'
-    status = data.get('status', 'active')  # 'active' or 'revoked'
-
-    if not target_type or target_type not in ('partner', 'counselor'):
-        return jsonify({"status": "error", "message": "target_type must be 'partner' or 'counselor'"}), 400
-
-    perm_id = save_consent_permission(
-        user_id=user_id,
-        target_type=target_type,
-        target_id=int(target_id) if target_id else None,
-        scope=scope,
-        status=status
-    )
-    return jsonify({
-        "status": "success",
-        "message": "Consent preference saved securely.",
-        "permission_id": perm_id
-    }), 201
-
-
-@app.route('/api/patient/consent/<int:perm_id>/revoke', methods=['POST'])
-@login_required
-def api_revoke_patient_consent(perm_id):
-    """1-tap revocation of a consent permission."""
-    user_id = session['user_id']
-    ok = revoke_consent_permission(user_id, perm_id)
-    if not ok:
-        return jsonify({"status": "error", "message": "Consent permission not found or already revoked."}), 404
-    return jsonify({"status": "success", "message": "Access permission revoked immediately."})
-
-
-@app.route('/api/patient/comprehension', methods=['POST'])
-@login_required
-def api_patient_comprehension():
-    """Save 1-tap patient comprehension feedback ('clear', 'somewhat', 'needs_counselor')."""
-    user_id = session['user_id']
-    data = request.get_json(silent=True) or {}
-    rating = data.get('rating')
-    assessment_type = data.get('assessment_type', 'self')
-
-    if not rating or rating not in ('clear', 'somewhat', 'needs_counselor'):
-        return jsonify({"status": "error", "message": "Rating must be 'clear', 'somewhat', or 'needs_counselor'"}), 400
-
-    fb_id = save_comprehension_feedback(user_id=user_id, rating=rating, assessment_type=assessment_type)
-    return jsonify({
-        "status": "success",
-        "message": "Thank you for your feedback! Your response helps us ensure clear explanations.",
-        "feedback_id": fb_id
-    }), 201
-
-
-@app.route('/api/patient/impact-metrics', methods=['GET'])
-def api_patient_impact_metrics():
-    """Aggregated non-coercive impact metrics for clinical/admin oversight."""
-    metrics = get_patient_impact_metrics()
-    return jsonify({"status": "success", "metrics": metrics})
-
 
 # ==================== GENETIC & PREMARITAL REPORT SCRAPING & PII MASKING ====================
 

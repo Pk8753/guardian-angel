@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Navbar } from '@/components/layout/Navbar';
 import { AuthGuard } from '@/components/layout/AuthGuard';
@@ -49,14 +48,7 @@ interface ReportMember {
 }
 
 export default function ProfilePage() {
-  const router = useRouter();
   const { user } = useAuthStore();
-
-  useEffect(() => {
-    if (user && user.role === 'patient') {
-      router.replace('/privacy-profile');
-    }
-  }, [user, router]);
   const { activeLocale } = useUIStore();
   const [fullName, setFullName] = useState(user?.fullName || 'Kabir Sharma');
   const [aliasName, setAliasName] = useState(user?.aliasName || 'Silent-Falcon-9214');

@@ -55,14 +55,34 @@ export function Header() {
           </nav>
         </div>
 
-        {/* Header Right: Single Clear Action & Language Switcher */}
-        <div className="flex items-center gap-3">
+        {/* Header Right: Compact Auth Controls */}
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => auth.openAuth('signin')}
-            className="px-4 py-2 text-xs font-bold bg-[#30ba78] text-[#0c322c] hover:bg-[#90ebcd] rounded-xl shadow-xs transition-all cursor-pointer"
+            className="px-3.5 py-1.5 text-xs font-bold text-white hover:text-[#30ba78] border border-white/20 hover:border-[#30ba78] rounded-lg transition-all cursor-pointer"
           >
             Sign In
+          </button>
+
+          <button
+            type="button"
+            onClick={() => auth.openAuth('register')}
+            className="px-3.5 py-1.5 text-xs font-bold bg-[#30ba78] text-[#0c322c] hover:bg-[#90ebcd] rounded-lg shadow-sm transition-all cursor-pointer"
+          >
+            Create Account
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              window.location.href = '/api/uaepass/login';
+            }}
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-black text-white hover:bg-neutral-900 border border-white/20 rounded-lg transition-all cursor-pointer"
+            title="Sign in with UAE PASS"
+          >
+            <span className="material-symbols-outlined text-[15px] text-[#30ba78]">fingerprint</span>
+            <span>UAE PASS</span>
           </button>
         </div>
       </div>

@@ -12,14 +12,9 @@ export function AuthModal() {
   if (!auth.isAuthOpen) return null;
 
   return (
-    <div
-      onClick={(e) => {
-        if (e.target === e.currentTarget) auth.closeAuth();
-      }}
-      className="fixed inset-0 z-[100] flex sm:items-center sm:justify-center sm:p-6 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200"
-    >
-      {/* Mobile View: Full-Screen 100dvh Native App Screen | Desktop: Centered Floating Modal */}
-      <div className="w-full h-[100dvh] sm:h-auto sm:max-w-md bg-white text-[#0c322c] sm:rounded-2xl shadow-2xl sm:border sm:border-[#30ba78]/30 overflow-hidden flex flex-col justify-between animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-[100] flex sm:items-start sm:justify-end sm:p-6 bg-black/70 sm:backdrop-blur-sm animate-in fade-in duration-200">
+      {/* Mobile View: Full-Screen 100dvh Native App Screen | Desktop: Compact Floating Modal */}
+      <div className="w-full h-[100dvh] sm:h-auto sm:max-w-md bg-white text-[#0c322c] sm:rounded-2xl shadow-2xl sm:border sm:border-[#30ba78]/30 overflow-hidden sm:mt-14 flex flex-col justify-between animate-in slide-in-from-bottom sm:slide-in-from-top-4 duration-300">
         
         {/* Top Native App Navigation Bar with Notch / Safe Area support */}
         <div

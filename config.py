@@ -39,9 +39,6 @@ class Config:
     SESSION_COOKIE_SAMESITE = 'Lax'
     SESSION_COOKIE_SECURE = os.environ.get('SESSION_COOKIE_SECURE', 'False').lower() in ('true', '1', 't')
     
-    # Google AI Studio Configuration (direct API key for GenWell AI)
-    GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
-
     # GCP Configuration
     GCP_PROJECT_ID = os.environ.get('GCP_PROJECT_ID', os.environ.get('GOOGLE_CLOUD_PROJECT', 'guardian-angel-health'))
     GCP_REGION = os.environ.get('GCP_REGION', 'us-central1')

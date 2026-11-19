@@ -72,32 +72,9 @@ export function MobileLoginView() {
 
   // Closes assessment and opens full-screen native mobile Auth view
   const handleSaveToVault = React.useCallback(() => {
-    const payload = {
-      answers: {
-        gender,
-        relStatus,
-        relIdx,
-        genIdx,
-        histIdx,
-        pregIdx,
-        scrIdx,
-        sameCarrier,
-      },
-      risk_estimate: assessment,
-      plain_summary: assessment.riskBandDesc || 'Completed premarital risk estimation.',
-      next_steps: [
-        "Complete premarital screening for both partners (Thalassemia, Sickle Cell, G6PD).",
-        "Schedule a genetic counseling review to discuss carrier traits.",
-        "Record any inherited conditions in either family before consulting."
-      ],
-      documents: estimator.uploadedDocs || [],
-    };
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('ga_pending_guest_assessment', JSON.stringify(payload));
-    }
     closeAssessment();
-    auth.openAuth('register');
-  }, [gender, relStatus, relIdx, genIdx, histIdx, pregIdx, scrIdx, sameCarrier, assessment, estimator.uploadedDocs, closeAssessment, auth]);
+    auth.openAuth('signin');
+  }, [closeAssessment, auth]);
 
   const selectedRel = relIdx !== null ? RELATIONSHIPS[relIdx] : null;
   const relTitle = selectedRel ? selectedRel[1] : 'Unrelated partners';

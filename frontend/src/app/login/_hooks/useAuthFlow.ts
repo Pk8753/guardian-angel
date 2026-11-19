@@ -107,49 +107,23 @@ export function useAuthFlow() {
 
     setIsSignInSubmitting(true);
 
-    let pendingQA: any = null;
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = localStorage.getItem('ga_pending_guest_assessment');
-        if (raw) pendingQA = JSON.parse(raw);
-      } catch {}
-    }
-
     try {
       const res = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mode: 'signin',
-          username: u,
-          password: p,
-          quick_assessment: pendingQA,
-        }),
+        body: JSON.stringify({ mode: 'signin', username: u, password: p }),
       });
 
       const data = await res.json();
 
       if (data.status === 'success' && data.user) {
-        if (pendingQA && typeof window !== 'undefined') {
-          try {
-            await fetch('/api/patient/quick-assessment/persist', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(pendingQA),
-            });
-          } catch {}
-          localStorage.removeItem('ga_pending_guest_assessment');
-        }
-
-        const userRole = data.user.role || (data.user.username.toLowerCase() === 'admin' ? 'admin' : 'patient');
         login({
           id: data.user.id,
           username: data.user.username,
           fullName: data.user.full_name,
           aliasName: data.user.alias_name,
-          role: userRole,
           isAdmin: data.user.username.toLowerCase() === 'admin',
-          isFreshUser: !pendingQA,
+          isFreshUser: false,
         });
         router.push('/dashboard');
         return;
@@ -162,47 +136,10 @@ export function useAuthFlow() {
       // Offline demo fallback
       const lower = u.toLowerCase();
       if (
-        (lower === 'patient' || lower === 'patient@guardianangel.ae') && p === 'Patient123!'
-      ) {
-        if (pendingQA && typeof window !== 'undefined') {
-          localStorage.removeItem('ga_pending_guest_assessment');
-        }
-        login({
-          id: 10,
-          username: 'patient',
-          fullName: 'Tariq Al-Mansoor',
-          aliasName: 'Tariq Al-Mansoor',
-          role: 'patient',
-          isAdmin: false,
-          isFreshUser: false,
-        });
-        router.push('/dashboard');
-        return;
-      } else if (
-        (lower === 'provider' || lower === 'provider@guardianangel.ae') && p === 'Provider123!'
-      ) {
-        if (pendingQA && typeof window !== 'undefined') {
-          localStorage.removeItem('ga_pending_guest_assessment');
-        }
-        login({
-          id: 11,
-          username: 'provider',
-          fullName: 'Dr. Mariam Al Mansoori',
-          aliasName: 'Dr. Mariam Al Mansoori',
-          role: 'provider',
-          isAdmin: false,
-          isFreshUser: false,
-        });
-        router.push('/dashboard');
-        return;
-      } else if (
         (lower === 'admin' && p === 'admin') ||
         (lower === 'user' && p === 'user') ||
         (lower === 'kabir' && p === '123456')
       ) {
-        if (pendingQA && typeof window !== 'undefined') {
-          localStorage.removeItem('ga_pending_guest_assessment');
-        }
         login({
           id: lower === 'admin' ? 1 : lower === 'user' ? 2 : 4,
           username: lower,
@@ -210,7 +147,7 @@ export function useAuthFlow() {
             lower === 'admin'
               ? 'Dr. Tariq Al-Mansoor (Admin)'
               : lower === 'user'
-              ? 'Tariq Al-Mansoor'
+              ? 'Dr. Eleanor Vance'
               : 'Kabir Khan',
           aliasName:
             lower === 'admin'
@@ -218,9 +155,8 @@ export function useAuthFlow() {
               : lower === 'user'
               ? 'Silent-Falcon-9214'
               : 'Solar-Sequoia-3972',
-          role: lower === 'admin' ? 'admin' : 'patient',
           isAdmin: lower === 'admin',
-          isFreshUser: !pendingQA,
+          isFreshUser: false,
         });
         router.push('/dashboard');
         return;
@@ -298,14 +234,6 @@ export function useAuthFlow() {
 
     setIsRegSubmitting(true);
 
-    let pendingQA: any = null;
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = localStorage.getItem('ga_pending_guest_assessment');
-        if (raw) pendingQA = JSON.parse(raw);
-      } catch {}
-    }
-
     try {
       const res = await fetch('/api/register', {
         method: 'POST',
@@ -320,66 +248,16 @@ export function useAuthFlow() {
           location: regLocation.trim(),
           reg_password: regPassword.trim(),
           otp: otpInput.trim() || '9090',
-          quick_assessment: pendingQA,
         }),
       });
 
       const data = await res.json();
 
-      if (data.status === 'error' || (!data.user_id && data.status !== 'success')) {
+      if (data.status === 'error' || !data.user_id) {
         setAuthError(data.message || 'Failed to create vault account. Please try again.');
         setIsRegSubmitting(false);
         return;
       }
-
-      // Auto sign-in with the new credentials
-      try {
-        const loginRes = await fetch('/api/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            mode: 'signin',
-            username: regUsername.trim(),
-            password: regPassword.trim(),
-            quick_assessment: pendingQA,
-          }),
-        });
-        const loginData = await loginRes.json();
-        if (loginData.status === 'success' && loginData.user) {
-          if (pendingQA && typeof window !== 'undefined') {
-            try {
-              await fetch('/api/patient/quick-assessment/persist', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(pendingQA),
-              });
-            } catch {}
-            localStorage.removeItem('ga_pending_guest_assessment');
-          }
-          login({
-            id: loginData.user.id,
-            username: loginData.user.username,
-            fullName: loginData.user.full_name,
-            aliasName: loginData.user.alias_name,
-            role: loginData.user.role || 'patient',
-            isAdmin: loginData.user.username.toLowerCase() === 'admin',
-            isFreshUser: !pendingQA,
-          });
-          setIsRegSubmitting(false);
-          router.push('/dashboard');
-          return;
-        }
-      } catch (e) {
-        console.error('Auto login after registration failed:', e);
-      }
-
-      setSignInUsername(regUsername.trim());
-      setSignInPassword('');
-      setIsRegSubmitting(false);
-      setActiveTab('signin');
-      setAuthSuccess(
-        'Your account has been created successfully! Please sign in with your credentials to access your health vault.'
-      );
     } catch {
       setAuthError(
         'Unable to connect to backend server. Please verify python3 app.py is running on port 5000.'
@@ -387,6 +265,14 @@ export function useAuthFlow() {
       setIsRegSubmitting(false);
       return;
     }
+
+    setSignInUsername('');
+    setSignInPassword('');
+    setIsRegSubmitting(false);
+    setActiveTab('signin');
+    setAuthSuccess(
+      'Your account has been created successfully! Please sign in with your credentials to access your health vault.'
+    );
   };
 
   return {

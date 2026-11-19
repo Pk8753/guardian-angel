@@ -410,13 +410,7 @@ endobj
     def test_report_analyze_with_pymupdf_extraction(self):
         """Verify PyMuPDF extracts full text, preserves complete report, unmasked name, and clinical findings"""
         import io
-        try:
-            import fitz
-        except ImportError:
-            try:
-                import pymupdf as fitz
-            except ImportError:
-                self.skipTest("PyMuPDF / fitz not installed in environment")
+        import pymupdf as fitz
         admin_u = get_user_by_username('admin')
         with self.client.session_transaction() as sess:
             sess['user_id'] = admin_u['id']

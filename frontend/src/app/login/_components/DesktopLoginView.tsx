@@ -37,39 +37,9 @@ export function DesktopLoginView() {
     toggleTile,
     isFormulaExpanded,
     setIsFormulaExpanded,
-    uploadedDocs,
-    addUploadedDoc,
-    removeUploadedDoc,
     handleResetEstimator,
     assessment,
   } = estimator;
-
-  const handleSaveAssessment = React.useCallback(() => {
-    const payload = {
-      answers: {
-        gender,
-        relStatus,
-        relIdx,
-        genIdx,
-        histIdx,
-        pregIdx,
-        scrIdx,
-        sameCarrier,
-      },
-      risk_estimate: assessment,
-      plain_summary: assessment.riskBandDesc || 'Completed premarital risk estimation.',
-      next_steps: [
-        "Complete premarital screening for both partners (Thalassemia, Sickle Cell, G6PD).",
-        "Schedule a genetic counseling review to discuss carrier traits.",
-        "Record any inherited conditions in either family before consulting."
-      ],
-      documents: uploadedDocs,
-    };
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('ga_pending_guest_assessment', JSON.stringify(payload));
-    }
-    auth.openAuth('register');
-  }, [gender, relStatus, relIdx, genIdx, histIdx, pregIdx, scrIdx, sameCarrier, assessment, uploadedDocs, auth]);
 
   const {
     currentF,
@@ -402,92 +372,6 @@ export function DesktopLoginView() {
                   Beta-Thalassemia, Sickle Cell, SMA).
                 </span>
               </label>
-
-              {/* Optional Document Attachment */}
-              <div className="pt-4 border-t border-neutral-100 space-y-2 mt-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-sm text-[#30ba78]">upload_file</span>
-                    <h3 className="text-xs font-bold text-[#0c322c]">
-                      Attach Medical Report (Optional)
-                    </h3>
-                  </div>
-                  <span className="text-[10px] bg-emerald-50 text-emerald-800 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
-                    Vault Pre-load
-                  </span>
-                </div>
-                <p className="text-[11px] text-neutral-500">
-                  Attach premarital screening results or a lab PDF to save into your vault.
-                </p>
-                <div className="border border-dashed border-neutral-300 hover:border-[#30ba78] rounded-xl p-3 bg-neutral-50/70 transition-colors space-y-2">
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
-                    <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-neutral-300 hover:border-[#30ba78] text-xs font-bold text-[#0c322c] shadow-2xs">
-                      <span className="material-symbols-outlined text-sm text-[#30ba78]">attach_file</span>
-                      <span>Upload from Device</span>
-                      <input
-                        type="file"
-                        className="hidden"
-                        accept=".pdf,.png,.jpg,.jpeg,.txt"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            addUploadedDoc({
-                              file_name: file.name,
-                              file_url: `/data/documents/${file.name}`,
-                              owner_type: 'self'
-                            });
-                          }
-                        }}
-                      />
-                    </label>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-[10px] text-neutral-400 font-semibold">Sample files:</span>
-                      <button
-                        type="button"
-                        onClick={() => addUploadedDoc({
-                          file_name: 'Premarital_CBC_Report.pdf',
-                          file_url: '/data/documents/Premarital_CBC_Report.pdf',
-                          owner_type: 'self'
-                        })}
-                        className="px-2 py-0.5 rounded bg-white hover:bg-emerald-50 text-neutral-700 hover:text-emerald-800 border border-neutral-200 text-[10px] font-bold shadow-2xs cursor-pointer"
-                      >
-                        + Premarital CBC
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => addUploadedDoc({
-                          file_name: 'Carrier_Screen_Thalassemia.pdf',
-                          file_url: '/data/documents/Carrier_Screen_Thalassemia.pdf',
-                          owner_type: 'self'
-                        })}
-                        className="px-2 py-0.5 rounded bg-white hover:bg-emerald-50 text-neutral-700 hover:text-emerald-800 border border-neutral-200 text-[10px] font-bold shadow-2xs cursor-pointer"
-                      >
-                        + Hemoglobin Assay
-                      </button>
-                    </div>
-                  </div>
-
-                  {uploadedDocs && uploadedDocs.length > 0 && (
-                    <div className="pt-2 border-t border-neutral-200 space-y-1">
-                      {uploadedDocs.map((doc, idx) => (
-                        <div key={idx} className="flex items-center justify-between bg-white px-2.5 py-1 rounded-lg border border-neutral-200 text-xs">
-                          <span className="font-semibold text-[#0c322c] truncate max-w-[260px] flex items-center gap-1.5">
-                            <span className="material-symbols-outlined text-xs text-[#30ba78]">description</span>
-                            {doc.file_name}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => removeUploadedDoc(doc.file_name)}
-                            className="text-rose-600 hover:text-rose-800 font-bold text-[11px] cursor-pointer"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -740,7 +624,7 @@ export function DesktopLoginView() {
           {/* Save / Access in Vault CTA */}
           <button
             type="button"
-            onClick={handleSaveAssessment}
+            onClick={() => auth.openAuth('signin')}
             className="w-full py-3 rounded-xl bg-[#30ba78] hover:bg-[#90ebcd] text-[#0c322c] text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-lg mt-4"
           >
             <span>Save Assessment in Clinical Vault</span>
