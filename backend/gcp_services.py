@@ -79,7 +79,7 @@ class VertexAIService:
 
     def ask_genwell(self, prompt: str, user_context: dict = None) -> dict:
         """
-        Ask GenWell AI assistant. Uses Vertex AI Gemini if configured on GCP,
+        Ask Care AI assistant. Uses Vertex AI Gemini if configured on GCP,
         otherwise uses the built-in clinical rule engine for deterministic, accurate clinical answers.
         """
         prompt_lower = prompt.lower().strip()
@@ -88,7 +88,7 @@ class VertexAIService:
         if self.is_vertex_available:
             try:
                 system_instruction = (
-                    "You are GenWell AI, a clinical genetics assistant within the GuardianAngel platform. "
+                    "You are Care AI, a clinical genetics assistant within the GuardianAngel platform. "
                     "You provide evidence-based, compassionate, and precise genomic guidance based on ACMG/SHG standards. "
                     "Current patient context: Proband Tariq Al-Mansoor, heterozygous carrier for Beta-Thalassemia (HBB) "
                     "and G6PD Mediterranean variant, evaluating pre-marital compatibility with Fatima Al-Zahra."

@@ -46,7 +46,7 @@ import {
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
-  const { activeLocale, viewMode } = useUIStore();
+  const { activeLocale, viewMode, selectedGeminiModel, setSelectedGeminiModel, geminiApiKey, aiEngineMode } = useUIStore();
   const firstName = user?.fullName ? user.fullName.split(' ')[0] : (user?.username || 'Patient');
 
   // Multiple Family Pedigrees State & Default Family Tree State
@@ -332,7 +332,8 @@ export default function DashboardPage() {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [dynamicQueries, setDynamicQueries] = useState<string[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
-  const [selectedModel, setSelectedModel] = useState('gemini-3.0-flash');
+  const selectedModel = selectedGeminiModel || 'gemini-3.8-flash';
+  const setSelectedModel = setSelectedGeminiModel;
   const [aiSource, setAiSource] = useState<string | null>(null);
   const [aiLocus, setAiLocus] = useState<string | null>(null);
   const [bookingConfirmed, setBookingConfirmed] = useState(false);
@@ -498,7 +499,12 @@ export default function DashboardPage() {
     fetch('/api/ai/analyze-assessment', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ family_id: fid })
+      body: JSON.stringify({
+        family_id: fid,
+        api_key: geminiApiKey ? geminiApiKey.trim() : undefined,
+        model: selectedGeminiModel || 'gemini-3.8-flash',
+        ai_mode: aiEngineMode
+      })
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
@@ -556,16 +562,21 @@ export default function DashboardPage() {
         text: m.text,
       }));
 
-      const endpoint = selectedModel ? '/api/ai/ask-studio' : '/api/ai/ask';
+      const isOnline = aiEngineMode === 'online' || Boolean(geminiApiKey && geminiApiKey.trim());
+      const endpoint = isOnline ? '/api/ai/ask-studio' : '/api/ai/ask';
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           query: userMsgText,
-          model: selectedModel,
+          model: selectedGeminiModel || 'gemini-3.8-flash',
+          api_key: geminiApiKey ? geminiApiKey.trim() : undefined,
+          ai_mode: isOnline ? 'online' : 'offline',
           view_mode: viewMode,
           family_id: activeFamily?.family_id,
-          conversation_history: historyPayload
+          conversation_history: historyPayload,
+          current_page: 'Dashboard',
+          page_context: 'Patient Dashboard overview with family stats, genomic literacy, and premarital screening status.'
         })
       });
       clearTimeout(stepTimer1);
@@ -881,13 +892,6 @@ export default function DashboardPage() {
             <div className="relative w-full bg-white rounded-2xl p-4 sm:p-6 lg:p-7 shadow-[0_1px_4px_rgba(12,50,44,0.04)] border border-outline-variant/40 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5 sm:gap-6">
               {/* Left Welcome Copy */}
               <div className="flex flex-col max-w-2xl space-y-2">
-                <div className="flex items-center gap-2 flex-wrap text-xs">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-mint/25 text-pine font-bold border border-mint text-[11px] tracking-wide">
-                    <span className="w-2 h-2 rounded-full bg-jungle animate-pulse" />
-                    {t('clinical_node_active', activeLocale)}
-                  </span>
-                </div>
-
                 <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-pine tracking-tight">
                   {t('good_morning', activeLocale)}, {firstName}
                 </h1>
@@ -1011,6 +1015,77 @@ export default function DashboardPage() {
                     </span>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Minimal Guided Steps for Patient */}
+            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-outline-variant/30 shadow-[0_1px_3px_rgba(12,50,44,0.03)]">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-jungle"></span>
+                  <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-pine">
+                    {activeLocale === 'ar' ? 'خطوات الفحص والإرشاد الوراثي' : 'Essential Guidance Pathway'}
+                  </h3>
+                </div>
+                <span className="text-[11px] text-slate-500 font-medium">
+                  {activeLocale === 'ar' ? '٣ خطوات أساسية' : '3 simple steps'}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <Link
+                  href="/pedigree"
+                  className="group p-3.5 rounded-xl border border-outline-variant/30 hover:border-mint bg-fog-light/40 hover:bg-mint/10 transition flex items-start gap-3"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-pine/10 text-pine font-black flex items-center justify-center shrink-0 text-xs">
+                    1
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-pine flex items-center gap-1 group-hover:text-jungle transition">
+                      {activeLocale === 'ar' ? 'توثيق شجرة العائلة' : 'Family Pedigree'}
+                      <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition -translate-x-1 group-hover:translate-x-0 rtl:rotate-180" />
+                    </h4>
+                    <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                      {activeLocale === 'ar' ? 'إضافة أفراد العائلة وتاريخ القرابة.' : 'Map family members and consanguinity connections.'}
+                    </p>
+                  </div>
+                </Link>
+
+                <button
+                  type="button"
+                  onClick={() => setIsUploadModalOpen(true)}
+                  className="group p-3.5 rounded-xl border border-outline-variant/30 hover:border-mint bg-fog-light/40 hover:bg-mint/10 transition flex items-start gap-3 text-start"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-pine/10 text-pine font-black flex items-center justify-center shrink-0 text-xs">
+                    2
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-pine flex items-center gap-1 group-hover:text-jungle transition">
+                      {activeLocale === 'ar' ? 'رفع تقرير الفحص الطبي' : 'Upload Screening Report'}
+                      <UploadCloud className="w-3 h-3 text-pine/60 group-hover:text-jungle" />
+                    </h4>
+                    <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                      {activeLocale === 'ar' ? 'رفع تقارير فحص ما قبل الزواج أو الجينات.' : 'Upload premarital or carrier screening lab PDFs.'}
+                    </p>
+                  </div>
+                </button>
+
+                <Link
+                  href="/couple-assessment"
+                  className="group p-3.5 rounded-xl border border-outline-variant/30 hover:border-mint bg-fog-light/40 hover:bg-mint/10 transition flex items-start gap-3"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-pine/10 text-pine font-black flex items-center justify-center shrink-0 text-xs">
+                    3
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-pine flex items-center gap-1 group-hover:text-jungle transition">
+                      {activeLocale === 'ar' ? 'توافق الزوجين والمخاطر' : 'Couple Compatibility'}
+                      <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition -translate-x-1 group-hover:translate-x-0 rtl:rotate-180" />
+                    </h4>
+                    <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                      {activeLocale === 'ar' ? 'عرض التوافق الصحي والحلول الوقائية المتاحة.' : 'Review combined risk & proactive family options.'}
+                    </p>
+                  </div>
+                </Link>
               </div>
             </div>
 
@@ -1417,10 +1492,8 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* ==================== 3. MAIN 2-COLUMN SECTION ==================== */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-              {/* -------------------- LEFT COLUMN (8 COLS) -------------------- */}
-              <div className="lg:col-span-8 flex flex-col gap-5">
+            {/* ==================== 3. MAIN LINEAGE PEDIGREE SECTION ==================== */}
+            <div className="w-full">
                 {/* Lineage Pedigree Model Card */}
                 <div className="bg-white rounded-2xl p-4 sm:p-6 border border-outline-variant/30 shadow-[0_1px_4px_rgba(12,50,44,0.04)] space-y-4">
                   <div className="flex items-center justify-between flex-wrap gap-2">
@@ -1521,366 +1594,7 @@ export default function DashboardPage() {
                     </Link>
                   </div>
                 </div>
-
-                {/* Sub-grid: Action Directives & Genomic Literacy nested directly below Lineage Pedigree Model */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch">
-                  {/* Action Directives Card */}
-                  <div className="bg-white rounded-2xl p-5 border border-outline-variant/30 shadow-[0_1px_4px_rgba(12,50,44,0.04)] space-y-3.5 flex flex-col justify-between">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-jungle" />
-                        <h2 className="text-xs font-bold text-pine uppercase tracking-wide">
-                          Action Directives
-                        </h2>
-                      </div>
-                      <span className="text-[10px] font-bold text-midnight bg-midnight/10 px-2 py-0.5 rounded-full tracking-wider">
-                        TIER 1 CLINICAL
-                      </span>
-                    </div>
-
-                    <div className="space-y-3">
-                      {/* Sub-card 1: Pre-Marital Gene Panel */}
-                      <div className="p-3.5 rounded-xl bg-fog/60 border border-outline-variant/30 space-y-2.5">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-lg bg-waterhole/10 border border-waterhole/20 text-waterhole flex items-center justify-center font-bold shrink-0">
-                              <Dna className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <h4 className="text-xs font-bold text-pine leading-tight">Pre-Marital Gene Panel</h4>
-                              <span className="text-[10px] text-on-surface-variant">
-                                Recommended for Fatima &amp; {firstName}
-                              </span>
-                            </div>
-                          </div>
-                          <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 text-[10px] font-bold border border-rose-200 shrink-0">
-                            Urgent
-                          </span>
-                        </div>
-
-                        <p className="text-[11px] text-on-surface-variant leading-relaxed">
-                          A simple blood screening checking for Beta-Thalassemia, G6PD, and Cystic Fibrosis
-                          at an accredited hospital so you have clear answers before marriage.
-                        </p>
-
-                        <button
-                          type="button"
-                          onClick={() => setPanelScheduled(true)}
-                          className={`w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer ${
-                            panelScheduled
-                              ? 'bg-pine text-white'
-                              : 'bg-pine hover:bg-pine-light text-white'
-                          }`}
-                        >
-                          <Calendar className="w-3.5 h-3.5" />
-                          <span>{panelScheduled ? 'Panel Scheduled (#902)' : 'Schedule Gene Panel'}</span>
-                        </button>
-                      </div>
-
-                      {/* Sub-card 2: Doctor Video Consultation */}
-                      <div className="p-3.5 rounded-xl bg-fog/60 border border-outline-variant/30 space-y-2.5">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-2.5">
-                            <img
-                              src="https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=120&auto=format&fit=crop&q=80"
-                              alt="Dr. Alisha Patel"
-                              className="w-8 h-8 rounded-full object-cover border border-outline-variant/40 shrink-0"
-                            />
-                            <div>
-                              <h4 className="text-xs font-bold text-pine leading-tight">Dr. Alisha Patel</h4>
-                              <span className="text-[10px] text-on-surface-variant">
-                                Consultant Genetic Counsellor (FACMG)
-                              </span>
-                            </div>
-                          </div>
-                          <span className="px-2 py-0.5 rounded-full bg-white border border-outline-variant/30 text-pine text-[10px] font-bold flex items-center gap-1 shrink-0">
-                            <Video className="w-3 h-3 text-pine" />
-                            <span>Video</span>
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <span className="px-2 py-0.5 rounded bg-white border border-outline-variant/30 text-pine text-[10px] font-semibold flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-pine/60" />
-                            Thu &bull; 14:00 (GST)
-                          </span>
-                          <span className="px-2 py-0.5 rounded bg-white border border-outline-variant/30 text-pine text-[10px] font-semibold">
-                            45 Mins
-                          </span>
-                        </div>
-
-                        <p className="text-[11px] text-on-surface-variant leading-relaxed">
-                          A friendly private video appointment to discuss your results and answer questions about healthy family planning.
-                        </p>
-
-                        <div className="grid grid-cols-2 gap-2 pt-0.5">
-                          <button
-                            type="button"
-                            onClick={() => alert('Rescheduling calendar opened...')}
-                            className="py-1.5 px-2.5 text-xs font-semibold text-pine bg-white hover:bg-fog border border-outline-variant/40 rounded-xl transition text-center cursor-pointer"
-                          >
-                            Reschedule
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setBookingConfirmed(true)}
-                            className={`py-1.5 px-2.5 text-xs font-bold rounded-xl transition text-center shadow-xs cursor-pointer ${
-                              bookingConfirmed
-                                ? 'bg-pine text-white'
-                                : 'bg-pine hover:bg-pine-light text-white'
-                            }`}
-                          >
-                            {bookingConfirmed ? 'Confirmed!' : 'Confirm Booking'}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Genomic Literacy Card */}
-                  <div className="bg-white rounded-2xl p-5 border border-outline-variant/30 shadow-[0_1px_4px_rgba(12,50,44,0.04)] space-y-3.5 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-pine">
-                        <ShieldCheck className="w-4 h-4 text-jungle" />
-                        <span>GENOMIC LITERACY</span>
-                      </div>
-
-                      <h3 className="text-sm font-bold text-pine leading-snug mt-1.5">
-                        Understanding Shared Family Bloodlines &amp; Hereditary Health
-                      </h3>
-                    </div>
-
-                    <div className="flex flex-col gap-3">
-                      {/* Family Photo Representation */}
-                      <div className="rounded-xl overflow-hidden shadow-xs h-32 border border-outline-variant/40 relative bg-fog">
-                        <img
-                          src="https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=600&auto=format&fit=crop&q=80"
-                          alt="Family Health"
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-
-                      {/* Educational Text in Simple English */}
-                      <div className="space-y-2">
-                        <p className="text-xs text-on-surface-variant leading-relaxed">
-                          Marrying within the family is a deeply respected and valued tradition in many cultures.
-                          Modern genetic testing gives couples clear, private knowledge—spotting shared hidden
-                          traits early so you can take simple steps to keep future generations healthy and thriving.
-                        </p>
-
-                        <p className="text-xs text-on-surface-variant leading-relaxed">
-                          Carrier status indicates you carry a recessive gene variation without having the clinical illness.
-                          Routine premarital screening empowers you with peace of mind.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-outline-variant/20 text-[11px]">
-                      <Link
-                        href="/risk-analysis"
-                        className="inline-flex items-center gap-1 font-bold text-waterhole hover:text-waterhole-dark transition"
-                      >
-                        <span>Read 5-min Summary</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </Link>
-                      <span className="text-on-surface-variant/70 font-medium text-[10px]">
-                        &bull; Medical Genetics Board
-                      </span>
-                    </div>
-                  </div>
-                </div>
               </div>
-
-              {/* -------------------- RIGHT COLUMN (4 COLS) -------------------- */}
-              <div className="lg:col-span-4 flex flex-col h-full">
-                {/* Ask Care AI Messenger Card (Dedicated full-height chat card extending to bottom of page) */}
-                <div id="care-ai-chat-section" className="bg-white rounded-2xl p-5 border border-outline-variant/30 shadow-[0_1px_4px_rgba(12,50,44,0.04)] space-y-3.5 scroll-mt-6 flex flex-col h-full justify-between">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-sm font-bold text-pine flex items-center gap-1.5">
-                        <Sparkles className="w-4 h-4 text-jungle" />
-                        Ask Care AI
-                      </h2>
-                      <p className="text-[11px] text-on-surface-variant">
-                        Premarital screening, policy &amp; pedigree intelligence
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={handleClearChat}
-                        title="Clear conversation"
-                        className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition text-[11px] flex items-center gap-1 cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span className="text-[10px] hidden sm:inline">Clear</span>
-                      </button>
-                      <span className="px-2 py-0.5 rounded-full bg-mint/25 text-pine text-[10px] font-bold border border-mint flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        Unified Care AI
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Scrollable Chat Conversation Viewport (Extends vertically to bottom of page matching left column) */}
-                  <div
-                    ref={chatScrollRef}
-                    className="flex-1 min-h-[700px] max-h-[1050px] overflow-y-auto space-y-3 p-3.5 bg-fog/50 rounded-2xl border border-outline-variant/20 scroll-smooth"
-                  >
-                    {chatMessages.map((msg) => (
-                      <div
-                        key={msg.id}
-                        className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start items-start gap-2'}`}
-                      >
-                        {msg.sender === 'ai' && (
-                          <div className="w-6 h-6 rounded-full bg-mint text-pine flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
-                            <Sparkles className="w-3.5 h-3.5 text-pine" />
-                          </div>
-                        )}
-                        <div
-                          className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 shadow-xs text-xs space-y-1.5 ${
-                            msg.sender === 'user'
-                              ? 'bg-pine text-white rounded-tr-xs'
-                              : 'bg-white text-pine border border-outline-variant/30 rounded-tl-xs'
-                          }`}
-                        >
-                          {renderFormattedText(msg.text)}
-                          <div
-                            className={`flex flex-col gap-1 text-[9px] pt-0.5 ${
-                              msg.sender === 'user' ? 'text-white/70' : 'text-on-surface-variant/70'
-                            }`}
-                          >
-                            {msg.sender === 'ai' && (
-                              <div className="flex flex-wrap items-center gap-1 pt-0.5">
-                                {msg.citationDetails && msg.citationDetails.length > 0 ? (
-                                  msg.citationDetails.map((cit, cIdx) => (
-                                    <button
-                                      key={cIdx}
-                                      type="button"
-                                      onClick={() => setActiveCitationPreview(cit)}
-                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-mint/30 hover:bg-mint/50 text-pine text-[9px] font-semibold border border-mint/60 transition cursor-pointer shadow-2xs"
-                                      title="Click to preview citation excerpt"
-                                    >
-                                      <FileText className="w-2.5 h-2.5 text-pine" />
-                                      <span className="truncate max-w-[130px]">{cit.title}</span>
-                                    </button>
-                                  ))
-                                ) : msg.source ? (
-                                  <span className="font-medium text-teal-800">
-                                    Source: <span className="underline decoration-mint underline-offset-2">{msg.source}</span>
-                                  </span>
-                                ) : null}
-                              </div>
-                            )}
-
-                            {msg.sender === 'ai' && msg.suggestedFollowUps && msg.suggestedFollowUps.length > 0 && (
-                              <div className="pt-1.5 border-t border-outline-variant/20 space-y-1">
-                                <p className="text-[10px] font-semibold text-pine/80 flex items-center gap-1">
-                                  <HelpCircle className="w-2.5 h-2.5 text-jungle" /> {t('care_ai_suggested_questions', activeLocale)}
-                                </p>
-                                <div className="flex flex-wrap gap-1">
-                                  {msg.suggestedFollowUps.map((qText, sIdx) => (
-                                    <button
-                                      key={sIdx}
-                                      type="button"
-                                      disabled={isAiLoading}
-                                      onClick={() => handleAskQuestion(qText)}
-                                      className="text-[10px] text-start px-2 py-0.5 rounded-lg bg-mint/20 hover:bg-mint/40 text-pine font-medium border border-mint/40 transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
-                                    >
-                                      <span>{qText}</span>
-                                      <ArrowRight className="w-2.5 h-2.5 text-jungle shrink-0 rtl:rotate-180" />
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                            <div className="flex justify-end">
-                              <span className="shrink-0">{msg.timestamp}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-
-                    {/* Left-side Care AI Thinking / Loading Bubble */}
-                    {isAiLoading && (
-                      <div className="flex justify-start items-start gap-2 animate-in fade-in duration-200">
-                        <div className="w-6 h-6 rounded-full bg-mint text-pine flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
-                          <Sparkles className="w-3.5 h-3.5 text-pine animate-spin" />
-                        </div>
-                        <div className="max-w-[85%] bg-white/95 border border-mint/70 rounded-2xl rounded-tl-xs px-3.5 py-2.5 shadow-xs space-y-1 text-xs">
-                          <div className="flex items-center gap-2 font-bold text-pine">
-                            <span className="inline-flex gap-1 items-center">
-                              <span className="w-1.5 h-1.5 rounded-full bg-jungle animate-bounce" style={{ animationDelay: '0ms' }} />
-                              <span className="w-1.5 h-1.5 rounded-full bg-jungle animate-bounce" style={{ animationDelay: '150ms' }} />
-                              <span className="w-1.5 h-1.5 rounded-full bg-jungle animate-bounce" style={{ animationDelay: '300ms' }} />
-                            </span>
-                            <span className="text-[11px] text-pine font-semibold">
-                              {thinkingStep || 'Reviewing lab records & genetic variants...'}
-                            </span>
-                          </div>
-                          <p className="text-[10px] text-slate-500">
-                            Synthesizing with local Qdrant vectors and your health pedigree...
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Question Input Box */}
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      if (query.trim() && !isAiLoading) handleAskQuestion(query);
-                    }}
-                    className="relative flex items-center"
-                  >
-                    <input
-                      type="text"
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                      placeholder={t('care_ai_placeholder', activeLocale)}
-                      className="w-full pl-3.5 pr-11 rtl:pl-11 rtl:pr-3.5 text-start py-2.5 text-xs rounded-xl bg-fog border border-outline-variant/30 text-pine placeholder:text-outline focus:bg-white focus:outline-none focus:ring-2 focus:ring-pine transition"
-                    />
-                    <button
-                      type="submit"
-                      disabled={isAiLoading || !query.trim()}
-                      className="absolute right-2 rtl:right-auto rtl:left-2 w-7 h-7 rounded-full bg-pine text-white flex items-center justify-center hover:bg-pine-light disabled:opacity-40 transition shadow-xs cursor-pointer"
-                      title={t('btn_send', activeLocale)}
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                    </button>
-                  </form>
-
-                  {/* Suggested Inquiries Chips */}
-                  <div className="space-y-1.5">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/70">
-                      {t('care_ai_suggested_inquiries', activeLocale)}
-                    </span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {(dynamicQueries.length > 0 ? dynamicQueries : defaultSuggestedQuestions.map((d) => d.q)).map((qText, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => handleAskQuestion(qText)}
-                          disabled={isAiLoading}
-                          className="px-2.5 py-1 rounded-lg bg-fog hover:bg-fog-dark border border-outline-variant/30 text-[11px] text-pine flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 text-start"
-                        >
-                          <Search className="w-3 h-3 text-pine/50 shrink-0" />
-                          <span className="truncate max-w-[260px]">{qText}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Footnote */}
-                  <div className="flex items-center gap-2 pt-2 border-t border-outline-variant/20 text-[10px] text-on-surface-variant/70">
-                    <ShieldCheck className="w-3.5 h-3.5 text-jungle shrink-0" />
-                    <span>Your questions and health data are private, encrypted, and never shared.</span>
-                  </div>
-                </div>
-              </div>
-            </div>
               </>
             )}
           </main>

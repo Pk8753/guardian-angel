@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useUIStore } from '@/stores/useUIStore';
 import {
   Heart,
   ShieldCheck,
@@ -53,6 +54,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
   aiSource,
   aiLocus
 }) => {
+  const { availableGeminiModels, selectedGeminiModel } = useUIStore();
   const firstName = user?.fullName ? user.fullName.split(' ')[0] : (user?.username || 'Friend');
 
   // Upload Report State
@@ -593,32 +595,26 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
           </div>
         </div>
 
-        {/* GenWell AI Assistant (Plain Language Mode) */}
+        {/* Care AI Assistant (Plain Language Mode) */}
         <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs flex flex-col justify-between space-y-4">
           <div className="space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-teal-800" />
-                <h2 className="text-sm font-bold text-slate-900">Ask GenWell AI</h2>
+                <h2 className="text-sm font-bold text-slate-900">Ask Care AI</h2>
                 <span className="px-2 py-0.5 rounded-full bg-teal-50 text-teal-800 text-[10px] font-bold border border-teal-200">
                   Google AI Studio
                 </span>
               </div>
 
-              {/* Model Dropdown */}
+              {/* Active Model Indicator from Settings */}
               <div className="flex items-center gap-1 self-start sm:self-auto">
-                <label htmlFor="patient-genwell-model" className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Model:</label>
-                <select
-                  id="patient-genwell-model"
-                  value={selectedModel}
-                  onChange={(e) => onModelChange(e.target.value)}
-                  className="text-xs bg-slate-50 border border-slate-200 text-slate-800 rounded-lg px-2 py-0.5 font-semibold focus:ring-1 focus:ring-teal-700 outline-none cursor-pointer"
+                <span
+                  className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold border border-slate-200"
+                  title="Configured in Settings"
                 >
-                  <option value="gemini-3.0-flash">⚡ Gemini 3.0 Flash</option>
-                  <option value="gemini-3.5-flash">🧪 Gemini 3.5 Flash</option>
-                  <option value="gemini-2.5-flash">🛡️ Gemini 2.5 Flash</option>
-                  <option value="gemini-1.5-flash">📦 Gemini 1.5 Flash</option>
-                </select>
+                  ⚡ {availableGeminiModels.find((m) => m.id === selectedGeminiModel)?.name || selectedGeminiModel || 'Gemini 1.5 Flash'}
+                </span>
               </div>
             </div>
 
@@ -659,7 +655,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
             {aiLoading && (
               <div className="p-3.5 bg-teal-50/60 border border-teal-200 rounded-xl flex items-center gap-2.5 text-xs text-teal-800 animate-pulse">
                 <span className="w-3.5 h-3.5 border-2 border-teal-700 border-t-transparent rounded-full animate-spin" />
-                <span>GenWell AI is generating clear, reassuring guidance for you...</span>
+                <span>Care AI is generating clear, reassuring guidance for you...</span>
               </div>
             )}
 
@@ -668,7 +664,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-teal-900 flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-teal-700" />
-                    GenWell Guidance
+                    Care AI Guidance
                   </span>
                   {aiSource && (
                     <span className="px-2 py-0.5 rounded-full bg-white text-teal-800 font-mono text-[9px] font-bold border border-teal-200">

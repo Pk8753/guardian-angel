@@ -4,7 +4,17 @@ import * as React from 'react';
 
 // ==================== DANTORA CANVAS ANIMATION (HERO DIAGONAL CHROMOSOME FLUID DNA) ====================
 // Health/Genomics fluid diagonal chromosome helix with circular bokeh system, slow pace & interactive parting
-export function DantoraHelixCanvas() {
+export interface DantoraHelixCanvasProps {
+  interactive?: boolean;
+  speedMultiplier?: number;
+  className?: string;
+}
+
+export function DantoraHelixCanvas({
+  interactive = true,
+  speedMultiplier = 1,
+  className = "absolute inset-0 overflow-hidden pointer-events-none z-0"
+}: DantoraHelixCanvasProps = {}) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
 
@@ -72,8 +82,10 @@ export function DantoraHelixCanvas() {
       mouse.y = -9999;
     };
 
-    window.addEventListener('mousemove', handlePointerMove, { passive: true });
-    document.addEventListener('mouseleave', handlePointerLeave);
+    if (interactive) {
+      window.addEventListener('mousemove', handlePointerMove, { passive: true });
+      document.addEventListener('mouseleave', handlePointerLeave);
+    }
 
     // ==================== CIRCULAR BOKEH SYSTEM (ALL AROUND HELIX) ====================
     interface BokehParticle {
@@ -255,7 +267,7 @@ export function DantoraHelixCanvas() {
       const helixRadius = Math.min(width * 0.22, 190);
       const focalLength = 380;
       // Active yet graceful rotation speed
-      const rotationSpeed = time * 0.22;
+      const rotationSpeed = time * 0.22 * speedMultiplier;
 
       interface ChromosomeNode {
         x: number;
@@ -564,14 +576,16 @@ export function DantoraHelixCanvas() {
 
     return () => {
       cancelAnimationFrame(animId);
-      window.removeEventListener('mousemove', handlePointerMove);
-      document.removeEventListener('mouseleave', handlePointerLeave);
+      if (interactive) {
+        window.removeEventListener('mousemove', handlePointerMove);
+        document.removeEventListener('mouseleave', handlePointerLeave);
+      }
       resizeObserver.disconnect();
     };
-  }, []);
+  }, [interactive, speedMultiplier]);
 
   return (
-    <div ref={containerRef} className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+    <div ref={containerRef} className={className}>
       <canvas ref={canvasRef} className="w-full h-full block" />
     </div>
   );

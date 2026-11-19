@@ -77,7 +77,7 @@ interface QwenAssessment {
 }
 
 export default function RiskAnalysisPage() {
-  const { viewMode, activeLocale } = useUIStore();
+  const { viewMode, activeLocale, geminiApiKey, selectedGeminiModel, aiEngineMode } = useUIStore();
   const [families, setFamilies] = useState<FamilyRecord[]>([]);
   const [assessment, setAssessment] = useState<QwenAssessment | null>(null);
   const [isLoadingAssessment, setIsLoadingAssessment] = useState(false);
@@ -271,14 +271,26 @@ export default function RiskAnalysisPage() {
     const famKey = fid || 'default';
 
     // Check persistent sessionStorage if not forcing a manual refresh
-    if (!forceRefresh && typeof window !== 'undefined') {
+    if (forceRefresh && typeof window !== 'undefined') {
+      try {
+        sessionStorage.removeItem(`ga_risk_assessment_${famKey}`);
+      } catch {}
+    } else if (typeof window !== 'undefined') {
       try {
         const saved = sessionStorage.getItem(`ga_risk_assessment_${famKey}`);
         if (saved) {
           const parsed = JSON.parse(saved);
           if (parsed && typeof parsed === 'object') {
-            setAssessment(parsed);
-            return;
+            if (typeof parsed.innovative_technologies === 'string') {
+              parsed.innovative_technologies = [parsed.innovative_technologies];
+            }
+            if (typeof parsed.next_possible_ways === 'string') {
+              parsed.next_possible_ways = [parsed.next_possible_ways];
+            }
+            if (!geminiApiKey || parsed.is_llm) {
+              setAssessment(parsed);
+              return;
+            }
           }
         }
       } catch (e) {
@@ -291,7 +303,13 @@ export default function RiskAnalysisPage() {
       const res = await fetch('/api/ai/analyze-assessment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ family_id: fid })
+        body: JSON.stringify({
+          family_id: fid,
+          api_key: geminiApiKey ? geminiApiKey.trim() : undefined,
+          model: selectedGeminiModel || 'gemini-3.8-flash',
+          ai_mode: aiEngineMode,
+          force_refresh: Boolean(forceRefresh)
+        })
       });
       if (res.ok) {
         const data = await res.json();
@@ -384,15 +402,15 @@ export default function RiskAnalysisPage() {
     }
   };
 
-  const totalMembers = families.reduce((acc, f) => acc + (f.members?.length || 0), 0);
-  const generationsMapped = families.length > 0
+  const totalMembers = Array.isArray(families) ? families.reduce((acc, f) => acc + (f?.members?.length || 0), 0) : 0;
+  const generationsMapped = Array.isArray(families) && families.length > 0
     ? Math.max(0, ...families.map((f) => {
-        const gens = (f.members || []).map((m) => Number(m.generation) || 1);
+        const gens = (f?.members || []).map((m) => Number(m.generation) || 1);
         return gens.length > 0 ? Math.max(...gens) : 0;
       }))
     : 0;
-  const screenedLociCount = (scrapedReports.length > 0 || (assessment?.detected_conditions && assessment.detected_conditions.length > 0))
-    ? Math.max(scrapedReports.length, assessment?.detected_conditions?.length || 0)
+  const screenedLociCount = (scrapedReports.length > 0 || (Array.isArray(assessment?.detected_conditions) && assessment.detected_conditions.length > 0))
+    ? Math.max(scrapedReports.length, Array.isArray(assessment?.detected_conditions) ? assessment.detected_conditions.length : 0)
     : 0;
   const hasUserData = totalMembers > 0 || scrapedReports.length > 0 || (assessment?.has_data ?? false);
 
@@ -404,26 +422,6 @@ export default function RiskAnalysisPage() {
           <Navbar />
 
         <main className="flex-1 overflow-y-auto p-3 sm:p-6 lg:p-8 space-y-6 pb-24 md:pb-8">
-          {/* Educational Decision Support Banner */}
-          <div className="w-full bg-white border border-outline-variant/30 rounded-2xl p-3.5 flex items-center justify-between shadow-xs">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-mint/25 flex items-center justify-center text-pine shrink-0">
-                <Info className="w-4 h-4 text-pine" />
-              </div>
-              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                <span className="text-xs uppercase tracking-wider text-pine font-bold">
-                  Educational Decision Support
-                </span>
-                <span className="hidden sm:inline text-outline-variant font-bold">&bull;</span>
-                <span className="text-xs text-on-surface-variant leading-relaxed">
-                  Synthesized under ACMG/AMP guidelines. Intended to guide proactive counseling discussions with certified geneticists.
-                </span>
-              </div>
-            </div>
-            <span className="text-[11px] text-pine bg-mint/25 px-2.5 py-1 rounded-full font-bold border border-mint shrink-0">
-              CLIA/CAP Synthesized
-            </span>
-          </div>
           {/* Page Header & Key Metrics Strip */}
           <div className="flex flex-col gap-5">
             <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
@@ -516,10 +514,10 @@ export default function RiskAnalysisPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h2 className="text-base sm:text-lg font-extrabold text-pine">
-                      Qwen3 Clinical Brain &bull; Couple Hereditary Assessment
+                      {assessment?.source ? `${assessment.source} • ` : ''}Couple Hereditary Assessment
                     </h2>
                     <span className="px-2.5 py-0.5 rounded-full bg-mint/25 text-pine text-[10px] font-bold border border-mint">
-                      Positive Guidance Mode
+                      Compassionate Guidance
                     </span>
                   </div>
                   <p className="text-xs text-on-surface-variant">
@@ -541,7 +539,7 @@ export default function RiskAnalysisPage() {
             {isLoadingAssessment ? (
               <div className="p-8 text-center text-xs text-slate-400 space-y-2">
                 <RefreshCw className="w-6 h-6 animate-spin mx-auto text-pine" />
-                <p>Qwen3 is analyzing your reports and synthesizing positive couple guidance...</p>
+                <p>Analyzing your reports and synthesizing compassionate couple guidance...</p>
               </div>
             ) : !hasUserData ? (
               <div className="p-6 sm:p-8 bg-fog/50 rounded-2xl border border-outline-variant/30 text-center space-y-4">
@@ -655,7 +653,7 @@ export default function RiskAnalysisPage() {
                 )}
 
                 {/* Innovative Reproductive & Privacy Technologies */}
-                {assessment.innovative_technologies && assessment.innovative_technologies.length > 0 && (
+                {Array.isArray(assessment.innovative_technologies) && assessment.innovative_technologies.length > 0 && (
                   <div className="space-y-3">
                     <div className="flex items-center gap-2 text-pine font-bold text-xs uppercase tracking-wider">
                       <Cpu className="w-4 h-4 text-pine" />
@@ -678,177 +676,36 @@ export default function RiskAnalysisPage() {
                 )}
 
                 {/* Next Possible Ways */}
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-pine font-bold text-xs uppercase tracking-wider">
-                    <Compass className="w-4 h-4 text-pine" />
-                    <span>Navigating Your Next Possible Steps:</span>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {assessment.next_possible_ways.map((step, idx) => (
-                      <div
-                        key={idx}
-                        className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-start gap-3"
-                      >
-                        <span className="w-5 h-5 rounded-full bg-pine text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
-                          {idx + 1}
-                        </span>
-                        <p className="text-xs text-slate-700 leading-relaxed font-medium">{step}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Interactive Q&A Based on Analysis Outcome */}
-                <div className="pt-4 border-t border-slate-100 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <HelpCircle className="w-4 h-4 text-pine" />
-                      <h4 className="text-xs font-bold text-pine uppercase tracking-wider">
-                        Ask Questions Based on This Analysis Outcome
-                      </h4>
+                {Array.isArray(assessment.next_possible_ways) && assessment.next_possible_ways.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-pine font-bold text-xs uppercase tracking-wider">
+                      <Compass className="w-4 h-4 text-pine" />
+                      <span>Navigating Your Next Possible Steps:</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleClearChat}
-                      title="Clear chat history"
-                      className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition text-[11px] flex items-center gap-1 cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span className="text-[10px] hidden sm:inline">Clear Chat</span>
-                    </button>
-                  </div>
-
-                  {/* Suggested Potential Queries from Qwen3 */}
-                  {assessment.potential_queries && assessment.potential_queries.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {assessment.potential_queries.map((q, idx) => (
-                        <button
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {assessment.next_possible_ways.map((step, idx) => (
+                        <div
                           key={idx}
-                          type="button"
-                          onClick={() => handleAskQuestion(q)}
-                          className="px-3 py-1.5 rounded-full bg-fog hover:bg-fog-dark border border-outline-variant/30 text-xs text-pine font-medium flex items-center gap-1.5 transition cursor-pointer"
+                          className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-start gap-3"
                         >
-                          <Search className="w-3 h-3 text-pine/50" />
-                          <span>{q}</span>
-                        </button>
+                          <span className="w-5 h-5 rounded-full bg-pine text-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
+                            {idx + 1}
+                          </span>
+                          <p className="text-xs text-slate-700 leading-relaxed font-medium">{step}</p>
+                        </div>
                       ))}
                     </div>
-                  )}
-
-                  {/* Scrollable Conversation Viewport */}
-                  <div
-                    ref={chatScrollRef}
-                    className="h-64 sm:h-72 overflow-y-auto space-y-3 p-3.5 bg-fog/60 rounded-2xl border border-outline-variant/20 scroll-smooth"
-                  >
-                    {chatMessages.map((msg) => (
-                      <div
-                        key={msg.id}
-                        className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start items-start gap-2'}`}
-                      >
-                        {msg.sender === 'ai' && (
-                          <div className="w-6 h-6 rounded-full bg-mint text-pine flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
-                            <Sparkles className="w-3.5 h-3.5 text-pine" />
-                          </div>
-                        )}
-                        <div
-                          className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 shadow-xs text-xs space-y-1.5 ${
-                            msg.sender === 'user'
-                              ? 'bg-pine text-white rounded-tr-xs'
-                              : 'bg-white text-pine border border-outline-variant/30 rounded-tl-xs'
-                          }`}
-                        >
-                          {renderFormattedText(msg.text)}
-                          <div
-                            className={`flex flex-col gap-1 text-[9px] pt-0.5 ${
-                              msg.sender === 'user' ? 'text-white/70' : 'text-on-surface-variant/70'
-                            }`}
-                          >
-                            {msg.sender === 'ai' && (
-                              <div className="flex flex-wrap items-center gap-1 pt-0.5">
-                                {msg.citationDetails && msg.citationDetails.length > 0 ? (
-                                  msg.citationDetails.map((cit, cIdx) => (
-                                    <button
-                                      key={cIdx}
-                                      type="button"
-                                      onClick={() => setActiveCitationPreview(cit)}
-                                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-mint/30 hover:bg-mint/50 text-pine text-[9px] font-semibold border border-mint/60 transition cursor-pointer shadow-2xs"
-                                      title="Click to preview citation excerpt"
-                                    >
-                                      <FileText className="w-2.5 h-2.5 text-pine" />
-                                      <span className="truncate max-w-[130px]">{cit.title}</span>
-                                    </button>
-                                  ))
-                                ) : msg.source ? (
-                                  <span className="font-medium text-teal-800">
-                                    Source: <span className="underline decoration-mint underline-offset-2">{msg.source}</span>
-                                  </span>
-                                ) : null}
-                              </div>
-                            )}
-                            <div className="flex justify-end">
-                              <span className="shrink-0">{msg.timestamp}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-
-                    {/* Progressive Thinking Indicator */}
-                    {isAsking && (
-                      <div className="flex justify-start items-start gap-2 animate-in fade-in duration-200">
-                        <div className="w-6 h-6 rounded-full bg-mint text-pine flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
-                          <Sparkles className="w-3.5 h-3.5 text-pine animate-spin" />
-                        </div>
-                        <div className="max-w-[85%] bg-white/95 border border-mint/70 rounded-2xl rounded-tl-xs px-3.5 py-2.5 shadow-xs space-y-1 text-xs">
-                          <div className="flex items-center gap-2 font-bold text-pine">
-                            <span className="inline-flex gap-1 items-center">
-                              <span className="w-1.5 h-1.5 rounded-full bg-jungle animate-bounce" style={{ animationDelay: '0ms' }} />
-                              <span className="w-1.5 h-1.5 rounded-full bg-jungle animate-bounce" style={{ animationDelay: '150ms' }} />
-                              <span className="w-1.5 h-1.5 rounded-full bg-jungle animate-bounce" style={{ animationDelay: '300ms' }} />
-                            </span>
-                            <span className="text-[11px] text-pine font-semibold">
-                              {thinkingStep || 'Reviewing genetic risk analysis & carrier loci...'}
-                            </span>
-                          </div>
-                          <p className="text-[10px] text-slate-500">
-                            Synthesizing with local Qdrant vectors and your health pedigree...
-                          </p>
-                        </div>
-                      </div>
-                    )}
                   </div>
+                )}
 
-                  {/* Question Input Form */}
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      handleAskQuestion(userQuery);
-                    }}
-                    className="relative flex items-center"
-                  >
-                    <input
-                      type="text"
-                      value={userQuery}
-                      onChange={(e) => setUserQuery(e.target.value)}
-                      placeholder={t('care_ai_placeholder', activeLocale)}
-                      className="w-full pl-4 pr-12 rtl:pl-12 rtl:pr-4 text-start py-2.5 text-xs rounded-xl bg-fog border border-outline-variant/30 text-pine placeholder:text-outline focus:bg-white focus:outline-none focus:ring-2 focus:ring-pine transition"
-                    />
-                    <button
-                      type="submit"
-                      disabled={isAsking || !userQuery.trim()}
-                      className="absolute right-2 rtl:right-auto rtl:left-2 w-8 h-8 rounded-full bg-pine text-white flex items-center justify-center hover:bg-pine-light disabled:opacity-50 transition shadow-xs cursor-pointer"
-                    >
-                      {isAsking ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                    </button>
-                  </form>
-                </div>
+
               </div>
             ) : null}
           </div>
 
           {/* Condition Risk Assessment Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {!hasUserData || !assessment?.detected_conditions || assessment.detected_conditions.length === 0 ? (
+            {!hasUserData || !Array.isArray(assessment?.detected_conditions) || assessment.detected_conditions.length === 0 ? (
               <div className="col-span-full bg-white rounded-3xl p-8 border border-outline-variant/30 text-center space-y-2">
                 <Dna className="w-8 h-8 text-outline/50 mx-auto" />
                 <h3 className="text-sm font-bold text-pine">{t('risk_no_conditions_title', activeLocale)}</h3>
@@ -915,7 +772,7 @@ export default function RiskAnalysisPage() {
                 ))}
 
                 {/* Educational Counseling Card when single condition present to neatly balance the 2-column grid */}
-                {assessment.detected_conditions.length === 1 && (
+                {Array.isArray(assessment.detected_conditions) && assessment.detected_conditions.length === 1 && (
                   <div className="bg-white rounded-3xl p-6 border border-mint/60 shadow-xs flex flex-col justify-between space-y-4 bg-gradient-to-br from-white to-mint/10">
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
@@ -974,126 +831,6 @@ export default function RiskAnalysisPage() {
               </>
             )}
           </div>
-          {/* Real-Time ClinVar & dbSNP Variant Annotation Engine */}
-          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Database className="w-4 h-4 text-teal-800" />
-                  <h3 className="text-base font-bold text-slate-800">
-                    Live ClinVar &amp; dbSNP Variant Annotation Engine
-                  </h3>
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 text-[10px] font-bold border border-emerald-200">
-                    Sub-150ms REST API
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Direct clinical variant interpretation without loading 1.8GB VCF files in memory. Powered by MyVariant.info &amp; NCBI.
-                </p>
-              </div>
-
-              {/* Sample Quick Query Buttons */}
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[10px] font-bold text-slate-400 uppercase">Samples:</span>
-                {[
-                  { q: 'rs35724883', label: 'HBB Codon 39' },
-                  { q: 'rs5030868', label: 'G6PD Med.' },
-                  { q: 'rs113993960', label: 'CFTR ΔF508' }
-                ].map((s) => (
-                  <button
-                    key={s.q}
-                    type="button"
-                    onClick={() => {
-                      setVariantQuery(s.q);
-                      handleLookupVariant(s.q);
-                    }}
-                    className="px-2 py-1 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-teal-50 text-slate-700 hover:text-teal-800 border border-slate-200/70 transition cursor-pointer"
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Search Input Bar */}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleLookupVariant(variantQuery);
-              }}
-              className="flex items-center gap-2"
-            >
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={variantQuery}
-                  onChange={(e) => setVariantQuery(e.target.value)}
-                  placeholder="Enter variant rsID (e.g. rs35724883) or gene symbol (e.g. HBB, G6PD)..."
-                  className="w-full pl-9 pr-4 py-2 text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-700 transition"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={variantLoading}
-                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition shadow-xs cursor-pointer disabled:opacity-50"
-              >
-                {variantLoading ? 'Querying...' : 'Query ClinVar'}
-              </button>
-            </form>
-
-            {/* Variant Annotation Result Box */}
-            {variantResult && variantResult.found && (
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3 text-xs">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono font-black text-sm text-slate-900">
-                      {variantResult.rs_id || variantResult.gene}
-                    </span>
-                    <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-800 border border-rose-200 font-bold text-[10px]">
-                      {variantResult.clinical_significance}
-                    </span>
-                    {variantResult.inheritance && (
-                      <span className="px-2 py-0.5 rounded-full bg-slate-200/70 text-slate-700 text-[10px] font-bold">
-                        {variantResult.inheritance}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 text-slate-500 font-mono text-[11px]">
-                    <span>Locus: Chr {variantResult.chromosome}</span>
-                    <span>&bull;</span>
-                    <span>OMIM #{variantResult.omim}</span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-3 rounded-xl border border-slate-200/60 text-slate-700">
-                  <div>
-                    <span className="text-[10px] text-slate-400 uppercase font-bold block">Condition</span>
-                    <span className="font-bold text-slate-800">{variantResult.condition}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 uppercase font-bold block">Review Status</span>
-                    <span className="font-semibold text-slate-700">{variantResult.review_status}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-400 uppercase font-bold block">ClinVar ID</span>
-                    <span className="font-mono text-slate-800">{variantResult.clinvar_id}</span>
-                  </div>
-                </div>
-
-                {/* Dual-Lens Summary */}
-                <div className="p-3 rounded-xl bg-teal-50/70 border border-teal-200/80 space-y-1">
-                  <span className="text-[10px] font-bold text-teal-900 uppercase tracking-wider">
-                    {viewMode === 'patient' ? '👤 Patient Explanation' : '🩺 Clinical Decision Support Note'}
-                  </span>
-                  <p className="text-slate-700 leading-relaxed text-xs">
-                    {variantResult.patient_friendly_summary}
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-
           {/* Interactive PGT-M & Offspring Inheritance Probability Simulator */}
           <PgtSimulator />
         </main>
