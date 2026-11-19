@@ -36,7 +36,7 @@ export function HeroSection() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         {/* Story Section 1: Intro Headline, Subheadline & 3 Core Principles */}
-        <div className="min-h-[100dvh] lg:min-h-0 pt-24 pb-8 lg:pt-28 lg:pb-12 flex flex-col justify-between lg:block">
+        <div className="pt-24 pb-8 lg:pt-28 lg:pb-12 flex flex-col justify-between lg:block">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center flex-1 justify-center">
             {/* Left Column: Headline, Subheadline, Actions & 3 Core Principles */}
             <div className="lg:col-span-7 space-y-4">
@@ -49,37 +49,22 @@ export function HeroSection() {
                 and make choices that fit their values. Private by design.
               </p>
 
-              {/* Desktop CTA row */}
-              <div className="hidden lg:flex items-center gap-2 pt-1 flex-wrap sm:flex-nowrap">
-                <button
-                  type="button"
-                  onClick={() => mobile.openAssessment(0)}
-                  className="px-4 py-2.5 rounded-lg bg-[#30ba78] hover:bg-[#90ebcd] text-[#0c322c] text-xs font-black flex items-center gap-1.5 shadow-sm flex-shrink-0 cursor-pointer whitespace-nowrap active:scale-95 transition-transform"
+              {/* Desktop CTA row - Single clear primary action */}
+              <div className="hidden lg:flex items-center gap-3 pt-2">
+                <a
+                  href="#estimator"
+                  className="px-6 py-3 rounded-xl bg-[#30ba78] hover:bg-[#90ebcd] text-[#0c322c] text-sm font-black flex items-center gap-2 shadow-md cursor-pointer whitespace-nowrap active:scale-95 transition-all"
                 >
-                  <span className="material-symbols-outlined text-sm">tune</span>
-                  <span>Quick Assessment</span>
-                </button>
-
+                  <span className="material-symbols-outlined text-base">tune</span>
+                  <span>Start Quick Assessment</span>
+                  <span className="material-symbols-outlined text-sm">arrow_downward</span>
+                </a>
                 <button
                   type="button"
                   onClick={() => auth.openAuth('signin')}
-                  className="px-3.5 py-2.5 rounded-lg bg-[#192072] hover:bg-[#2453ff] text-white text-xs font-bold flex items-center gap-1 border border-[#90ebcd]/30 shadow-sm flex-shrink-0 cursor-pointer whitespace-nowrap"
+                  className="px-4 py-3 rounded-xl text-xs font-semibold text-white/90 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
                 >
-                  <span>Access Health Vault</span>
-                  <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    window.location.href = '/api/uaepass/login';
-                  }}
-                  className="px-3 py-2.5 rounded-lg bg-black hover:bg-neutral-900 text-white text-xs font-bold flex items-center gap-1 border border-white/20 flex-shrink-0 cursor-pointer whitespace-nowrap"
-                >
-                  <span className="material-symbols-outlined text-[#30ba78] text-sm">
-                    fingerprint
-                  </span>
-                  <span>UAE PASS</span>
+                  <span>Sign In to Vault &rarr;</span>
                 </button>
               </div>
 
@@ -118,38 +103,25 @@ export function HeroSection() {
                 </div>
               </div>
 
-              {/* Mobile Quick Launcher in First Screen */}
-              <div className="pt-4 lg:hidden space-y-2">
+              {/* Mobile Quick Launcher in First Screen - Single Primary Action */}
+              <div className="pt-3 lg:hidden space-y-2">
                 <button
                   type="button"
                   onClick={() => mobile.openAssessment(0)}
-                  className="w-full py-4 rounded-2xl bg-[#30ba78] hover:bg-[#90ebcd] text-[#0c322c] text-sm font-black flex items-center justify-center gap-2 shadow-lg cursor-pointer whitespace-nowrap active:scale-95 transition-all"
+                  className="w-full py-3.5 rounded-xl bg-[#30ba78] hover:bg-[#90ebcd] text-[#0c322c] text-sm font-black flex items-center justify-center gap-2 shadow-md cursor-pointer whitespace-nowrap active:scale-95 transition-all"
                 >
-                  <span className="material-symbols-outlined text-xl">tune</span>
+                  <span className="material-symbols-outlined text-lg">tune</span>
                   <span>Start 2-Min Quick Assessment</span>
                   <span className="material-symbols-outlined text-sm">arrow_forward</span>
                 </button>
 
-                <div className="flex items-center gap-2">
+                <div className="text-center pt-1">
                   <button
                     type="button"
                     onClick={() => auth.openAuth('signin')}
-                    className="flex-1 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold flex items-center justify-center gap-1 border border-white/20 cursor-pointer"
+                    className="text-xs text-white/80 hover:text-white underline cursor-pointer"
                   >
-                    <span>Patient Vault</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      window.location.href = '/api/uaepass/login';
-                    }}
-                    className="flex-1 py-3 rounded-xl bg-black hover:bg-neutral-900 text-white text-xs font-bold flex items-center justify-center gap-1 border border-white/20 cursor-pointer"
-                  >
-                    <span className="material-symbols-outlined text-[#30ba78] text-sm">
-                      fingerprint
-                    </span>
-                    <span>UAE PASS</span>
+                    Already have an account? Sign In
                   </button>
                 </div>
               </div>
@@ -254,8 +226,8 @@ export function HeroSection() {
           </div>
         </div>
 
-        {/* Story Section 2: UAE Programme & Why This Matters (Dedicated screen on mobile) */}
-        <div className="min-h-[100dvh] lg:min-h-0 flex flex-col justify-center py-16 lg:py-0 border-t border-white/10 lg:border-t-0 scroll-mt-14">
+        {/* Story Section 2: UAE Programme & Why This Matters */}
+        <div className="py-10 sm:py-14 border-t border-white/10 scroll-mt-14">
           
           {/* Mobile Card: The UAE Programme (Shown on mobile as part of Story Screen 2) */}
           <div className="block lg:hidden rounded-3xl p-5 bg-[#192072]/80 backdrop-blur-md border border-[#2453ff]/40 shadow-xl space-y-3 mb-6">
@@ -323,16 +295,14 @@ export function HeroSection() {
               what comes next: what your results mean, what they don’t mean, and where to get support.
             </p>
 
-            <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
-              <button
-                type="button"
-                onClick={() => mobile.openAssessment(0)}
-                className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-[#30ba78] hover:bg-[#90ebcd] text-[#0c322c] text-sm font-black flex items-center justify-center gap-2 shadow-lg cursor-pointer whitespace-nowrap active:scale-95 transition-all"
+            <div className="pt-3 flex items-center justify-center">
+              <a
+                href="#estimator"
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-[#30ba78] hover:text-[#90ebcd] transition-colors"
               >
-                <span className="material-symbols-outlined text-lg">tune</span>
-                <span>Open Risk Estimator</span>
-                <span className="material-symbols-outlined text-sm">arrow_forward</span>
-              </button>
+                <span>Continue to Risk Estimator below</span>
+                <span className="material-symbols-outlined text-sm">arrow_downward</span>
+              </a>
             </div>
           </div>
         </div>
