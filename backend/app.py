@@ -41,7 +41,7 @@ from database import (
     get_patient_profile, upsert_patient_profile, save_quick_assessment, get_quick_assessment,
     create_couple_assessment, get_couple_assessments, get_couple_assessment_by_id, delete_couple_assessment,
     save_document, get_documents, delete_document, get_genetic_conditions, get_genetic_condition_by_slug,
-    get_providers, get_provider_by_id, create_appointment, get_appointments_for_patient, cancel_appointment,
+    get_providers, get_provider_by_id, create_appointment, get_appointments_for_patient, get_appointments_for_provider, cancel_appointment,
     save_consent_permission, get_consent_permissions, revoke_consent_permission,
     save_comprehension_feedback, get_patient_impact_metrics
 )
@@ -63,9 +63,36 @@ app.config.from_object(Config)
 # Initialize database on startup
 init_db()
 
+@app.before_request
+def handle_session_header():
+    """Support per-tab multi-session isolation via X-Session-User-Id header."""
+    session_user_header = request.headers.get('X-Session-User-Id')
+    if session_user_header:
+        try:
+            hdr_user_id = int(session_user_header)
+            u = get_user_by_id(hdr_user_id)
+            if u:
+                session['user_id'] = hdr_user_id
+                session['username'] = u['username']
+                session['role'] = u['role']
+        except (ValueError, TypeError):
+            pass
+
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        session_user_header = request.headers.get('X-Session-User-Id')
+        if session_user_header:
+            try:
+                hdr_user_id = int(session_user_header)
+                u = get_user_by_id(hdr_user_id)
+                if u:
+                    session['user_id'] = hdr_user_id
+                    session['username'] = u['username']
+                    session['role'] = u['role']
+            except (ValueError, TypeError):
+                pass
+
         if 'user_id' not in session:
             if request.path.startswith('/api/'):
                 return jsonify({"status": "error", "message": "Authentication required. Please sign in to access your secure health vault."}), 401
@@ -683,7 +710,15 @@ def profile_view():
         return jsonify({"status": "success", "message": "Patient clinical details successfully updated."})
 
     profile = get_user_profile(user_id)
-    return jsonify({"status": "success", "profile": dict(profile) if profile else {}})
+    p_dict = dict(profile) if profile else {"user_id": user_id}
+    u = get_user_by_id(user_id)
+    if u:
+        p_dict["username"] = u["username"]
+        p_dict["email"] = p_dict.get("email") or u["email"]
+        p_dict["full_name"] = p_dict.get("full_name") or u["full_name"]
+        p_dict["role"] = u["role"]
+        p_dict["user_id"] = user_id
+    return jsonify({"status": "success", "profile": p_dict})
 
 # ==================== API ENDPOINTS ====================
 
@@ -1807,8 +1842,14 @@ def api_patient_providers():
 def api_appointments():
     """Manage counselor appointments."""
     user_id = session['user_id']
+    user = get_user_by_id(user_id)
+    is_provider = user and dict(user).get('role') == 'provider'
+
     if request.method == 'GET':
-        appts = get_appointments_for_patient(user_id)
+        if is_provider or request.args.get('view') == 'provider':
+            appts = get_appointments_for_provider(user_id)
+        else:
+            appts = get_appointments_for_patient(user_id)
         return jsonify({"status": "success", "appointments": appts})
 
     data = request.get_json(silent=True) or {}
@@ -1818,6 +1859,7 @@ def api_appointments():
     scheduled_at = (data.get('scheduled_at') or data.get('slot') or '').strip()
     notes = (data.get('notes') or '').strip()
     duration = data.get('duration', '30 Mins')
+    share_personal_details = 1 if data.get('share_personal_details', True) in [True, 1, '1', 'true'] else 0
 
     if not provider_id or not scheduled_at:
         return jsonify({"status": "error", "message": "Provider and time slot are required."}), 400
@@ -1829,7 +1871,8 @@ def api_appointments():
         couple_assessment_id=int(couple_assessment_id) if couple_assessment_id else None,
         scheduled_at=scheduled_at,
         notes=notes,
-        duration=duration
+        duration=duration,
+        share_personal_details=share_personal_details
     )
 
     return jsonify({

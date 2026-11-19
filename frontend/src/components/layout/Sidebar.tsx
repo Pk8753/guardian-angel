@@ -25,9 +25,15 @@ export function Sidebar() {
     },
     {
       label: activeLocale === 'ar' ? 'فحص الزوجين' : 'Couple Check',
-      mobileLabel: activeLocale === 'ar' ? 'الزوجين' : 'Couple',
+      mobileLabel: activeLocale === 'ar' ? 'الزوجين' : 'Couples',
       href: '/couple-assessment',
       icon: 'diversity_1'
+    },
+    {
+      label: activeLocale === 'ar' ? 'التثقيف الجيني' : 'Genomic Literacy',
+      mobileLabel: activeLocale === 'ar' ? 'تعلم' : 'Learn',
+      href: '/genomic-literacy',
+      icon: 'menu_book'
     },
     {
       label: activeLocale === 'ar' ? 'المستشارون' : 'Counselors',
@@ -36,10 +42,10 @@ export function Sidebar() {
       icon: 'stethoscope'
     },
     {
-      label: activeLocale === 'ar' ? 'الخصوصية والملف' : 'Privacy & Profile',
-      mobileLabel: activeLocale === 'ar' ? 'الخصوصية' : 'Privacy',
-      href: '/privacy-profile',
-      icon: 'shield_lock'
+      label: activeLocale === 'ar' ? 'اسأل الذكاء الاصطناعي' : 'Ask AI',
+      mobileLabel: activeLocale === 'ar' ? 'المساعد' : 'Ask AI',
+      href: '/ask-ai',
+      icon: 'neurology'
     }
   ];
 
@@ -199,12 +205,12 @@ export function Sidebar() {
         </aside>
       )}
 
-      {/* ==================== MOBILE BOTTOM APP NAVIGATION BAR (4-Tab for Patients, 6-Tab for Providers) ==================== */}
+      {/* ==================== MOBILE BOTTOM APP NAVIGATION BAR (5-Tab for Patients, 6-Tab for Providers) ==================== */}
       <nav
         aria-label="Mobile Navigation"
         className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-[#16181b]/95 backdrop-blur-xl border-t border-slate-200/90 dark:border-white/10 shadow-[0_-4px_24px_rgba(0,0,0,0.08)] px-1.5 py-1 pb-[max(0.6rem,env(safe-area-inset-bottom))] transition-all select-none"
       >
-        <div className={`grid ${isProvider ? 'grid-cols-6' : 'grid-cols-4'} items-center justify-around gap-1 max-w-md mx-auto`}>
+        <div className={`grid ${isProvider ? 'grid-cols-6' : 'grid-cols-5'} items-center justify-around gap-1 max-w-md mx-auto`}>
           {activeNavItems.map((item) => {
             const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
             return (

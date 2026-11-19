@@ -76,6 +76,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
   const [selectedProviderId, setSelectedProviderId] = useState<number | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string>('');
   const [bookingNotes, setBookingNotes] = useState<string>('');
+  const [sharePersonalDetails, setSharePersonalDetails] = useState<number>(1);
   const [isBookingSubmitting, setIsBookingSubmitting] = useState<boolean>(false);
   const [bookingSuccessMsg, setBookingSuccessMsg] = useState<string | null>(null);
 
@@ -204,7 +205,8 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
           assessment_type: bookingAssessmentType,
           couple_assessment_id: bookingAssessmentType === 'couple' ? bookingCoupleId : null,
           scheduled_at: selectedSlot,
-          notes: bookingNotes
+          notes: bookingNotes,
+          share_personal_details: sharePersonalDetails
         })
       });
 
@@ -303,71 +305,40 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         </div>
       ) : (
         /* HYDRATED PATIENT PROFILE HERO */
-        <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-teal-950 via-teal-900 to-slate-900 text-white p-5 sm:p-6 lg:p-8 shadow-md border border-teal-700/40">
-          <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-5 sm:gap-6">
-            <div className="space-y-2 max-w-2xl">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="px-3 py-1 rounded-full bg-teal-800/80 text-teal-200 text-xs font-bold tracking-wide uppercase border border-teal-500/30 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  Personal Health Vault
-                </span>
-                <span className="text-teal-300 text-xs font-semibold">&bull; 100% Private &amp; Confidential</span>
-              </div>
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight">
-                Welcome back, {firstName} 👋
+        <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-teal-950 via-teal-900 to-slate-900 text-white p-5 sm:p-6 shadow-sm border border-teal-800/40">
+          <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight">
+                Welcome, {firstName} 👋
               </h1>
-              <p className="text-teal-100/90 text-xs sm:text-sm leading-relaxed">
-                Here is your complete health overview. We translate complex genetic details into plain, practical answers so you and your family can plan with absolute confidence.
+              <p className="text-teal-100/90 text-xs sm:text-sm">
+                Your personal health vault is active, private, and fully up to date.
               </p>
             </div>
-
-            {/* Quick Health Summary Pill Box */}
-            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20 flex flex-col gap-2 w-full sm:w-auto min-w-0 sm:min-w-[300px]">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-teal-200 font-semibold">Your Overall Status</span>
-                <span className={`px-2.5 py-0.5 rounded-full font-bold text-[11px] border ${
-                  profileRisk === 'ok'
-                    ? 'bg-emerald-400/20 text-emerald-300 border-emerald-400/30'
-                    : profileRisk === 'hi'
-                    ? 'bg-rose-400/20 text-rose-300 border-rose-400/30'
-                    : 'bg-amber-400/20 text-amber-300 border-amber-400/30'
-                }`}>
-                  {profileRisk === 'ok' ? 'General Population Baseline' : profileRisk === 'hi' ? 'Action Advised' : 'Moderate Consideration'}
-                </span>
-              </div>
-              <div className="text-base font-black text-white">
-                {profileSummary}
-              </div>
-              <p className="text-[11px] text-teal-100/80 leading-relaxed">
-                You are healthy and normal. Routine screening and simple choices ensure total clarity for your future baby.
-              </p>
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <span className={`px-3 py-1.5 rounded-xl font-bold text-xs border ${
+                profileRisk === 'ok'
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30'
+                  : profileRisk === 'hi'
+                  ? 'bg-rose-500/20 text-rose-300 border-rose-400/30'
+                  : 'bg-amber-500/20 text-amber-300 border-amber-400/30'
+              }`}>
+                {profileRisk === 'ok' ? 'Baseline Population Health' : profileRisk === 'hi' ? 'Action Advised' : 'Moderate Consideration'}
+              </span>
             </div>
           </div>
         </div>
       )}
 
       {/* ==================== 1B. RISK VS. DIAGNOSIS CLARITY BANNER ==================== */}
-      <div className="rounded-2xl sm:rounded-3xl bg-gradient-to-r from-teal-50/90 via-emerald-50/60 to-blue-50/70 border border-teal-200/90 p-4 sm:p-5 shadow-2xs">
-        <div className="flex items-start gap-3.5">
-          <div className="w-9 h-9 rounded-xl bg-teal-800 text-white flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
-            <ShieldCheck className="w-5 h-5 text-emerald-300" />
+      <div className="rounded-2xl sm:rounded-3xl bg-teal-50/80 border border-teal-200 p-4 shadow-2xs">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-teal-800 text-white flex items-center justify-center shrink-0 shadow-2xs">
+            <ShieldCheck className="w-4 h-4 text-emerald-300" />
           </div>
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-xs sm:text-sm font-bold text-teal-950">
-                Understanding Your Results: Risk vs. Diagnosis
-              </h2>
-              <span className="px-2 py-0.5 rounded-full bg-teal-800/10 text-teal-900 text-[10px] font-bold border border-teal-300/50">
-                Essential Distinction
-              </span>
-            </div>
-            <p className="text-xs font-semibold text-teal-900 leading-snug">
-              &ldquo;Being a carrier does not mean you are sick, and an estimate is not a diagnosis.&rdquo;
-            </p>
-            <p className="text-[11px] sm:text-xs text-slate-600 leading-relaxed pt-0.5">
-              This overview is based on your questionnaire responses. Only certified laboratory screening can confirm carrier status. Healthy single-gene carriers live vibrant, completely normal lives without symptoms. Knowing your carrier status empowers you with clarity to make informed family choices calmly.
-            </p>
-          </div>
+          <p className="text-xs sm:text-sm font-bold text-teal-950 leading-snug">
+            Being a carrier does not mean you are sick, and an estimate is not a diagnosis.
+          </p>
         </div>
       </div>
 
@@ -453,13 +424,13 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Card 1: Your Health Status */}
         <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between space-y-3">
-          <div className="space-y-2">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
-              <Heart className="w-5 h-5 text-emerald-600" />
+          <div className="space-y-1.5">
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
+              <Heart className="w-4 h-4 text-emerald-600" />
             </div>
             <h3 className="text-sm font-bold text-slate-800">Your Current Health</h3>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Carrying an inherited trait means your body has one healthy copy of the gene. <strong>You are completely healthy and asymptomatic.</strong> Everyday life and vitality are completely normal.
+              You are healthy and asymptomatic; carrying a single trait does not affect your vitality.
             </p>
           </div>
           <div className="pt-2 border-t border-slate-100 flex items-center text-[11px] text-emerald-700 font-bold">
@@ -470,13 +441,13 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
 
         {/* Card 2: Family & Future Baby Risk */}
         <div className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between space-y-3">
-          <div className="space-y-2">
-            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold">
-              <Dna className="w-5 h-5 text-amber-600" />
+          <div className="space-y-1.5">
+            <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold">
+              <Dna className="w-4 h-4 text-amber-600" />
             </div>
             <h3 className="text-sm font-bold text-slate-800">Future Baby Planning</h3>
             <p className="text-xs text-slate-600 leading-relaxed">
-              An autosomal recessive condition can only affect a child if <strong>both mother and father</strong> carry the exact same trait. If only one parent carries it, your child has <strong>zero risk</strong> of having the disease.
+              A child is affected only if both parents carry the exact same trait.
             </p>
           </div>
           <div className="pt-2 border-t border-slate-100 flex items-center text-[11px] text-teal-800 font-bold">
@@ -487,13 +458,13 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
 
         {/* Card 3: Actionable Next Step */}
         <div className="bg-white rounded-3xl p-5 border border-teal-200 bg-gradient-to-br from-white to-teal-50/40 shadow-xs flex flex-col justify-between space-y-3">
-          <div className="space-y-2">
-            <div className="w-10 h-10 rounded-xl bg-teal-800 text-white flex items-center justify-center font-bold">
-              <Sparkles className="w-5 h-5 text-white" />
+          <div className="space-y-1.5">
+            <div className="w-9 h-9 rounded-xl bg-teal-800 text-white flex items-center justify-center font-bold">
+              <Sparkles className="w-4 h-4 text-white" />
             </div>
             <h3 className="text-sm font-bold text-slate-900">Recommended Next Step</h3>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Check compatibility with your potential match or spouse. Create a dedicated Couple Assessment to review shared carrier likelihood calmly.
+              Start a Couple Assessment to check compatibility with your prospective partner calmly.
             </p>
           </div>
           <Link
@@ -762,13 +733,20 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
                       <span>{appt.scheduled_at || appt.date_time}</span>
                     </div>
 
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-[11px] font-bold text-teal-900 mt-1">
-                      <span>Target:</span>
-                      <span className="text-teal-700">
-                        {appt.assessment_type === 'couple'
-                          ? `Couple (${appt.couple_partner_label || 'Partner Match'})`
-                          : 'Self Analysis'}
-                      </span>
+                    <div className="flex items-center gap-2 flex-wrap pt-1">
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-[11px] font-bold text-teal-900">
+                        <span>Target:</span>
+                        <span className="text-teal-700">
+                          {appt.assessment_type === 'couple'
+                            ? `Couple (${appt.couple_partner_label || 'Partner Match'})`
+                            : 'Self Analysis'}
+                        </span>
+                      </div>
+                      {appt.share_personal_details === 0 && (
+                        <span className="px-2 py-0.5 rounded-full bg-slate-200/80 text-slate-800 text-[10px] font-bold">
+                          🔒 Encrypted Ref: {appt.encrypted_patient_ref || 'REF-CONFIDENTIAL'}
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -982,329 +960,44 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         </div>
       </div>
 
-      {/* ==================== 6. GENOMIC LITERACY: GENETICS MADE SIMPLE ==================== */}
-      <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200/80 shadow-xs space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-teal-800" />
-              <h2 className="text-base font-extrabold text-slate-900">
-                Genomic Literacy: Genetics Made Simple
-              </h2>
-            </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Everything you need to know about inherited traits, carrier status, and keeping your future baby safe.
-            </p>
-          </div>
-
-          {/* Literacy Navigation Tabs */}
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl self-start sm:self-auto text-xs font-bold max-w-full overflow-x-auto no-scrollbar">
-            <button
-              type="button"
-              onClick={() => setActiveLiteracyTab('carrier')}
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-                activeLiteracyTab === 'carrier'
-                  ? 'bg-white text-slate-900 shadow-2xs'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              What is a Carrier?
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveLiteracyTab('consanguinity')}
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-                activeLiteracyTab === 'consanguinity'
-                  ? 'bg-white text-slate-900 shadow-2xs'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              Related Marriages
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveLiteracyTab('choices')}
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-                activeLiteracyTab === 'choices'
-                  ? 'bg-white text-slate-900 shadow-2xs'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              Your Choices
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveLiteracyTab('myths')}
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-                activeLiteracyTab === 'myths'
-                  ? 'bg-white text-slate-900 shadow-2xs'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              Myth vs. Fact
-            </button>
-          </div>
-        </div>
-
-        {/* Tab Content Display */}
-        <div className="p-5 rounded-2xl bg-slate-50/70 border border-slate-200/70 text-xs text-slate-700 leading-relaxed">
-          {activeLiteracyTab === 'carrier' && (
-            <div className="space-y-3">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <span className="w-6 h-6 rounded-lg bg-teal-800 text-white flex items-center justify-center text-xs">1</span>
-                What does having a &quot;Carrier Trait&quot; actually mean?
-              </h3>
-              <p>
-                Think of your genes as two matching instruction manuals—one inherited from your mother and one from your father.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                <div className="p-3 bg-white rounded-xl border border-slate-200">
-                  <span className="font-bold text-slate-900 block mb-1">✅ You are healthy</span>
-                  <span>Because you have a healthy working copy of the gene, you will not experience symptoms or become ill.</span>
-                </div>
-                <div className="p-3 bg-white rounded-xl border border-slate-200">
-                  <span className="font-bold text-slate-900 block mb-1">👶 What about children?</span>
-                  <span>A baby can only develop an autosomal recessive condition if <strong>both parents</strong> carry the exact same trait. If only one parent is a carrier, your child cannot have the disease.</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeLiteracyTab === 'consanguinity' && (
-            <div className="space-y-3">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <span className="w-6 h-6 rounded-lg bg-teal-800 text-white flex items-center justify-center text-xs">2</span>
-                Marrying a Relative (Consanguinity &amp; Cousins)
-              </h3>
-              <p>
-                In many cultures across the UAE and region, cousin marriages are very common and deeply respected. Scientifically:
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                <div className="p-3 bg-white rounded-xl border border-slate-200">
-                  <span className="font-bold text-emerald-800 block mb-1">🌟 Over 95%+ of babies are completely healthy</span>
-                  <span>The vast majority of pregnancies between first cousins result in normal, healthy children.</span>
-                </div>
-                <div className="p-3 bg-white rounded-xl border border-slate-200">
-                  <span className="font-bold text-teal-800 block mb-1">🔬 Why pre-marital testing matters</span>
-                  <span>Because relatives share common ancestors, there is a slightly higher chance of sharing the same recessive gene. A simple pre-marital check provides complete clarity.</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeLiteracyTab === 'choices' && (
-            <div className="space-y-3">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <span className="w-6 h-6 rounded-lg bg-teal-800 text-white flex items-center justify-center text-xs">3</span>
-                Empowering Choices: What if both partners carry a trait?
-              </h3>
-              <p>
-                If testing shows that both you and your partner carry the same trait, modern medicine provides multiple safe options:
-              </p>
-              <ul className="space-y-2 list-disc pl-4 text-slate-700">
-                <li><strong>Pre-implantation Genetic Testing (PGT-M with IVF):</strong> Embryos are tested before pregnancy, allowing only healthy, unaffected embryos to be transferred.</li>
-                <li><strong>Non-Invasive Prenatal Testing (NIPT):</strong> Simple blood tests during early pregnancy check the baby&apos;s health safely.</li>
-                <li><strong>Early Pediatric Care:</strong> Knowing in advance lets pediatricians provide immediate, specialized care from day one.</li>
-              </ul>
-            </div>
-          )}
-
-          {activeLiteracyTab === 'myths' && (
-            <div className="space-y-3">
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <span className="w-6 h-6 rounded-lg bg-teal-800 text-white flex items-center justify-center text-xs">4</span>
-                Common Genetic Myths Debunked
-              </h3>
-              <div className="space-y-2">
-                <div className="p-3 bg-white rounded-xl border border-slate-200 flex items-start gap-2.5">
-                  <span className="text-rose-600 font-bold text-xs shrink-0">MYTH:</span>
-                  <div>
-                    <span className="font-bold text-slate-800">&quot;If I feel strong and healthy, I can&apos;t be a carrier.&quot;</span>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      <strong>Fact:</strong> Carriers almost always feel completely healthy! Carrier status has nothing to do with physical fitness or diet.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="p-3 bg-white rounded-xl border border-slate-200 flex items-start gap-2.5">
-                  <span className="text-rose-600 font-bold text-xs shrink-0">MYTH:</span>
-                  <div>
-                    <span className="font-bold text-slate-800">&quot;Genetic tests are scary and always find bad news.&quot;</span>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      <strong>Fact:</strong> Genetic testing is preventative and reassuring. Most people test clear, and for those who carry traits, actionable options exist to protect their baby.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ==================== 7. GENWELL AI ASSISTANT ==================== */}
-      <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200/80 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-teal-800" />
-            <h2 className="text-base font-extrabold text-slate-900">Ask GenWell AI (Patient View)</h2>
-            <span className="px-2 py-0.5 rounded-full bg-teal-50 text-teal-800 text-[10px] font-bold border border-teal-200">
-              Plain English Answers
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1.5 self-start sm:self-auto text-xs">
-            <label htmlFor="patient-genwell-model-dash" className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Model:</label>
-            <select
-              id="patient-genwell-model-dash"
-              value={selectedModel}
-              onChange={(e) => onModelChange(e.target.value)}
-              className="text-xs bg-slate-50 border border-slate-200 text-slate-800 rounded-lg px-2 py-1 font-semibold focus:ring-1 focus:ring-teal-700 outline-none cursor-pointer"
-            >
-              <option value="gemini-3.0-flash">⚡ Gemini 3.0 Flash</option>
-              <option value="gemini-3.5-flash">🧪 Gemini 3.5 Flash</option>
-              <option value="gemini-2.5-flash">🛡️ Gemini 2.5 Flash</option>
-              <option value="gemini-1.5-flash">📦 Gemini 1.5 Flash</option>
-            </select>
-          </div>
-        </div>
-
-        <p className="text-xs text-slate-600">
-          Ask any question about your family tree, carrier traits, or testing in everyday plain language.
-        </p>
-
-        {/* Input */}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (query.trim() && !aiLoading) onAskQuestion(query);
-          }}
-          className="relative flex items-center"
+      {/* ==================== 6. QUICK NAVIGATION: LITERACY & AI ==================== */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Link
+          href="/genomic-literacy"
+          className="p-5 sm:p-6 rounded-3xl bg-white border border-slate-200/80 hover:border-teal-300 shadow-xs transition group flex items-start justify-between gap-3"
         >
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Ask about family carrier status, baby safety, or pre-marital screening..."
-            disabled={aiLoading}
-            className="w-full pl-3.5 pr-11 py-2.5 text-sm sm:text-xs rounded-xl bg-slate-50 border border-slate-200 text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-600 transition disabled:opacity-50"
-          />
-          <button
-            type="submit"
-            disabled={aiLoading}
-            className="absolute right-2 w-7 h-7 rounded-full bg-slate-900 text-white flex items-center justify-center hover:bg-slate-800 transition shadow-xs cursor-pointer disabled:opacity-50"
-          >
-            {aiLoading ? (
-              <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <Send className="w-3.5 h-3.5" />
-            )}
-          </button>
-        </form>
-
-        {aiLoading && (
-          <div className="p-3.5 bg-teal-50/60 border border-teal-200 rounded-xl flex items-center gap-2.5 text-xs text-teal-800 animate-pulse">
-            <span className="w-3.5 h-3.5 border-2 border-teal-700 border-t-transparent rounded-full animate-spin" />
-            <span>GenWell AI is preparing reassuring, evidence-based guidance for you...</span>
-          </div>
-        )}
-
-        {aiAnswer && !aiLoading && (
-          <div className="p-4 bg-teal-50/70 border border-teal-200 rounded-2xl space-y-2 text-xs">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-teal-900 flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-teal-700" />
-                GenWell Guidance
-              </span>
-              {aiSource && (
-                <span className="px-2 py-0.5 rounded-full bg-white text-teal-800 font-mono text-[9px] font-bold border border-teal-200">
-                  {aiSource}
-                </span>
-              )}
+          <div className="space-y-1.5">
+            <div className="w-10 h-10 rounded-2xl bg-teal-50 text-teal-800 flex items-center justify-center font-bold">
+              <BookOpen className="w-5 h-5 text-teal-700" />
             </div>
-            <p className="text-slate-700 leading-relaxed text-xs whitespace-pre-line">{aiAnswer}</p>
-          </div>
-        )}
-
-        {/* Popular Questions */}
-        <div className="space-y-1.5 pt-2 border-t border-slate-100">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-            COMMON QUESTIONS PATIENTS ASK
-          </span>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {patientInquiries.map((item, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => onAskQuestion(item.q)}
-                className="w-full text-left p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200/60 text-xs text-slate-700 flex items-center justify-between transition cursor-pointer"
-              >
-                <span className="truncate">{item.q}</span>
-                <ArrowRight className="w-3 h-3 text-slate-400 shrink-0 ml-2" />
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* ==================== MODAL 1: LEARN ABOUT CONDITIONS (6 UAE CONDITIONS) ==================== */}
-      {isLearnModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-7 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-teal-800" />
-                <h3 className="text-base font-extrabold text-slate-900">
-                  UAE-Relevant Genetic Conditions Guide
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsLearnModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-600 leading-relaxed">
-              These conditions are part of the standard pre-marital and neonatal screening panel in the UAE. Understanding them in everyday terms helps couples plan with confidence.
+            <h3 className="text-sm font-bold text-slate-900 group-hover:text-teal-800 transition">
+              Genomic Literacy Guide
+            </h3>
+            <p className="text-xs text-slate-500 leading-snug">
+              Explore 6 UAE conditions, carrier explainers, and mythbusters in simple language.
             </p>
-
-            {/* Condition List */}
-            <div className="space-y-3">
-              {conditions.map((cond: any) => (
-                <div
-                  key={cond.slug}
-                  className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2 text-xs"
-                >
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-bold text-sm text-slate-900">{cond.name}</h4>
-                    <span className="px-2 py-0.5 rounded-full bg-teal-50 text-teal-800 text-[10px] font-bold border border-teal-200">
-                      {cond.category}
-                    </span>
-                  </div>
-                  <p className="text-slate-700 leading-relaxed">
-                    {cond.plain_summary}
-                  </p>
-                  <div className="pt-2 border-t border-slate-200/60 text-[11px] text-teal-900 bg-white p-2.5 rounded-xl border border-slate-200">
-                    <strong>Clear Next Steps:</strong> {cond.next_steps_info}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="pt-2 border-t border-slate-100 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setIsLearnModalOpen(false)}
-                className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition cursor-pointer"
-              >
-                Close Guide
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+          <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-teal-800 group-hover:translate-x-0.5 transition shrink-0 mt-2" />
+        </Link>
+
+        <Link
+          href="/ask-ai"
+          className="p-5 sm:p-6 rounded-3xl bg-white border border-slate-200/80 hover:border-teal-300 shadow-xs transition group flex items-start justify-between gap-3"
+        >
+          <div className="space-y-1.5">
+            <div className="w-10 h-10 rounded-2xl bg-teal-50 text-teal-800 flex items-center justify-center font-bold">
+              <Sparkles className="w-5 h-5 text-teal-700" />
+            </div>
+            <h3 className="text-sm font-bold text-slate-900 group-hover:text-teal-800 transition">
+              Ask Guardian AI
+            </h3>
+            <p className="text-xs text-slate-500 leading-snug">
+              Have questions about your test results or family planning? Ask our calm educational AI.
+            </p>
+          </div>
+          <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-teal-800 group-hover:translate-x-0.5 transition shrink-0 mt-2" />
+        </Link>
+      </div>
 
       {/* ==================== MODAL 2: BOOK GENETIC COUNSELOR APPOINTMENT ==================== */}
       {isBookingModalOpen && (
@@ -1410,7 +1103,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
                             setSelectedSlot(p.available_slots[0].full_label || p.available_slots[0].time);
                           }
                         }}
-                        className={`p-3 rounded-xl border transition cursor-pointer flex flex-col gap-1 ${
+                        className={`p-3 rounded-xl border transition cursor-pointer flex flex-col gap-0.5 ${
                           selectedProviderId === p.id
                             ? 'bg-teal-50 border-teal-700 text-teal-900 ring-1 ring-teal-700'
                             : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
@@ -1418,10 +1111,11 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-bold text-slate-900">{p.full_name}</span>
-                          <span className="text-[10px] text-slate-500 font-semibold">{p.location}</span>
+                          <span className="text-[10px] text-teal-800 font-semibold">{p.specialty}</span>
                         </div>
-                        <p className="text-[11px] text-slate-500 leading-snug">{p.specialty}</p>
-                        <p className="text-[10px] text-teal-800">{p.bio}</p>
+                        <p className="text-[11px] text-slate-500 leading-snug">
+                          {p.location} &bull; {Array.isArray(p.languages) ? p.languages.join(', ') : 'Arabic, English'}
+                        </p>
                       </div>
                     ))}
                   </div>
@@ -1447,6 +1141,38 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
                     </select>
                   </div>
                 )}
+
+                {/* 4. Privacy & Personal Identity Sharing Choice */}
+                <div className="space-y-1.5 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <label className="font-bold text-slate-800 block text-xs">
+                    4. Privacy &amp; Identity Sharing Choice
+                  </label>
+                  <p className="text-[11px] text-slate-500">
+                    Share my personal details (name &amp; contact) with the counselor?
+                  </p>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 pt-1">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+                      <input
+                        type="radio"
+                        name="shareDetails"
+                        checked={sharePersonalDetails === 1}
+                        onChange={() => setSharePersonalDetails(1)}
+                        className="text-teal-700 focus:ring-teal-700"
+                      />
+                      <span>Yes &mdash; Share my name &amp; email</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+                      <input
+                        type="radio"
+                        name="shareDetails"
+                        checked={sharePersonalDetails === 0}
+                        onChange={() => setSharePersonalDetails(0)}
+                        className="text-teal-700 focus:ring-teal-700"
+                      />
+                      <span>No &mdash; Anonymous encrypted ref (SHA-256)</span>
+                    </label>
+                  </div>
+                </div>
 
                 {/* Optional Notes */}
                 <div className="space-y-1">

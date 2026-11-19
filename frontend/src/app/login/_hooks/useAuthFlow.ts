@@ -141,12 +141,13 @@ export function useAuthFlow() {
           localStorage.removeItem('ga_pending_guest_assessment');
         }
 
+        const userRole = data.user.role || (data.user.username.toLowerCase() === 'admin' ? 'admin' : 'patient');
         login({
           id: data.user.id,
           username: data.user.username,
           fullName: data.user.full_name,
           aliasName: data.user.alias_name,
-          role: data.user.role || (data.user.username.toLowerCase() === 'admin' ? 'admin' : 'patient'),
+          role: userRole,
           isAdmin: data.user.username.toLowerCase() === 'admin',
           isFreshUser: !pendingQA,
         });
@@ -161,6 +162,40 @@ export function useAuthFlow() {
       // Offline demo fallback
       const lower = u.toLowerCase();
       if (
+        (lower === 'patient' || lower === 'patient@guardianangel.ae') && p === 'Patient123!'
+      ) {
+        if (pendingQA && typeof window !== 'undefined') {
+          localStorage.removeItem('ga_pending_guest_assessment');
+        }
+        login({
+          id: 10,
+          username: 'patient',
+          fullName: 'Tariq Al-Mansoor',
+          aliasName: 'Tariq Al-Mansoor',
+          role: 'patient',
+          isAdmin: false,
+          isFreshUser: false,
+        });
+        router.push('/dashboard');
+        return;
+      } else if (
+        (lower === 'provider' || lower === 'provider@guardianangel.ae') && p === 'Provider123!'
+      ) {
+        if (pendingQA && typeof window !== 'undefined') {
+          localStorage.removeItem('ga_pending_guest_assessment');
+        }
+        login({
+          id: 11,
+          username: 'provider',
+          fullName: 'Dr. Mariam Al Mansoori',
+          aliasName: 'Dr. Mariam Al Mansoori',
+          role: 'provider',
+          isAdmin: false,
+          isFreshUser: false,
+        });
+        router.push('/dashboard');
+        return;
+      } else if (
         (lower === 'admin' && p === 'admin') ||
         (lower === 'user' && p === 'user') ||
         (lower === 'kabir' && p === '123456')
@@ -175,7 +210,7 @@ export function useAuthFlow() {
             lower === 'admin'
               ? 'Dr. Tariq Al-Mansoor (Admin)'
               : lower === 'user'
-              ? 'Dr. Eleanor Vance'
+              ? 'Tariq Al-Mansoor'
               : 'Kabir Khan',
           aliasName:
             lower === 'admin'

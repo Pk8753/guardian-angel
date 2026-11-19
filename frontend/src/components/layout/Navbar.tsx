@@ -6,7 +6,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useUIStore } from '@/stores/useUIStore';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { t } from '@/lib/translations';
-import { Sun, Moon, Settings, LogOut, Heart, Stethoscope, ShieldCheck, Home } from 'lucide-react';
+import { Sun, Moon, Settings, LogOut, Heart, Stethoscope, ShieldCheck, Home, BookOpen, Sparkles } from 'lucide-react';
 
 export function Navbar() {
   const router = useRouter();
@@ -35,7 +35,7 @@ export function Navbar() {
 
   const realName = user?.fullName || user?.username || 'Patient';
   const aliasName = user?.aliasName || 'Anonymous-Patient';
-  const displayName = isSudoMode ? aliasName : realName;
+  const displayName = isProvider && isSudoMode ? aliasName : realName;
   const initialChar = (displayName || user?.username || 'P').charAt(0).toUpperCase();
 
   const handleSignOut = () => {
@@ -43,12 +43,13 @@ export function Navbar() {
     router.push('/login');
   };
 
-  // 4 Top Navigation Tabs for Patients
+  // 5 Top Navigation Tabs for Patients
   const patientTabs = [
     { href: '/dashboard', label: activeLocale === 'ar' ? 'الرئيسية' : 'Home', icon: Home },
     { href: '/couple-assessment', label: activeLocale === 'ar' ? 'فحص الزوجين' : 'Couple Check', icon: Heart },
+    { href: '/genomic-literacy', label: activeLocale === 'ar' ? 'التثقيف الجيني' : 'Genomic Literacy', icon: BookOpen },
     { href: '/counselors', label: activeLocale === 'ar' ? 'المستشارون' : 'Counselors', icon: Stethoscope },
-    { href: '/privacy-profile', label: activeLocale === 'ar' ? 'الخصوصية والملف' : 'Privacy & Profile', icon: ShieldCheck }
+    { href: '/ask-ai', label: activeLocale === 'ar' ? 'اسأل الذكاء الاصطناعي' : 'Ask AI', icon: Sparkles }
   ];
 
   return (

@@ -232,6 +232,8 @@ def init_db():
         duration TEXT NOT NULL,
         status TEXT DEFAULT 'Confirmed',
         notes TEXT,
+        share_personal_details INTEGER DEFAULT 1,
+        encrypted_patient_ref TEXT,
         FOREIGN KEY (user_id) REFERENCES users(id)
     );
     """)
@@ -503,6 +505,8 @@ def init_db():
         ("couple_assessment_id", "INTEGER"),
         ("scheduled_at", "TEXT"),
         ("created_at", "TEXT"),
+        ("share_personal_details", "INTEGER DEFAULT 1"),
+        ("encrypted_patient_ref", "TEXT"),
     ]
     for col_name, col_def in appointment_columns:
         try:
@@ -743,6 +747,104 @@ def init_db():
 
     # Seed Patient Genetics (6 conditions) & Providers (5 counselors)
     seed_patient_genetics_and_providers(cursor, conn)
+
+    # 1. Seed Demo Patient Account: patient@guardianangel.ae / Patient123!
+    patient_hash = hash_password("Patient123!")
+    cursor.execute("SELECT id FROM users WHERE username = 'patient' OR email = 'patient@guardianangel.ae'")
+    patient_row = cursor.fetchone()
+    if not patient_row:
+        cursor.execute("""
+        INSERT INTO users (username, password_hash, email, full_name, role, alias_name)
+        VALUES ('patient', ?, 'patient@guardianangel.ae', 'Tariq Al-Mansoor', 'patient', 'Tariq Al-Mansoor')
+        """, (patient_hash,))
+        patient_id = cursor.lastrowid
+    else:
+        patient_id = patient_row[0]
+        cursor.execute("UPDATE users SET password_hash = ?, email = 'patient@guardianangel.ae', full_name = 'Tariq Al-Mansoor', role = 'patient' WHERE id = ?", (patient_hash, patient_id))
+
+    # Ensure profile for patient
+    cursor.execute("SELECT id FROM user_profiles WHERE user_id = ?", (patient_id,))
+    if not cursor.fetchone():
+        cursor.execute("""
+        INSERT INTO user_profiles (user_id, dob, blood_type, phone, city, country, kinship_degree, phenotypic_notes, emergency_contact)
+        VALUES (?, '1995-04-12', 'O+', '+971 50 123 4567', 'Dubai', 'United Arab Emirates', 'Consanguineous',
+                'Heterozygous carrier for Beta-Thalassemia Trait (HBB).', 'Fatima Al-Mansoor (+971 50 987 6543)')
+        """, (patient_id,))
+
+    # Ensure quick assessment for patient
+    cursor.execute("SELECT id FROM quick_assessments WHERE user_id = ?", (patient_id,))
+    if not cursor.fetchone():
+        qa_answers = json.dumps({
+            "partner_related": "first_cousin",
+            "known_conditions": ["beta-thalassemia"],
+            "planning_timeline": "6_months",
+            "family_origin": "uae"
+        })
+        qa_next = json.dumps([
+            "Complete pre-marital blood screening (CBC & Hb electrophoresis)",
+            "Review trait compatibility with your partner",
+            "Schedule a session with a licensed genetic counselor"
+        ])
+        cursor.execute("""
+        INSERT INTO quick_assessments (user_id, answers_json, risk_estimate, next_steps_json, created_at)
+        VALUES (?, ?, 'Beta-Thalassemia Trait Carrier. Routine pre-marital screening recommended.', ?, datetime('now'))
+        """, (patient_id, qa_answers, qa_next))
+        cursor.execute("""
+        INSERT OR REPLACE INTO patient_profiles (user_id, has_quick_assessment, risk_level, plain_summary, updated_at)
+        VALUES (?, 1, 'Moderate Consideration', 'Healthy single-gene carrier for Beta-Thalassemia. Routine pre-marital screening recommended.', datetime('now'))
+        """, (patient_id,))
+
+    # Ensure couple assessment for patient
+    cursor.execute("SELECT id FROM couple_assessments WHERE user_id = ?", (patient_id,))
+    if not cursor.fetchone():
+        ca_answers = json.dumps({
+            "partner_label": "Fatima",
+            "relationship_type": "First Cousin",
+            "known_traits": "Beta-Thalassemia Trait",
+            "screening_status": "Completed"
+        })
+        cursor.execute("""
+        INSERT INTO couple_assessments (user_id, partner_label, relationship_type, answers_json, risk_estimate, plain_summary, created_at)
+        VALUES (?, 'Fatima (Prospective Match)', 'First Cousin', ?, '{\"carrier_risk\": \"25%\"}',
+                'Both partners carry Beta-Thalassemia trait, giving a 25% chance of major condition in each pregnancy. Modern reproductive choices (including PGT-M) provide safe pathways.', datetime('now'))
+        """, (patient_id, ca_answers))
+
+    # Ensure sample document for patient
+    cursor.execute("SELECT id FROM documents WHERE user_id = ?", (patient_id,))
+    if not cursor.fetchone():
+        cursor.execute("""
+        INSERT INTO documents (user_id, owner_type, file_name, file_url, uploaded_at)
+        VALUES (?, 'self', 'UAE_Premarital_Screening_Tariq.pdf', '/docs/sample_screening_tariq.pdf', datetime('now'))
+        """, (patient_id,))
+
+    # 2. Seed Demo Provider Account: provider@guardianangel.ae / Provider123!
+    provider_hash = hash_password("Provider123!")
+    cursor.execute("SELECT id FROM users WHERE username = 'provider' OR email = 'provider@guardianangel.ae'")
+    provider_row = cursor.fetchone()
+    if not provider_row:
+        cursor.execute("""
+        INSERT INTO users (username, password_hash, email, full_name, role, alias_name)
+        VALUES ('provider', ?, 'provider@guardianangel.ae', 'Dr. Mariam Al Mansoori', 'provider', 'Dr. Mariam Al Mansoori')
+        """, (provider_hash,))
+        provider_user_id = cursor.lastrowid
+    else:
+        provider_user_id = provider_row[0]
+        cursor.execute("UPDATE users SET password_hash = ?, email = 'provider@guardianangel.ae', full_name = 'Dr. Mariam Al Mansoori', role = 'provider' WHERE id = ?", (provider_hash, provider_user_id))
+
+    # Link Dr. Mariam Al Mansoori in providers table to provider_user_id
+    cursor.execute("""
+    UPDATE providers SET user_id = ? WHERE full_name LIKE '%Mariam Al Mansoori%'
+    """, (provider_user_id,))
+
+    # Ensure profile for provider
+    cursor.execute("SELECT id FROM user_profiles WHERE user_id = ?", (provider_user_id,))
+    if not cursor.fetchone():
+        cursor.execute("""
+        INSERT INTO user_profiles (user_id, dob, blood_type, phone, city, country, kinship_degree, phenotypic_notes, emergency_contact)
+        VALUES (?, '1982-08-20', 'A+', '+971 50 555 1234', 'Abu Dhabi', 'United Arab Emirates', 'Non-Consanguineous',
+                'Consultant Clinical Geneticist & Prenatal Counselor.', '+971 50 555 9999')
+        """, (provider_user_id,))
+    conn.commit()
 
     conn.close()
 
@@ -2706,8 +2808,10 @@ def get_provider_by_id(provider_id: int):
     return d
 
 
-def create_appointment(patient_id: int, provider_id: int, assessment_type: str = "self", couple_assessment_id: int = None, scheduled_at: str = None, notes: str = "", duration: str = "30 Mins"):
-    """Book a new genetic counselor appointment."""
+def create_appointment(patient_id: int, provider_id: int, assessment_type: str = "self", couple_assessment_id: int = None, scheduled_at: str = None, notes: str = "", duration: str = "30 Mins", share_personal_details: int = 1):
+    """Book a new genetic counselor appointment with optional encrypted patient reference."""
+    import secrets
+    import hashlib
     conn = get_db_connection()
     cursor = conn.cursor()
     now_ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
@@ -2719,13 +2823,20 @@ def create_appointment(patient_id: int, provider_id: int, assessment_type: str =
         if p_row:
             counselor_name = p_row[0]
 
+    encrypted_patient_ref = None
+    if int(share_personal_details) == 0:
+        ref_code = f"REF-{secrets.token_hex(3).upper()}"
+        ref_hash = hashlib.sha256(f"{patient_id}_{counselor_name}_{now_ts}_{secrets.token_hex(4)}".encode()).hexdigest()[:8]
+        encrypted_patient_ref = f"{ref_code} (SHA-256: {ref_hash})"
+
     cursor.execute("""
         INSERT INTO appointments (
             user_id, patient_id, provider_id, counselor_name, assessment_type, couple_assessment_id,
-            scheduled_at, date_time, duration, status, notes, created_at
+            scheduled_at, date_time, duration, status, notes, created_at,
+            share_personal_details, encrypted_patient_ref
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', ?, ?)
-    """, (patient_id, patient_id, provider_id, counselor_name, assessment_type, couple_assessment_id, scheduled_at, scheduled_at, duration, notes, now_ts))
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', ?, ?, ?, ?)
+    """, (patient_id, patient_id, provider_id, counselor_name, assessment_type, couple_assessment_id, scheduled_at, scheduled_at, duration, notes, now_ts, int(share_personal_details), encrypted_patient_ref))
     appt_id = cursor.lastrowid
     conn.commit()
     conn.close()
@@ -2747,6 +2858,31 @@ def get_appointments_for_patient(patient_id: int):
     """, (patient_id, patient_id)).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def get_appointments_for_provider(provider_id: int):
+    """Get appointments for a provider, masking patient details if share_personal_details is 0."""
+    conn = get_db_connection()
+    rows = conn.execute("""
+        SELECT a.*, u.full_name as patient_full_name, u.email as patient_email,
+               p.full_name as provider_name
+        FROM appointments a
+        LEFT JOIN users u ON a.patient_id = u.id
+        LEFT JOIN providers p ON a.provider_id = p.id
+        WHERE a.provider_id = ? OR p.user_id = ?
+        ORDER BY a.id DESC
+    """, (provider_id, provider_id)).fetchall()
+    conn.close()
+    result = []
+    for r in rows:
+        d = dict(r)
+        if d.get("share_personal_details") == 0:
+            d["patient_name"] = d.get("encrypted_patient_ref") or "Anonymous Patient"
+            d["patient_email"] = "[Confidential - Encrypted Booking]"
+        else:
+            d["patient_name"] = d.get("patient_full_name") or "Patient"
+        result.append(d)
+    return result
 
 
 def cancel_appointment(appointment_id: int, patient_id: int):

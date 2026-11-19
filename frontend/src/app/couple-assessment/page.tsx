@@ -7,6 +7,7 @@ import { Navbar } from '@/components/layout/Navbar';
 import { AuthGuard } from '@/components/layout/AuthGuard';
 import { PgtSimulator } from '@/components/simulation/PgtSimulator';
 import { useUIStore } from '@/stores/useUIStore';
+import { useAuthStore } from '@/stores/useAuthStore';
 import { t } from '@/lib/translations';
 import {
   Heart,
@@ -55,7 +56,10 @@ interface ChatMessage {
 }
 
 export default function CoupleAssessmentPage() {
-  const { activeLocale } = useUIStore();
+  const { activeLocale, viewMode } = useUIStore();
+  const { user } = useAuthStore();
+  const isProvider = user?.role === 'provider' || user?.isAdmin || viewMode === 'provider';
+
   const [assessment, setAssessment] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [userQuery, setUserQuery] = useState('');
@@ -89,6 +93,7 @@ export default function CoupleAssessmentPage() {
   const [selectedProviderId, setSelectedProviderId] = useState<number | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string>('');
   const [bookingNotes, setBookingNotes] = useState<string>('');
+  const [sharePersonalDetails, setSharePersonalDetails] = useState<number>(1);
   const [isBookingSubmitting, setIsBookingSubmitting] = useState<boolean>(false);
   const [bookingSuccessMsg, setBookingSuccessMsg] = useState<string | null>(null);
 
@@ -382,7 +387,8 @@ export default function CoupleAssessmentPage() {
           assessment_type: 'couple',
           couple_assessment_id: selectedProfileId,
           scheduled_at: selectedSlot,
-          notes: bookingNotes
+          notes: bookingNotes,
+          share_personal_details: sharePersonalDetails
         })
       });
 
@@ -424,8 +430,8 @@ export default function CoupleAssessmentPage() {
           const members = activeFam.members || [];
           const maleTarget = members.find((m: any) => m.sex === 'male' && m.relationship !== 'child');
           const femaleTarget = members.find((m: any) => m.sex === 'female' && m.relationship !== 'child');
-          if (maleTarget) pA = maleTarget.alias_name || maleTarget.name || 'Partner A (Target Male)';
-          if (femaleTarget) pB = femaleTarget.alias_name || femaleTarget.name || 'Partner B (Target Female)';
+          if (maleTarget) pA = maleTarget.name || maleTarget.full_name || (isProvider ? maleTarget.alias_name : '') || 'Partner A';
+          if (femaleTarget) pB = femaleTarget.name || femaleTarget.full_name || (isProvider ? femaleTarget.alias_name : '') || 'Partner B';
         }
       }
       setPartnerAName(pA);
@@ -755,36 +761,23 @@ export default function CoupleAssessmentPage() {
                         active.plain_summary?.toLowerCase().includes('sma') ||
                         active.relationship_type?.includes('First Cousin')
                       ) && (
-                        <div className="mt-3 p-3.5 rounded-xl bg-gradient-to-r from-amber-50 via-emerald-50/60 to-teal-50 border border-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          <div className="flex items-start gap-2.5">
-                            <div className="w-8 h-8 rounded-lg bg-amber-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
-                              <Stethoscope className="w-4 h-4" />
-                            </div>
-                            <div className="space-y-0.5">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-bold text-xs text-amber-950">
-                                  Recommended: Speak with an Accredited Counselor
-                                </span>
-                                <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                                  Supportive Guidance
-                                </span>
-                              </div>
-                              <p className="text-[11px] text-slate-700 leading-snug">
-                                Guidance from an expert ensures peace of mind and explores modern family pathways (such as PGT-M with IVF, non-invasive screening, or targeted pediatric care).
-                              </p>
-                            </div>
+                        <div className="mt-3 p-3.5 rounded-xl bg-gradient-to-r from-amber-50 via-emerald-50/60 to-teal-50 border border-amber-300 flex items-start gap-2.5">
+                          <div className="w-8 h-8 rounded-lg bg-amber-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
+                            <Stethoscope className="w-4 h-4" />
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedProfileId(active.id);
-                              setIsBookingModalOpen(true);
-                            }}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-pine hover:bg-pine-light text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer shrink-0 self-start sm:self-auto"
-                          >
-                            <Calendar className="w-3.5 h-3.5 text-mint" />
-                            <span>Book Consultation for this Match</span>
-                          </button>
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-xs text-amber-950">
+                                Recommended: Speak with an Accredited Counselor
+                              </span>
+                              <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                                Supportive Guidance
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-700 leading-snug">
+                              Guidance from an expert ensures peace of mind and explores modern family pathways (such as PGT-M with IVF, non-invasive screening, or targeted pediatric care). Tap &ldquo;Book Counselor&rdquo; above to schedule.
+                            </p>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -843,7 +836,7 @@ export default function CoupleAssessmentPage() {
                 </div>
               </div>
             </div>
-          ) : (
+          ) : isProvider ? (
             <>
               {/* Clinical Protocol Recommendation Banner */}
               <div className="p-4 rounded-2xl bg-mint/20 border border-mint/60 flex items-start gap-4 shadow-xs">
@@ -1018,9 +1011,9 @@ export default function CoupleAssessmentPage() {
                 </div>
               </div>
             </>
-          )}
+          ) : null}
 
-          {/* ==================== QWEN3 BRAIN: POSITIVE COUPLE ASSESSMENT & NAVIGATION ==================== */}
+          {/* ==================== AI COUPLE ASSESSMENT & NAVIGATION ==================== */}
           {assessment && (
             <div className="bg-white rounded-3xl p-6 sm:p-8 border border-outline-variant/30 shadow-xs space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-outline-variant/20 pb-4">
@@ -1031,7 +1024,7 @@ export default function CoupleAssessmentPage() {
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className="text-base sm:text-lg font-extrabold text-pine">
-                        Qwen3 Clinical Brain &bull; Couple Assessment
+                        AI Couple Assessment
                       </h3>
                       <span className="px-2.5 py-0.5 rounded-full bg-mint/25 text-pine text-[10px] font-bold border border-mint">
                         Compassionate Guidance
@@ -1265,91 +1258,97 @@ export default function CoupleAssessmentPage() {
             </div>
           )}
 
-          {/* Variant Concordance Matrix Table */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
-            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Dna className="w-5 h-5 text-pine" />
-                <h3 className="font-bold text-slate-800 text-sm">
-                  Comparative Variant Concordance Matrix (3,240 Autosomal Loci)
-                </h3>
+          {/* Provider-Only: Clinical Variant Concordance Matrix & PGT-M Simulator */}
+          {isProvider && (
+            <>
+              {/* Variant Concordance Matrix Table */}
+              <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+                <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Dna className="w-5 h-5 text-pine" />
+                    <h3 className="font-bold text-slate-800 text-sm">
+                      Comparative Variant Concordance Matrix (3,240 Autosomal Loci)
+                    </h3>
+                  </div>
+                  <span className="text-xs text-slate-400">ACMG Guidelines 2024</span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-start text-xs">
+                    <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-100">
+                      <tr>
+                        <th className="px-5 py-3">Gene / Condition</th>
+                        <th className="px-5 py-3">Pattern</th>
+                        <th className="px-5 py-3">Partner A Status</th>
+                        <th className="px-5 py-3">Partner B Status</th>
+                        <th className="px-5 py-3">Concordance Risk</th>
+                        <th className="px-5 py-3 text-right">Clinical Protocol</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-slate-700">
+                      <tr className={`hover:bg-slate-50/80 transition-colors ${assessment?.synthesis?.recessive_risk?.includes('25%') ? 'bg-red-50/20' : 'bg-emerald-50/10'}`}>
+                        <td className="px-5 py-3.5 font-bold text-slate-800">
+                          {assessment?.partner_a?.condition || assessment?.partner_b?.condition || 'HBB (Beta-Thalassemia Major)'}
+                        </td>
+                        <td className="px-5 py-3.5 font-mono text-slate-500">Autosomal Recessive</td>
+                        <td className="px-5 py-3.5 text-amber-800 font-medium">
+                          {assessment?.partner_a?.carrier_status ? `${assessment.partner_a.carrier_status} (${assessment.partner_a.variant})` : 'Carrier (c.92+5G>C)'}
+                        </td>
+                        <td className="px-5 py-3.5 text-amber-800 font-medium">
+                          {assessment?.partner_b?.carrier_status ? `${assessment.partner_b.carrier_status} (${assessment.partner_b.variant})` : 'Carrier (IVS-I-5 G>C)'}
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${assessment?.synthesis?.recessive_risk?.includes('25%') ? 'bg-red-100 text-red-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                            {assessment?.synthesis?.recessive_risk || '25% Risk'}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3.5 text-right font-medium text-pine">
+                          {assessment?.synthesis?.recessive_risk?.includes('25%') ? 'Targeted Pre-implantation / PGT-M' : 'Routine Clinical Care'}
+                        </td>
+                      </tr>
+
+                      <tr className="hover:bg-slate-50/80 transition-colors">
+                        <td className="px-5 py-3.5 font-bold text-slate-800">
+                          CFTR (Cystic Fibrosis)
+                        </td>
+                        <td className="px-5 py-3.5 font-mono text-slate-500">Autosomal Recessive</td>
+                        <td className="px-5 py-3.5 text-slate-600">Non-carrier</td>
+                        <td className="px-5 py-3.5 text-slate-600">Non-carrier</td>
+                        <td className="px-5 py-3.5">
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px]">
+                            &lt;0.01% Low
+                          </span>
+                        </td>
+                        <td className="px-5 py-3.5 text-right font-medium text-slate-500">
+                          Standard Care
+                        </td>
+                      </tr>
+
+                      <tr className="hover:bg-slate-50/80 transition-colors">
+                        <td className="px-5 py-3.5 font-bold text-slate-800">
+                          SMN1 (Spinal Muscular Atrophy)
+                        </td>
+                        <td className="px-5 py-3.5 font-mono text-slate-500">Autosomal Recessive</td>
+                        <td className="px-5 py-3.5 text-slate-600">2 Copies</td>
+                        <td className="px-5 py-3.5 text-slate-600">2 Copies</td>
+                        <td className="px-5 py-3.5">
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px]">
+                            &lt;0.01% Low
+                          </span>
+                        </td>
+                        <td className="px-5 py-3.5 text-right font-medium text-slate-500">
+                          Standard Care
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
-              <span className="text-xs text-slate-400">ACMG Guidelines 2024</span>
-            </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-start text-xs">
-                <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-100">
-                  <tr>
-                    <th className="px-5 py-3">Gene / Condition</th>
-                    <th className="px-5 py-3">Pattern</th>
-                    <th className="px-5 py-3">Partner A Status</th>
-                    <th className="px-5 py-3">Partner B Status</th>
-                    <th className="px-5 py-3">Concordance Risk</th>
-                    <th className="px-5 py-3 text-right">Clinical Protocol</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
-                  <tr className={`hover:bg-slate-50/80 transition-colors ${assessment?.synthesis?.recessive_risk?.includes('25%') ? 'bg-red-50/20' : 'bg-emerald-50/10'}`}>
-                    <td className="px-5 py-3.5 font-bold text-slate-800">
-                      {assessment?.partner_a?.condition || assessment?.partner_b?.condition || 'HBB (Beta-Thalassemia Major)'}
-                    </td>
-                    <td className="px-5 py-3.5 font-mono text-slate-500">Autosomal Recessive</td>
-                    <td className="px-5 py-3.5 text-amber-800 font-medium">
-                      {assessment?.partner_a?.carrier_status ? `${assessment.partner_a.carrier_status} (${assessment.partner_a.variant})` : 'Carrier (c.92+5G>C)'}
-                    </td>
-                    <td className="px-5 py-3.5 text-amber-800 font-medium">
-                      {assessment?.partner_b?.carrier_status ? `${assessment.partner_b.carrier_status} (${assessment.partner_b.variant})` : 'Carrier (IVS-I-5 G>C)'}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${assessment?.synthesis?.recessive_risk?.includes('25%') ? 'bg-red-100 text-red-800' : 'bg-emerald-100 text-emerald-800'}`}>
-                        {assessment?.synthesis?.recessive_risk || '25% Risk'}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5 text-right font-medium text-pine">
-                      {assessment?.synthesis?.recessive_risk?.includes('25%') ? 'Targeted Pre-implantation / PGT-M' : 'Routine Clinical Care'}
-                    </td>
-                  </tr>
-
-                  <tr className="hover:bg-slate-50/80 transition-colors">
-                    <td className="px-5 py-3.5 font-bold text-slate-800">
-                      CFTR (Cystic Fibrosis)
-                    </td>
-                    <td className="px-5 py-3.5 font-mono text-slate-500">Autosomal Recessive</td>
-                    <td className="px-5 py-3.5 text-slate-600">Non-carrier</td>
-                    <td className="px-5 py-3.5 text-slate-600">Non-carrier</td>
-                    <td className="px-5 py-3.5">
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px]">
-                        &lt;0.01% Low
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5 text-right font-medium text-slate-500">
-                      Standard Care
-                    </td>
-                  </tr>
-
-                  <tr className="hover:bg-slate-50/80 transition-colors">
-                    <td className="px-5 py-3.5 font-bold text-slate-800">
-                      SMN1 (Spinal Muscular Atrophy)
-                    </td>
-                    <td className="px-5 py-3.5 font-mono text-slate-500">Autosomal Recessive</td>
-                    <td className="px-5 py-3.5 text-slate-600">2 Copies</td>
-                    <td className="px-5 py-3.5 text-slate-600">2 Copies</td>
-                    <td className="px-5 py-3.5">
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px]">
-                        &lt;0.01% Low
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5 text-right font-medium text-slate-500">
-                      Standard Care
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-          {/* Interactive PGT-M & Offspring Probability Simulator */}
-          <PgtSimulator />
+              {/* Interactive PGT-M & Offspring Probability Simulator */}
+              <PgtSimulator />
+            </>
+          )}
         </main>
       </div>
       </div>
@@ -1656,11 +1655,10 @@ export default function CoupleAssessmentPage() {
                         >
                           <div className="flex items-center justify-between">
                             <span className="font-bold text-pine">{prov.full_name}</span>
-                            <span className="text-[10px] text-slate-500">{prov.location}</span>
+                            <span className="text-[10px] text-teal-800 font-semibold">{prov.specialty}</span>
                           </div>
-                          <p className="text-[11px] text-slate-600 mt-0.5">{prov.specialty}</p>
-                          <p className="text-[10px] text-slate-400 mt-1">
-                            Languages: {Array.isArray(prov.languages) ? prov.languages.join(', ') : 'Arabic, English'}
+                          <p className="text-[11px] text-slate-500 mt-0.5">
+                            {prov.location} &bull; {Array.isArray(prov.languages) ? prov.languages.join(', ') : 'Arabic, English'}
                           </p>
                         </div>
                       );
@@ -1717,6 +1715,38 @@ export default function CoupleAssessmentPage() {
                     onChange={(e) => setBookingNotes(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pine/30"
                   />
+                </div>
+
+                {/* Privacy & Identity Sharing Choice */}
+                <div className="space-y-1.5 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <label className="font-bold text-slate-800 block text-xs">
+                    Privacy &amp; Identity Sharing Choice
+                  </label>
+                  <p className="text-[11px] text-slate-500">
+                    Share personal details (name &amp; contact) with the counselor?
+                  </p>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 pt-1">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+                      <input
+                        type="radio"
+                        name="shareDetailsCouple"
+                        checked={sharePersonalDetails === 1}
+                        onChange={() => setSharePersonalDetails(1)}
+                        className="text-teal-700 focus:ring-teal-700"
+                      />
+                      <span>Yes &mdash; Share names &amp; email</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+                      <input
+                        type="radio"
+                        name="shareDetailsCouple"
+                        checked={sharePersonalDetails === 0}
+                        onChange={() => setSharePersonalDetails(0)}
+                        className="text-teal-700 focus:ring-teal-700"
+                      />
+                      <span>No &mdash; Anonymous encrypted ref (SHA-256)</span>
+                    </label>
+                  </div>
                 </div>
 
                 {/* Actions */}

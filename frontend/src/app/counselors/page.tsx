@@ -57,6 +57,8 @@ interface Appointment {
   scheduled_at: string;
   status: string;
   notes?: string;
+  share_personal_details?: number;
+  encrypted_patient_ref?: string;
 }
 
 interface ChatMessage {
@@ -83,6 +85,7 @@ export default function CounselorsPage() {
   const [selectedCoupleId, setSelectedCoupleId] = useState<number | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string>('');
   const [bookingNotes, setBookingNotes] = useState<string>('');
+  const [sharePersonalDetails, setSharePersonalDetails] = useState<number>(1);
   const [isSubmittingBooking, setIsSubmittingBooking] = useState<boolean>(false);
   const [bookingSuccessMsg, setBookingSuccessMsg] = useState<string | null>(null);
   const [bookingError, setBookingError] = useState<string | null>(null);
@@ -182,7 +185,8 @@ export default function CounselorsPage() {
           assessment_type: bookingType,
           couple_assessment_id: bookingType === 'couple' ? selectedCoupleId : null,
           scheduled_at: selectedSlot,
-          notes: bookingNotes
+          notes: bookingNotes,
+          share_personal_details: sharePersonalDetails
         })
       });
 
@@ -371,13 +375,20 @@ export default function CounselorsPage() {
                           <span>{appt.scheduled_at}</span>
                         </div>
 
-                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-[11px] font-bold text-teal-900 mt-1">
-                          <span>Focus:</span>
-                          <span className="text-teal-700">
-                            {appt.assessment_type === 'couple'
-                              ? `Couple Assessment (${appt.couple_partner_label || 'Partner Match'})`
-                              : 'Personal Self Analysis'}
-                          </span>
+                        <div className="flex items-center gap-2 flex-wrap pt-1">
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-[11px] font-bold text-teal-900">
+                            <span>Focus:</span>
+                            <span className="text-teal-700">
+                              {appt.assessment_type === 'couple'
+                                ? `Couple Assessment (${appt.couple_partner_label || 'Partner Match'})`
+                                : 'Personal Self Analysis'}
+                            </span>
+                          </div>
+                          {appt.share_personal_details === 0 && (
+                            <span className="px-2 py-0.5 rounded-full bg-slate-200/80 text-slate-800 text-[10px] font-bold">
+                              🔒 Encrypted Ref: {appt.encrypted_patient_ref || 'REF-CONFIDENTIAL'}
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -507,9 +518,9 @@ export default function CounselorsPage() {
                             ))}
                           </div>
 
-                          {/* Bio */}
-                          <p className="text-xs text-slate-600 leading-relaxed line-clamp-3">
-                            {counselor.bio}
+                          {/* 1-Line Trimmed Bio */}
+                          <p className="text-xs text-slate-600 leading-snug line-clamp-1">
+                            {counselor.specialty} &bull; {counselor.location}
                           </p>
 
                           {/* Next Slot Badge */}
@@ -829,6 +840,38 @@ export default function CounselorsPage() {
                     rows={2}
                     className="w-full p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 text-xs outline-none focus:bg-white"
                   />
+                </div>
+
+                {/* 5. Privacy & Personal Identity Sharing Choice */}
+                <div className="space-y-1.5 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                  <label className="font-bold text-slate-800 block text-xs">
+                    5. Privacy &amp; Identity Sharing Choice
+                  </label>
+                  <p className="text-[11px] text-slate-500">
+                    Share my personal details (name &amp; contact) with the counselor?
+                  </p>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 pt-1">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+                      <input
+                        type="radio"
+                        name="shareDetailsCounselors"
+                        checked={sharePersonalDetails === 1}
+                        onChange={() => setSharePersonalDetails(1)}
+                        className="text-teal-700 focus:ring-teal-700"
+                      />
+                      <span>Yes &mdash; Share my name &amp; email</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+                      <input
+                        type="radio"
+                        name="shareDetailsCounselors"
+                        checked={sharePersonalDetails === 0}
+                        onChange={() => setSharePersonalDetails(0)}
+                        className="text-teal-700 focus:ring-teal-700"
+                      />
+                      <span>No &mdash; Anonymous encrypted ref (SHA-256)</span>
+                    </label>
+                  </div>
                 </div>
 
                 {/* Submit Row */}

@@ -55,30 +55,47 @@ export function SocialAuthButtons({ fillDemoCreds }: SocialAuthButtonsProps) {
         </a>
       </div>
 
-      <div className="pt-2 border-t border-neutral-100 flex items-center justify-between text-[10px] text-neutral-400">
-        <span>Demo logins:</span>
-        <div className="flex items-center gap-1.5">
+      <div className="pt-2 border-t border-neutral-100 space-y-2">
+        <div className="flex items-center justify-between text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
+          <span>Quick Demo Access</span>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
-            onClick={() => fillDemoCreds('admin', 'admin')}
-            className="px-2 py-0.5 rounded bg-neutral-100 text-[#0c322c] hover:bg-[#30ba78]/20 font-semibold cursor-pointer"
+            onClick={() => fillDemoCreds('patient@guardianangel.ae', 'Patient123!')}
+            className="w-full py-2 px-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold text-center cursor-pointer transition-all flex items-center justify-center gap-1.5 shadow-2xs"
           >
-            admin
+            <span>👤</span>
+            <span>Demo Patient</span>
           </button>
           <button
             type="button"
-            onClick={() => fillDemoCreds('user', 'user')}
-            className="px-2 py-0.5 rounded bg-neutral-100 text-[#0c322c] hover:bg-[#30ba78]/20 font-semibold cursor-pointer"
+            onClick={() => fillDemoCreds('provider@guardianangel.ae', 'Provider123!')}
+            className="w-full py-2 px-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 text-xs font-bold text-center cursor-pointer transition-all flex items-center justify-center gap-1.5 shadow-2xs"
           >
-            user
+            <span>🩺</span>
+            <span>Demo Provider</span>
           </button>
-          <button
-            type="button"
-            onClick={() => fillDemoCreds('kabir', '123456')}
-            className="px-2 py-0.5 rounded bg-neutral-100 text-[#0c322c] hover:bg-[#30ba78]/20 font-semibold cursor-pointer"
-          >
-            kabir
-          </button>
+        </div>
+
+        <div className="flex items-center justify-between text-[10px] text-neutral-400 pt-1">
+          <span>Other accounts:</span>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => fillDemoCreds('admin', 'admin')}
+              className="px-2 py-0.5 rounded bg-neutral-100 text-[#0c322c] hover:bg-[#30ba78]/20 font-semibold cursor-pointer"
+            >
+              admin
+            </button>
+            <button
+              type="button"
+              onClick={() => fillDemoCreds('user', 'user')}
+              className="px-2 py-0.5 rounded bg-neutral-100 text-[#0c322c] hover:bg-[#30ba78]/20 font-semibold cursor-pointer"
+            >
+              user
+            </button>
+          </div>
         </div>
       </div>
     </>
