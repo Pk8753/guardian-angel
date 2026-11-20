@@ -6,6 +6,9 @@ if (util && util._extend) {
 
 /** @type {import('next').NextConfig} */
 const backendPort = process.env.BACKEND_PORT || '5000';
+const isDev = process.env.NODE_ENV !== 'production';
+const defaultBackend = isDev ? `http://127.0.0.1:${backendPort}` : 'https://guardian-angel-703744831646.us-central1.run.app';
+const backendBase = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || defaultBackend;
 
 const nextConfig = {
   reactStrictMode: true,
@@ -17,15 +20,14 @@ const nextConfig = {
     return [
       {
         source: '/api/:path*',
-        destination: `http://127.0.0.1:${backendPort}/api/:path*`,
+        destination: `${backendBase}/api/:path*`,
       },
       {
         source: '/data/:path*',
-        destination: `http://127.0.0.1:${backendPort}/data/:path*`,
+        destination: `${backendBase}/data/:path*`,
       },
     ];
   },
 };
 
 module.exports = nextConfig;
-
