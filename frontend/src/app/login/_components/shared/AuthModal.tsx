@@ -61,86 +61,116 @@ export function AuthModal() {
         </div>
 
         {/* Tab Switcher (Segmented Control on Mobile, Underline Tabs on Desktop) */}
-        <div className="p-2.5 sm:p-0 border-b border-[#efefef] bg-[#efefef] shrink-0">
-          <div className="flex bg-neutral-200/80 sm:bg-transparent p-1 sm:p-0 rounded-xl sm:rounded-none">
-            <button
-              type="button"
-              onClick={() => {
-                auth.setActiveTab('signin');
-                auth.setAuthError(null);
-              }}
-              className={`flex-1 py-2 sm:py-3 text-xs font-bold text-center transition-all cursor-pointer rounded-lg sm:rounded-none ${
-                auth.activeTab === 'signin'
-                  ? 'bg-white text-[#0c322c] shadow-xs sm:shadow-none sm:border-b-2 sm:border-[#30ba78]'
-                  : 'text-neutral-500 hover:text-[#0c322c]'
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                auth.setActiveTab('register');
-                auth.setAuthError(null);
-              }}
-              className={`flex-1 py-2 sm:py-3 text-xs font-bold text-center transition-all cursor-pointer rounded-lg sm:rounded-none ${
-                auth.activeTab === 'register'
-                  ? 'bg-white text-[#0c322c] shadow-xs sm:shadow-none sm:border-b-2 sm:border-[#30ba78]'
-                  : 'text-neutral-500 hover:text-[#0c322c]'
-              }`}
-            >
-              Create Account
-            </button>
+        {!auth.isRegistrationSuccess && (
+          <div className="p-2.5 sm:p-0 border-b border-[#efefef] bg-[#efefef] shrink-0">
+            <div className="flex bg-neutral-200/80 sm:bg-transparent p-1 sm:p-0 rounded-xl sm:rounded-none">
+              <button
+                type="button"
+                onClick={() => {
+                  auth.setActiveTab('signin');
+                  auth.setAuthError(null);
+                }}
+                className={`flex-1 py-2 sm:py-3 text-xs font-bold text-center transition-all cursor-pointer rounded-lg sm:rounded-none ${
+                  auth.activeTab === 'signin'
+                    ? 'bg-white text-[#0c322c] shadow-xs sm:shadow-none sm:border-b-2 sm:border-[#30ba78]'
+                    : 'text-neutral-500 hover:text-[#0c322c]'
+                }`}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  auth.setActiveTab('register');
+                  auth.setAuthError(null);
+                }}
+                className={`flex-1 py-2 sm:py-3 text-xs font-bold text-center transition-all cursor-pointer rounded-lg sm:rounded-none ${
+                  auth.activeTab === 'register'
+                    ? 'bg-white text-[#0c322c] shadow-xs sm:shadow-none sm:border-b-2 sm:border-[#30ba78]'
+                    : 'text-neutral-500 hover:text-[#0c322c]'
+                }`}
+              >
+                Create Account
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Form Body - Native Scrollable Container */}
         <div className="flex-1 p-5 overflow-y-auto space-y-4 min-h-0 sm:max-h-[75vh]">
-          <AuthErrorBanner authError={auth.authError} authSuccess={auth.authSuccess} />
+          {auth.isRegistrationSuccess ? (
+            <div className="py-8 px-4 flex flex-col items-center justify-center text-center space-y-5 animate-in fade-in zoom-in-95 duration-200 my-auto">
+              <div className="w-16 h-16 rounded-full bg-emerald-50 border-2 border-[#30ba78] text-[#30ba78] flex items-center justify-center shadow-sm">
+                <span className="material-symbols-outlined text-4xl">check_circle</span>
+              </div>
 
-          {auth.activeTab === 'signin' ? (
-            <LoginFormFields
-              signInUsername={auth.signInUsername}
-              setSignInUsername={auth.setSignInUsername}
-              signInPassword={auth.signInPassword}
-              setSignInPassword={auth.setSignInPassword}
-              showSignInPassword={auth.showSignInPassword}
-              setShowSignInPassword={auth.setShowSignInPassword}
-              isSignInSubmitting={auth.isSignInSubmitting}
-              fieldErrors={auth.fieldErrors}
-              clearFieldError={auth.clearFieldError}
-              handleSignIn={auth.handleSignIn}
-              fillDemoCreds={auth.fillDemoCreds}
-            />
+              <div className="space-y-2">
+                <h3 className="text-xl font-extrabold text-[#0c322c]">
+                  Account Created Successfully!
+                </h3>
+                <p className="text-xs text-neutral-600 max-w-xs mx-auto leading-relaxed">
+                  Your secure health vault has been established. Please sign in with your credentials to access your health vault.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={auth.goToSignInFromSuccess}
+                className="w-full py-3 px-6 rounded-xl font-bold text-xs bg-[#30ba78] text-[#0c322c] hover:bg-[#30ba78]/90 active:scale-95 transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer mt-2"
+              >
+                <span>Proceed to Sign In</span>
+                <span className="material-symbols-outlined text-sm">arrow_forward</span>
+              </button>
+            </div>
           ) : (
-            <RegisterFormFields
-              regFirstName={auth.regFirstName}
-              setRegFirstName={auth.setRegFirstName}
-              regSecondName={auth.regSecondName}
-              setRegSecondName={auth.setRegSecondName}
-              regUsername={auth.regUsername}
-              setRegUsername={auth.setRegUsername}
-              regDob={auth.regDob}
-              setRegDob={auth.setRegDob}
-              regEmail={auth.regEmail}
-              setRegEmail={auth.setRegEmail}
-              regLocation={auth.regLocation}
-              setRegLocation={auth.setRegLocation}
-              regPassword={auth.regPassword}
-              setRegPassword={auth.setRegPassword}
-              showRegPassword={auth.showRegPassword}
-              setShowRegPassword={auth.setShowRegPassword}
-              isRegSubmitting={auth.isRegSubmitting}
-              otpSent={auth.otpSent}
-              otpVerified={auth.otpVerified}
-              otpInput={auth.otpInput}
-              setOtpInput={auth.setOtpInput}
-              otpLoading={auth.otpLoading}
-              clearFieldError={auth.clearFieldError}
-              handleSendOtp={auth.handleSendOtp}
-              handleVerifyOtp={auth.handleVerifyOtp}
-              handleRegister={auth.handleRegister}
-            />
+            <>
+              <AuthErrorBanner authError={auth.authError} authSuccess={auth.authSuccess} />
+
+              {auth.activeTab === 'signin' ? (
+                <LoginFormFields
+                  signInUsername={auth.signInUsername}
+                  setSignInUsername={auth.setSignInUsername}
+                  signInPassword={auth.signInPassword}
+                  setSignInPassword={auth.setSignInPassword}
+                  showSignInPassword={auth.showSignInPassword}
+                  setShowSignInPassword={auth.setShowSignInPassword}
+                  isSignInSubmitting={auth.isSignInSubmitting}
+                  fieldErrors={auth.fieldErrors}
+                  clearFieldError={auth.clearFieldError}
+                  handleSignIn={auth.handleSignIn}
+                  fillDemoCreds={auth.fillDemoCreds}
+                />
+              ) : (
+                <RegisterFormFields
+                  regFirstName={auth.regFirstName}
+                  setRegFirstName={auth.setRegFirstName}
+                  regSecondName={auth.regSecondName}
+                  setRegSecondName={auth.setRegSecondName}
+                  regUsername={auth.regUsername}
+                  setRegUsername={auth.setRegUsername}
+                  regDob={auth.regDob}
+                  setRegDob={auth.setRegDob}
+                  regEmail={auth.regEmail}
+                  setRegEmail={auth.setRegEmail}
+                  regLocation={auth.regLocation}
+                  setRegLocation={auth.setRegLocation}
+                  regPassword={auth.regPassword}
+                  setRegPassword={auth.setRegPassword}
+                  showRegPassword={auth.showRegPassword}
+                  setShowRegPassword={auth.setShowRegPassword}
+                  isRegSubmitting={auth.isRegSubmitting}
+                  otpSent={auth.otpSent}
+                  otpVerified={auth.otpVerified}
+                  otpInput={auth.otpInput}
+                  setOtpInput={auth.setOtpInput}
+                  otpLoading={auth.otpLoading}
+                  clearFieldError={auth.clearFieldError}
+                  handleSendOtp={auth.handleSendOtp}
+                  handleVerifyOtp={auth.handleVerifyOtp}
+                  handleRegister={auth.handleRegister}
+                />
+              )}
+            </>
           )}
         </div>
 

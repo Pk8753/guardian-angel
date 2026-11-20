@@ -134,17 +134,7 @@ export function RegisterFormFields({
       </div>
 
       <div>
-        <div className="flex items-center justify-between">
-          <label className="text-[11px] font-bold text-[#0c322c]">Email *</label>
-          <button
-            type="button"
-            onClick={handleSendOtp}
-            disabled={otpLoading}
-            className="text-[10px] font-bold text-[#30ba78] hover:underline"
-          >
-            {otpLoading ? 'Sending...' : otpSent ? 'Resend OTP' : 'Send Verification OTP'}
-          </button>
-        </div>
+        <label className="text-[11px] font-bold text-[#0c322c]">Email *</label>
         <input
           type="email"
           placeholder="you@domain.com"
@@ -155,36 +145,6 @@ export function RegisterFormFields({
           }}
           className="w-full h-9 px-2.5 text-xs rounded border border-neutral-200 focus:border-[#30ba78] bg-neutral-50"
         />
-      </div>
-
-      <div className="p-2.5 rounded-lg bg-[#efefef] border border-neutral-200 space-y-1.5">
-        <div className="flex items-center justify-between text-[11px]">
-          <span className="font-semibold text-neutral-600">Verification OTP:</span>
-          {otpVerified && (
-            <span className="text-[#30ba78] font-bold flex items-center gap-1">
-              <span className="material-symbols-outlined text-xs">verified</span> Verified
-            </span>
-          )}
-        </div>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            maxLength={6}
-            placeholder="Enter verification code"
-            value={otpInput}
-            disabled={otpVerified}
-            onChange={(e) => setOtpInput(e.target.value)}
-            className="flex-1 h-8 px-2 text-xs rounded border border-neutral-300 bg-white"
-          />
-          <button
-            type="button"
-            onClick={handleVerifyOtp}
-            disabled={otpVerified}
-            className="px-3 h-8 bg-[#0c322c] text-white hover:bg-[#30ba78] hover:text-[#0c322c] text-xs font-bold rounded transition-colors"
-          >
-            Verify
-          </button>
-        </div>
       </div>
 
       <div>
@@ -208,6 +168,73 @@ export function RegisterFormFields({
             <span className="material-symbols-outlined text-sm">
               {showRegPassword ? 'visibility_off' : 'visibility'}
             </span>
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <button
+          type="button"
+          onClick={handleSendOtp}
+          disabled={otpLoading || otpVerified}
+          className={`w-full h-9 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-xs cursor-pointer ${
+            otpVerified
+              ? 'bg-neutral-100 text-[#30ba78] border border-[#30ba78]/40 cursor-default'
+              : otpSent
+              ? 'bg-[#0c322c] hover:bg-[#17483f] text-white'
+              : 'bg-[#0c322c] hover:bg-[#17483f] text-white'
+          } disabled:opacity-60`}
+        >
+          {otpLoading ? (
+            <>
+              <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+              <span>Sending Verification Code...</span>
+            </>
+          ) : otpVerified ? (
+            <>
+              <span className="material-symbols-outlined text-sm text-[#30ba78]">check_circle</span>
+              <span>Email Verified</span>
+            </>
+          ) : otpSent ? (
+            <>
+              <span className="material-symbols-outlined text-sm">refresh</span>
+              <span>Resend OTP</span>
+            </>
+          ) : (
+            <>
+              <span className="material-symbols-outlined text-sm">send</span>
+              <span>Send Verification OTP</span>
+            </>
+          )}
+        </button>
+      </div>
+
+      <div className="p-2.5 rounded-lg bg-[#efefef] border border-neutral-200 space-y-1.5">
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="font-semibold text-neutral-600">Verification OTP:</span>
+          {otpVerified && (
+            <span className="text-[#30ba78] font-bold flex items-center gap-1">
+              <span className="material-symbols-outlined text-xs">verified</span> Verified
+            </span>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            maxLength={6}
+            placeholder="Enter verification code"
+            value={otpInput}
+            disabled={otpVerified}
+            onChange={(e) => setOtpInput(e.target.value)}
+            className="flex-1 h-8 px-2 text-xs rounded border border-neutral-300 bg-white focus:border-[#30ba78] focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={handleVerifyOtp}
+            disabled={otpVerified || !otpInput.trim()}
+            className="px-3.5 h-8 bg-[#30ba78] hover:bg-[#90ebcd] disabled:bg-neutral-200 disabled:text-neutral-400 text-[#0c322c] text-xs font-bold rounded transition-colors cursor-pointer"
+          >
+            Verify
           </button>
         </div>
       </div>

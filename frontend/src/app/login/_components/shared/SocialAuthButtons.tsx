@@ -3,10 +3,10 @@
 import * as React from 'react';
 
 interface SocialAuthButtonsProps {
-  fillDemoCreds: (u: string, p: string) => void;
+  fillDemoCreds?: (u: string, p: string) => void;
 }
 
-export function SocialAuthButtons({ fillDemoCreds }: SocialAuthButtonsProps) {
+export function SocialAuthButtons({ fillDemoCreds: _fillDemoCreds }: SocialAuthButtonsProps) {
   return (
     <>
       <div className="relative my-3 flex items-center justify-center">
@@ -53,33 +53,6 @@ export function SocialAuthButtons({ fillDemoCreds }: SocialAuthButtonsProps) {
         <a href="/api/uaepass/sandbox-login" className="font-bold text-[#30ba78] hover:underline">
           Instant Sandbox Login →
         </a>
-      </div>
-
-      <div className="pt-2 border-t border-neutral-100 flex items-center justify-between text-[10px] text-neutral-400">
-        <span>Demo logins:</span>
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => fillDemoCreds('admin', 'admin')}
-            className="px-2 py-0.5 rounded bg-neutral-100 text-[#0c322c] hover:bg-[#30ba78]/20 font-semibold cursor-pointer"
-          >
-            admin
-          </button>
-          <button
-            type="button"
-            onClick={() => fillDemoCreds('user', 'user')}
-            className="px-2 py-0.5 rounded bg-neutral-100 text-[#0c322c] hover:bg-[#30ba78]/20 font-semibold cursor-pointer"
-          >
-            user
-          </button>
-          <button
-            type="button"
-            onClick={() => fillDemoCreds('kabir', '123456')}
-            className="px-2 py-0.5 rounded bg-neutral-100 text-[#0c322c] hover:bg-[#30ba78]/20 font-semibold cursor-pointer"
-          >
-            kabir
-          </button>
-        </div>
       </div>
     </>
   );
