@@ -13,6 +13,7 @@ import base64
 import urllib.parse
 import urllib.request
 import urllib.error
+from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timezone
 from functools import wraps
 from flask import (
@@ -56,6 +57,19 @@ app.config.from_object(Config)
 
 # Initialize database on startup
 init_db()
+
+# In-memory Couple & Genetic Intelligence Assessment Cache
+ASSESSMENT_CACHE: Dict[str, Any] = {}
+
+def get_assessment_cache_key(user_id: int, family_id: Any, reports: List[Dict[str, Any]]) -> str:
+    rep_sig = tuple(sorted((str(r.get('id', '')), str(r.get('created_at', ''))) for r in reports))
+    return f"u_{user_id}_f_{family_id}_reps_{hash(rep_sig)}"
+
+def invalidate_assessment_cache(user_id: int):
+    prefix = f"u_{user_id}_"
+    keys_to_del = [k for k in list(ASSESSMENT_CACHE.keys()) if k.startswith(prefix)]
+    for k in keys_to_del:
+        ASSESSMENT_CACHE.pop(k, None)
 
 def login_required(f):
     @wraps(f)
@@ -666,11 +680,96 @@ def api_delete_pedigree_member(node_id):
 
 @app.route('/api/ai/models', methods=['GET'])
 def api_ai_models():
-    """Returns list of supported Google AI Studio Gemini models (including Gemini 3.x Flash)."""
+    """Returns list of supported Google AI Studio Gemini models."""
+    api_key = (request.args.get('key') or request.args.get('api_key') or session.get('gemini_api_key') or os.environ.get('GEMINI_API_KEY') or getattr(Config, 'GEMINI_API_KEY', '') or '').strip()
+    if api_key:
+        check = gemini_studio.test_connection(api_key=api_key)
+        if check.get('status') == 'success' and check.get('models'):
+            return jsonify({
+                "status": "success",
+                "models": check.get('models')
+            })
     return jsonify({
         "status": "success",
         "models": gemini_studio.get_supported_models()
     })
+
+@app.route('/api/ai/test-gemini-connection', methods=['POST'])
+def api_ai_test_gemini_connection():
+    """Tests user provided Google AI Studio Gemini API key and fetches enabled models."""
+    data = request.get_json(silent=True) or {}
+    api_key = (data.get('api_key') if 'api_key' in data else (data.get('gemini_api_key') if 'gemini_api_key' in data else session.get('gemini_api_key', '')) or '').strip()
+    model_id = (data.get('model_id') or data.get('model') or '').strip()
+    result = gemini_studio.test_connection(api_key=api_key, model_id=model_id or None)
+    if result.get('status') == 'success' and api_key:
+        session['gemini_api_key'] = api_key
+        session['ai_mode'] = 'online'
+        if model_id:
+            session['gemini_model'] = model_id
+    status_code = 200 if result.get('status') == 'success' else 400
+    return jsonify(result), status_code
+
+def _resolve_chat_family_context(user_id, family_id_param, query, user_families):
+    """
+    Resolves targeted family chart for AI chat grounded in database records.
+    Supports chart ID mentions in query (e.g. 'FA-00003', 'FA-000003', 'F-000123')
+    with zero-padding normalization, explicit family_id payload, or user default.
+    Enforces user ownership for tenant isolation.
+    """
+    matched_fam_id = None
+    if query:
+        m = re.search(r'\b(FA?[-_]?\d{1,8})\b', query, re.I)
+        if not m:
+            m = re.search(r'(?:chart|family)[-_ ]?(?:id)?\s*[:#]?\s*([A-Za-z0-9_-]+)', query, re.I)
+        if m:
+            cand = m.group(1).strip()
+            for f in (user_families or []):
+                fid = str(f.get('family_id') or '')
+                if fid.lower() == cand.lower():
+                    matched_fam_id = fid
+                    break
+                m_fid = re.match(r'([A-Za-z]+)[-_]?0*(\d+)', fid)
+                m_cand = re.match(r'([A-Za-z]+)[-_]?0*(\d+)', cand)
+                if m_fid and m_cand and m_fid.group(1).lower() == m_cand.group(1).lower() and m_fid.group(2) == m_cand.group(2):
+                    matched_fam_id = fid
+                    break
+            if not matched_fam_id:
+                direct = get_family_by_id(cand)
+                if direct and direct.get('user_id') == user_id:
+                    matched_fam_id = cand
+
+    if not matched_fam_id and family_id_param:
+        param_str = str(family_id_param).strip()
+        for f in (user_families or []):
+            fid = str(f.get('family_id') or '')
+            if fid.lower() == param_str.lower():
+                matched_fam_id = fid
+                break
+            m_fid = re.match(r'([A-Za-z]+)[-_]?0*(\d+)', fid)
+            m_param = re.match(r'([A-Za-z]+)[-_]?0*(\d+)', param_str)
+            if m_fid and m_param and m_fid.group(1).lower() == m_param.group(1).lower() and m_fid.group(2) == m_param.group(2):
+                matched_fam_id = fid
+                break
+        if not matched_fam_id:
+            matched_fam_id = param_str
+
+    if not matched_fam_id and user_families:
+        matched_fam_id = user_families[0].get('family_id')
+
+    active_fam = None
+    nodes = []
+    if matched_fam_id:
+        fam_data = get_family_by_id(matched_fam_id)
+        if fam_data and fam_data.get('user_id') == user_id:
+            active_fam = fam_data
+            nodes = fam_data.get('members', [])
+        else:
+            nodes = get_pedigree_nodes(user_id, matched_fam_id)
+    else:
+        nodes = get_pedigree_nodes(user_id)
+
+    return matched_fam_id, active_fam, nodes
+
 
 @app.route('/api/ai/ask-studio', methods=['POST'])
 @login_required
@@ -682,15 +781,40 @@ def api_ai_ask_studio():
         return jsonify({"error": "Query cannot be empty"}), 400
 
     user_id = session.get('user_id')
-    nodes = get_pedigree_nodes(user_id) if user_id else []
-    model_id = data.get('model', 'gemini-3.0-flash')
+    user_families = get_user_families(user_id) if user_id else []
+    target_fam_id, active_fam, nodes = _resolve_chat_family_context(
+        user_id=user_id,
+        family_id_param=data.get('family_id'),
+        query=query,
+        user_families=user_families
+    )
+    reports = get_user_scraped_reports(user_id) if user_id else []
+    model_id = data.get('model') or session.get('gemini_model') or 'gemini-3.8-flash'
     view_mode = data.get('view_mode', 'patient')
+    current_page = data.get('current_page', 'Dashboard')
+    page_context = data.get('page_context', '')
+    api_key = (data.get('api_key') or data.get('gemini_api_key') or session.get('gemini_api_key') or os.environ.get('GEMINI_API_KEY') or getattr(Config, 'GEMINI_API_KEY', '') or '').strip()
+    if api_key:
+        session['gemini_api_key'] = api_key
+        session['ai_mode'] = 'online'
+        if model_id:
+            session['gemini_model'] = model_id
 
     result = gemini_studio.ask(
         prompt=query,
         model_id=model_id,
         view_mode=view_mode,
-        pedigree_context={"nodes": nodes}
+        pedigree_context={
+            "nodes": nodes,
+            "reports": reports,
+            "families": user_families,
+            "active_family": active_fam,
+            "family_id": target_fam_id
+        },
+        api_key=api_key,
+        current_page=current_page,
+        page_context=page_context,
+        conversation_history=data.get('conversation_history') or []
     )
     return jsonify(result)
 
@@ -739,19 +863,13 @@ def api_ai_ask():
     reports = get_user_scraped_reports(user_id) if user_id else []
     user_families = get_user_families(user_id) if user_id else []
 
-    # Determine active family
-    active_family_id = family_id
-    if not active_family_id and user_families:
-        active_family_id = user_families[0].get('family_id')
-
-    if active_family_id:
-        fam_data = get_family_by_id(active_family_id)
-        if fam_data and fam_data.get('user_id') == user_id:
-            nodes = fam_data.get('members', [])
-        else:
-            nodes = get_pedigree_nodes(user_id, active_family_id)
-    else:
-        nodes = get_pedigree_nodes(user_id)
+    # Determine active family for AI ask query
+    active_family_id, fam_data, nodes = _resolve_chat_family_context(
+        user_id=user_id,
+        family_id_param=family_id,
+        query=query,
+        user_families=user_families
+    )
 
     # Filter reports to active family members if tagged
     if nodes and reports:
@@ -844,13 +962,53 @@ def api_ai_ask():
         "star_child": star_node
     }
 
-    # If model specified or GEMINI_API_KEY available, use Gemini Studio service
-    if model_id or Config.GEMINI_API_KEY or os.environ.get('GEMINI_API_KEY'):
+    current_page = data.get('current_page', 'Dashboard')
+    page_context = data.get('page_context', '')
+    patient_context["current_page"] = current_page
+    patient_context["page_context"] = page_context
+
+    api_key = (data.get('api_key') or data.get('gemini_api_key') or session.get('gemini_api_key') or os.environ.get('GEMINI_API_KEY') or getattr(Config, 'GEMINI_API_KEY', '') or '').strip()
+    ai_mode = (data.get('ai_mode') or session.get('ai_mode') or ('online' if (data.get('api_key') or session.get('gemini_api_key')) else 'offline')).strip().lower()
+    selected_model = (data.get('model') or data.get('model_id') or session.get('gemini_model') or 'gemini-3.8-flash').strip()
+
+    # If in online mode or GEMINI API key is available, use Gemini Studio service with the live key
+    if api_key:
+        session['gemini_api_key'] = api_key
+        session['ai_mode'] = 'online'
+        if selected_model:
+            session['gemini_model'] = selected_model
+
+    if ai_mode == 'online' and api_key:
         result = gemini_studio.ask(
             prompt=query,
-            model_id=model_id or 'gemini-3.0-flash',
+            model_id=selected_model,
             view_mode=view_mode,
-            pedigree_context={"nodes": nodes, "reports": reports, "families": user_families}
+            pedigree_context={
+                "nodes": nodes,
+                "reports": reports,
+                "families": user_families,
+                "active_family": fam_data,
+                "family_id": active_family_id
+            },
+            api_key=api_key,
+            current_page=current_page,
+            page_context=page_context
+        )
+    elif data.get('model') and api_key:
+        result = gemini_studio.ask(
+            prompt=query,
+            model_id=selected_model,
+            view_mode=view_mode,
+            pedigree_context={
+                "nodes": nodes,
+                "reports": reports,
+                "families": user_families,
+                "active_family": fam_data,
+                "family_id": active_family_id
+            },
+            api_key=api_key,
+            current_page=current_page,
+            page_context=page_context
         )
     else:
         # Query Qdrant with BGE-M3 and synthesize answer with Qwen3 (or resilient fallback)
@@ -1139,19 +1297,13 @@ def api_ai_analyze_assessment():
     reports = get_user_scraped_reports(user_id)
     user_families = get_user_families(user_id)
 
-    # Determine active family
-    active_family_id = family_id
-    if not active_family_id and user_families:
-        active_family_id = user_families[0].get('family_id')
-
-    if active_family_id:
-        fam_data = get_family_by_id(active_family_id)
-        if fam_data and fam_data.get('user_id') == user_id:
-            nodes = fam_data.get('members', [])
-        else:
-            nodes = get_pedigree_nodes(user_id, active_family_id)
-    else:
-        nodes = get_pedigree_nodes(user_id)
+    # Determine active family for assessment analysis
+    active_family_id, fam_data, nodes = _resolve_chat_family_context(
+        user_id=user_id,
+        family_id_param=family_id,
+        query='',
+        user_families=user_families
+    )
 
     # Filter reports to active family members if tagged
     if nodes and reports:
@@ -1241,11 +1393,38 @@ def api_ai_analyze_assessment():
         if not partner_b_name:
             partner_b_name = "Candidate Partner"
 
-    assessment = qwen_brain_service.analyze_couple_and_reports(
-        reports=reports,
-        pedigree_nodes=nodes,
-        couple_names={'partner_a': partner_a_name, 'partner_b': partner_b_name}
-    )
+    ai_mode = (data.get('ai_mode') or session.get('ai_mode') or ('online' if (data.get('api_key') or session.get('gemini_api_key')) else 'offline')).strip().lower()
+    gemini_api_key = (data.get('api_key') or data.get('gemini_api_key') or session.get('gemini_api_key') or os.environ.get('GEMINI_API_KEY') or getattr(Config, 'GEMINI_API_KEY', '') or '').strip()
+    model_id = data.get('model') or session.get('gemini_model') or 'gemini-3.8-flash'
+    force_refresh = bool(data.get('force_refresh'))
+
+    cache_key = get_assessment_cache_key(user_id, active_family_id, reports)
+    if not force_refresh and cache_key in ASSESSMENT_CACHE:
+        cached_item = ASSESSMENT_CACHE[cache_key]
+        if (gemini_api_key and ai_mode == 'online' and cached_item.get('is_llm')) or (ai_mode != 'online'):
+            logger.info(f"Returning cached couple assessment for user {user_id}")
+            return jsonify(cached_item)
+
+    if ai_mode == 'online' and gemini_api_key:
+        session['gemini_api_key'] = gemini_api_key
+        session['ai_mode'] = 'online'
+        if model_id:
+            session['gemini_model'] = model_id
+        assessment = gemini_studio.analyze_assessment(
+            reports=reports,
+            pedigree_nodes=nodes,
+            couple_names={'partner_a': partner_a_name, 'partner_b': partner_b_name},
+            api_key=gemini_api_key,
+            model_id=model_id
+        )
+    else:
+        assessment = qwen_brain_service.analyze_couple_and_reports(
+            reports=reports,
+            pedigree_nodes=nodes,
+            couple_names={'partner_a': partner_a_name, 'partner_b': partner_b_name}
+        )
+
+    ASSESSMENT_CACHE[cache_key] = assessment
     return jsonify(assessment)
 
 
@@ -2675,6 +2854,9 @@ def api_analyze_report():
 
     effective_cand_name = masked_patient_name or (matched_existing_report and matched_existing_report.get('masked_data', {}).get('patient_name')) or "CAXXXXTE"
 
+    if user_id:
+        invalidate_assessment_cache(user_id)
+
     return jsonify({
         "status": "success",
         "already_exists": already_exists,
@@ -2711,6 +2893,7 @@ def api_delete_scraped_report(report_id):
     user_id = session['user_id']
     success = delete_scraped_report(report_id, user_id)
     if success:
+        invalidate_assessment_cache(user_id)
         try:
             vector_db_service.delete_document_points(100000 + int(report_id), user_id)
         except Exception as e:
@@ -2728,6 +2911,7 @@ def api_bulk_delete_scraped_reports():
         return jsonify({"status": "error", "message": "No reports selected for deletion."}), 400
     
     count = delete_scraped_reports_bulk(report_ids, user_id)
+    invalidate_assessment_cache(user_id)
     for r_id in report_ids:
         try:
             vector_db_service.delete_document_points(100000 + int(r_id), user_id)

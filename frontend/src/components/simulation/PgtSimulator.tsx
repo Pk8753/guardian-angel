@@ -192,20 +192,18 @@ export const PgtSimulator: React.FC<{ className?: string }> = ({ className }) =>
         <div>
           <div className="flex items-center gap-2.5 flex-wrap">
             <span className="px-2.5 py-0.5 rounded-full bg-teal-50 text-teal-800 text-[11px] font-bold tracking-wider uppercase border border-teal-200">
-              Interactive Simulation Engine
+              Family Planning &amp; PGT-M Simulator
             </span>
-            <span className="text-slate-300 font-bold">&bull;</span>
-            <span className="text-xs font-mono text-slate-500">ACMG / ESHRE Validated</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mt-1">
             {viewMode === 'patient'
-              ? 'Future Baby Genetic Risk & IVF Embryo Simulator'
-              : 'Interactive PGT-M Mendelian Probability & Embryo Cohort Simulator'}
+              ? 'Future Baby Genetic Health & IVF Embryo Simulator'
+              : 'PGT-M Reproductive Probability Simulator'}
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
             {viewMode === 'patient'
-              ? 'See how inherited traits are passed down and explore how IVF pre-testing protects your future child.'
-              : 'Dynamic Bayesian Punnett distribution and simulated 10-blastocyst PGT-M biopsy transferability matrix.'}
+              ? 'Explore inheritance chances and see how premarital testing protects your future family.'
+              : 'Mendelian probability distribution and simulated 10-embryo transferability forecast.'}
           </p>
         </div>
 

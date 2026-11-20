@@ -664,8 +664,8 @@ export const translations: Translations = {
     ar: 'الذكاء الوراثي الاصطناعي'
   },
   risk_analysis_subtitle: {
-    en: 'Clinical Genomic Synthesis powered by Qwen3 Clinical Brain and UAE Premarital Guidelines.',
-    ar: 'التحليل الجينومي السريري المدعوم بنموذج Qwen3 السريري والبروتوكول الوطني الإماراتي.'
+    en: 'Clinical Genomic Synthesis aligned with UAE Premarital Guidelines.',
+    ar: 'التحليل الجينومي السريري المتوافق مع الإرشادات الوطنية لفحص ما قبل الزواج.'
   },
   risk_metric_analyzed: {
     en: 'Members Analyzed',

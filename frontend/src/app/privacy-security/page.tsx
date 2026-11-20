@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Navbar } from '@/components/layout/Navbar';
 import { AuthGuard } from '@/components/layout/AuthGuard';
@@ -26,8 +27,13 @@ import {
 } from 'lucide-react';
 
 export default function PrivacySecurityPage() {
+  const router = useRouter();
   const { isSudoMode, toggleSudoMode, activeLocale } = useUIStore();
   const [rotated, setRotated] = useState(false);
+
+  useEffect(() => {
+    router.replace('/dashboard');
+  }, [router]);
 
   const handleRotateKey = () => {
     setRotated(true);

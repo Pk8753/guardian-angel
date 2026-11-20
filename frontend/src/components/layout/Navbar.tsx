@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useUIStore } from '@/stores/useUIStore';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { t } from '@/lib/translations';
-import { Sun, Moon, Settings } from 'lucide-react';
+import { Sun, Moon, Settings, Sparkles } from 'lucide-react';
 
 export function Navbar() {
   const router = useRouter();
@@ -19,7 +19,9 @@ export function Navbar() {
     toggleDarkMode,
     setSettingsModalOpen,
     viewMode,
-    setViewMode
+    setViewMode,
+    isCareAIOpen,
+    toggleCareAIOpen
   } = useUIStore();
   const { user, logout } = useAuthStore();
   const [isDropdownOpen, setIsDropdownOpen] = React.useState(false);
@@ -38,56 +40,10 @@ export function Navbar() {
         </div>
       </Link>
 
-      {/* Search Input (Visible on desktop & tablets) */}
-      <div className="hidden md:flex items-center gap-3 flex-1 max-w-xs lg:max-w-md">
-        <div className="relative w-full">
-          <span className="material-symbols-outlined absolute left-3 rtl:left-auto rtl:right-3 top-1/2 -translate-y-1/2 text-outline text-[18px]">
-            search
-          </span>
-          <input
-            type="text"
-            placeholder={t('search_placeholder', activeLocale)}
-            className="w-full pl-9 pr-4 rtl:pl-4 rtl:pr-9 text-start py-1.5 rounded-lg bg-surface-container-low text-on-surface placeholder:text-outline text-xs focus:outline-none focus:bg-white focus:ring-1 focus:ring-waterhole transition-all border border-outline-variant/30"
-          />
-        </div>
-      </div>
-
-      {/* DUAL-LENS PERSONA TOGGLE (Patient vs Provider View) - PINNED AT TOP ON BOTH MOBILE & DESKTOP */}
-      <div className="flex items-center gap-0.5 bg-surface-container-low p-1 rounded-full border border-outline-variant/40 shadow-2xs text-[11px] font-bold shrink-0">
-        <button
-          type="button"
-          onClick={() => setViewMode('patient')}
-          className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 rounded-full cursor-pointer transition-all ${
-            viewMode === 'patient'
-              ? 'bg-teal-700 text-white shadow-xs font-extrabold'
-              : 'text-on-surface-variant hover:text-teal-800'
-          }`}
-          title="Switch to Patient / Plain-English View"
-        >
-          <span className="text-xs">👤</span>
-          <span className="text-xs">Patient</span>
-          <span className="hidden sm:inline">View</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setViewMode('provider')}
-          className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 rounded-full cursor-pointer transition-all ${
-            viewMode === 'provider'
-              ? 'bg-slate-900 text-white shadow-xs font-extrabold'
-              : 'text-on-surface-variant hover:text-slate-900'
-          }`}
-          title="Switch to Clinical Provider / Genetics Specialist View"
-        >
-          <span className="text-xs">🩺</span>
-          <span className="text-xs">Provider</span>
-          <span className="hidden sm:inline">View</span>
-        </button>
-      </div>
-
-      {/* Right Controls */}
-      <div className="flex items-center gap-1.5 sm:gap-3">
-        {/* Language Selector: USA English & UAE Arabic (Hidden on tiny screens, accessible in menu) */}
-        <div className="hidden sm:flex items-center gap-1 bg-surface-container-low px-2 py-1 rounded-full border border-outline-variant/30 text-[11px] font-bold shrink-0">
+      {/* Left-side Controls: Language Selector & Theme Toggle (Moved from right side, replacing search) */}
+      <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 rtl:left-auto rtl:right-3 rtl:pl-4 rtl:pr-9">
+        {/* Language Selector: USA English & UAE Arabic */}
+        <div className="flex items-center gap-0.5 sm:gap-1 bg-surface-container-low px-1.5 sm:px-2 py-1 rounded-full border border-outline-variant/30 text-[11px] font-bold shrink-0">
           <button
             type="button"
             onClick={() => setActiveLocale('en')}
@@ -127,6 +83,57 @@ export function Navbar() {
           ) : (
             <Moon className="w-4 h-4 text-slate-700 transition-transform hover:-rotate-12" />
           )}
+        </button>
+      </div>
+
+      {/* DUAL-LENS PERSONA TOGGLE (Patient vs Provider View) - PINNED AT TOP ON BOTH MOBILE & DESKTOP */}
+      <div className="flex items-center gap-0.5 bg-surface-container-low p-1 rounded-full border border-outline-variant/40 shadow-2xs text-[11px] font-bold shrink-0">
+        <button
+          type="button"
+          onClick={() => setViewMode('patient')}
+          className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 rounded-full cursor-pointer transition-all ${
+            viewMode === 'patient'
+              ? 'bg-teal-700 text-white shadow-xs font-extrabold'
+              : 'text-on-surface-variant hover:text-teal-800'
+          }`}
+          title="Switch to Patient / Plain-English View"
+        >
+          <span className="text-xs">👤</span>
+          <span className="text-xs">Patient</span>
+          <span className="hidden sm:inline">View</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setViewMode('provider')}
+          className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 rounded-full cursor-pointer transition-all ${
+            viewMode === 'provider'
+              ? 'bg-slate-900 text-white shadow-xs font-extrabold'
+              : 'text-on-surface-variant hover:text-slate-900'
+          }`}
+          title="Switch to Clinical Provider / Genetics Specialist View"
+        >
+          <span className="text-xs">🩺</span>
+          <span className="text-xs">Provider</span>
+          <span className="hidden sm:inline">View</span>
+        </button>
+      </div>
+
+      {/* Right Controls */}
+      <div className="flex items-center gap-1.5 sm:gap-2.5">
+        {/* AI Star Icon Button (Launches Ask Care AI Chatbot Popup) */}
+        <button
+          type="button"
+          onClick={toggleCareAIOpen}
+          className={`relative w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center transition-all cursor-pointer border shrink-0 shadow-xs group ${
+            isCareAIOpen
+              ? 'bg-mint text-pine border-jungle ring-2 ring-jungle/40 scale-105'
+              : 'bg-pine hover:bg-pine-light text-white border-pine-light/40 hover:scale-105'
+          }`}
+          title="Ask Care AI — Clinical Genetics & Screening Assistant"
+          aria-label="Ask Care AI"
+        >
+          <Sparkles className={`w-4 h-4 transition-transform group-hover:rotate-12 ${isCareAIOpen ? 'text-pine' : 'text-jungle'}`} />
+          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-jungle rounded-full border-2 border-white animate-pulse" />
         </button>
 
         {/* PRIVACY TOGGLE BUTTON */}

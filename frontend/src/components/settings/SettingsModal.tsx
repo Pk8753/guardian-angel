@@ -18,7 +18,13 @@ import {
   Sparkles,
   AlertCircle,
   HelpCircle,
-  RefreshCw
+  RefreshCw,
+  Globe,
+  Eye,
+  EyeOff,
+  Key,
+  Copy,
+  Check
 } from 'lucide-react';
 
 interface PolicyDoc {
@@ -50,7 +56,19 @@ interface SystemStatus {
 }
 
 export function SettingsModal() {
-  const { isSettingsModalOpen, setSettingsModalOpen, activeLocale } = useUIStore();
+  const {
+    isSettingsModalOpen,
+    setSettingsModalOpen,
+    activeLocale,
+    aiEngineMode,
+    setAIEngineMode,
+    geminiApiKey,
+    setGeminiApiKey,
+    selectedGeminiModel,
+    setSelectedGeminiModel,
+    availableGeminiModels,
+    setAvailableGeminiModels
+  } = useUIStore();
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [documents, setDocuments] = useState<PolicyDoc[]>([]);
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
@@ -59,10 +77,11 @@ export function SettingsModal() {
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
   const [uploadMessage, setUploadMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Quick Semantic Search / Vector Test Tab
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchResult, setSearchResult] = useState<any | null>(null);
+  // Online Gemini Cloud State
+  const [isTestingGemini, setIsTestingGemini] = useState(false);
+  const [testResult, setTestResult] = useState<{ status: 'success' | 'error'; message: string } | null>(null);
+  const [copiedTestResult, setCopiedTestResult] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -70,8 +89,82 @@ export function SettingsModal() {
     if (isSettingsModalOpen) {
       loadSystemStatus();
       loadDocuments();
+      loadGeminiModels();
     }
   }, [isSettingsModalOpen]);
+
+  const loadGeminiModels = async () => {
+    try {
+      const url = geminiApiKey.trim()
+        ? `/api/ai/models?key=${encodeURIComponent(geminiApiKey.trim())}`
+        : '/api/ai/models';
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.models) && data.models.length > 0) {
+          setAvailableGeminiModels(data.models);
+        }
+      }
+    } catch (e) {
+      console.warn('Could not load Gemini models:', e);
+    }
+  };
+
+  const handleTestGeminiConnection = async () => {
+    if (!geminiApiKey.trim()) {
+      setTestResult({ status: 'error', message: 'Please enter a Gemini API Key to test.' });
+      return;
+    }
+    setIsTestingGemini(true);
+    setTestResult(null);
+    try {
+      const res = await fetch('/api/ai/test-gemini-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          api_key: geminiApiKey.trim(),
+          model_id: selectedGeminiModel
+        })
+      });
+
+      let data: any = {};
+      try {
+        data = await res.json();
+      } catch {
+        data = {
+          status: 'error',
+          message: `Server returned HTTP ${res.status}: ${res.statusText || 'Unable to parse server response'}`
+        };
+      }
+
+      if (res.ok && data.status === 'success') {
+        const fetchedModels = Array.isArray(data.models) && data.models.length > 0 ? data.models : availableGeminiModels;
+        setAvailableGeminiModels(fetchedModels);
+        if (!fetchedModels.some((m: any) => m.id === selectedGeminiModel)) {
+          if (fetchedModels[0]?.id) {
+            setSelectedGeminiModel(fetchedModels[0].id);
+          }
+        }
+        setAIEngineMode('online');
+        setTestResult({
+          status: 'success',
+          message: data.message || `Successfully connected to Google AI Studio (${fetchedModels.length} models available)!`
+        });
+      } else {
+        setTestResult({
+          status: 'error',
+          message: data.message || 'Gemini authentication failed. Please verify your API key.'
+        });
+      }
+    } catch (e: any) {
+      setTestResult({
+        status: 'error',
+        message: `Connection error: ${e.message || 'Could not reach server'}`
+      });
+    } finally {
+      setIsTestingGemini(false);
+    }
+  };
 
   const loadSystemStatus = async () => {
     try {
@@ -160,34 +253,11 @@ export function SettingsModal() {
     }
   };
 
-  const handleTestSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!searchQuery.trim()) return;
-
-    setIsSearching(true);
-    setSearchResult(null);
-    try {
-      const res = await fetch('/api/ai/ask', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: searchQuery.trim() })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setSearchResult(data);
-      }
-    } catch (err) {
-      console.error('Error running test search:', err);
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
   if (!isSettingsModalOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
-      <div className="w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-outline-variant/40 overflow-hidden my-8 max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200 select-text">
+      <div className="w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-outline-variant/40 overflow-hidden my-8 max-h-[90vh] flex flex-col select-text">
         {/* Modal Header */}
         <div className="p-6 pb-4 border-b border-outline-variant/20 flex items-center justify-between gap-4 bg-fog/30 shrink-0">
           <div className="flex items-center gap-3">
@@ -213,89 +283,260 @@ export function SettingsModal() {
 
         {/* Modal Content - Scrollable */}
         <div className="p-6 space-y-6 overflow-y-auto flex-1">
-          {/* AI Stack Status Badges */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-pine uppercase tracking-wider">
-                Core Services Connection Status
-              </span>
-              <button
-                type="button"
-                onClick={loadSystemStatus}
-                className="text-[11px] text-teal-800 hover:underline flex items-center gap-1 font-semibold cursor-pointer"
-              >
-                <RefreshCw className="w-3 h-3" />
-                <span>Refresh Status</span>
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {/* QWEN3 */}
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col justify-between space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Cpu className="w-4 h-4 text-pine" />
-                    <span className="text-xs font-bold text-slate-800">QWEN3</span>
-                  </div>
-                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                    systemStatus?.services?.qwen3?.status === 'connected' || systemStatus?.services?.qwen3?.connected
-                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                      : 'bg-rose-100 text-rose-800 border border-rose-300'
-                  }`}>
-                    {systemStatus?.services?.qwen3?.status === 'connected' || systemStatus?.services?.qwen3?.connected ? 'Connected' : 'Connection Error'}
-                  </span>
-                </div>
-                {!(systemStatus?.services?.qwen3?.status === 'connected' || systemStatus?.services?.qwen3?.connected) && (
-                  <p className="text-[11px] text-rose-700 leading-tight">
-                    Connection issue. Please check that Docker or local service is running and click Refresh to reconnect.
-                  </p>
-                )}
+          {/* AI Stack / Engine Mode Selection (Offline vs Online) */}
+          <div className="space-y-4 bg-slate-50/70 dark:bg-slate-800/40 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-700/60">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <span className="text-xs font-bold text-pine dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-jungle" />
+                  AI Intelligence Engine &amp; Connectivity
+                </span>
+                <p className="text-[11px] text-on-surface-variant dark:text-slate-400">
+                  Choose between local air-gapped clinical processing (Qwen, BGE-M3, Qdrant) or online Google Gemini Cloud.
+                </p>
               </div>
 
-              {/* BAAI BGE-M3 */}
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col justify-between space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Layers className="w-4 h-4 text-pine" />
-                    <span className="text-xs font-bold text-slate-800">BAAI BGE-M3</span>
-                  </div>
-                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                    systemStatus?.services?.bge_m3?.status === 'connected' || systemStatus?.services?.bge_m3?.connected
-                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                      : 'bg-rose-100 text-rose-800 border border-rose-300'
-                  }`}>
-                    {systemStatus?.services?.bge_m3?.status === 'connected' || systemStatus?.services?.bge_m3?.connected ? 'Connected' : 'Connection Error'}
-                  </span>
-                </div>
-                {!(systemStatus?.services?.bge_m3?.status === 'connected' || systemStatus?.services?.bge_m3?.connected) && (
-                  <p className="text-[11px] text-rose-700 leading-tight">
-                    Connection issue. Please check that Docker or local service is running and click Refresh to reconnect.
-                  </p>
-                )}
-              </div>
-
-              {/* Qdrant */}
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col justify-between space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Database className="w-4 h-4 text-pine" />
-                    <span className="text-xs font-bold text-slate-800">Qdrant</span>
-                  </div>
-                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                    systemStatus?.services?.qdrant?.status === 'connected' || systemStatus?.services?.qdrant?.connected
-                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                      : 'bg-rose-100 text-rose-800 border border-rose-300'
-                  }`}>
-                    {systemStatus?.services?.qdrant?.status === 'connected' || systemStatus?.services?.qdrant?.connected ? 'Connected' : 'Connection Error'}
-                  </span>
-                </div>
-                {!(systemStatus?.services?.qdrant?.status === 'connected' || systemStatus?.services?.qdrant?.connected) && (
-                  <p className="text-[11px] text-rose-700 leading-tight">
-                    Connection issue. Please check that Docker or local service is running and click Refresh to reconnect.
-                  </p>
-                )}
+              {/* Mode Toggle Switch */}
+              <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1 rounded-xl border border-outline-variant/40 shadow-2xs self-start sm:self-auto shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setAIEngineMode('offline')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    aiEngineMode === 'offline'
+                      ? 'bg-pine text-white shadow-xs'
+                      : 'text-on-surface-variant hover:text-pine dark:text-slate-400'
+                  }`}
+                >
+                  <Cpu className="w-3.5 h-3.5" />
+                  <span>Offline Mode</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAIEngineMode('online')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    aiEngineMode === 'online'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-on-surface-variant hover:text-blue-600 dark:text-slate-400'
+                  }`}
+                >
+                  <Globe className="w-3.5 h-3.5" />
+                  <span>Online Mode</span>
+                </button>
               </div>
             </div>
+
+            {/* Offline Mode View: QWEN3, BAAI BGE-M3, Qdrant */}
+            {aiEngineMode === 'offline' ? (
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                    Offline Stack: Air-Gapped Local Clinical Services
+                  </span>
+                  <button
+                    type="button"
+                    onClick={loadSystemStatus}
+                    className="text-[11px] text-teal-800 hover:underline flex items-center gap-1 font-semibold cursor-pointer"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>Refresh Status</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {/* QWEN3 */}
+                  <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-700/80 flex flex-col justify-between space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Cpu className="w-4 h-4 text-pine" />
+                        <span className="text-xs font-bold text-slate-800 dark:text-white">QWEN3</span>
+                      </div>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                        systemStatus?.services?.qwen3?.status === 'connected' || systemStatus?.services?.qwen3?.connected
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                          : 'bg-rose-100 text-rose-800 border border-rose-300'
+                      }`}>
+                        {systemStatus?.services?.qwen3?.status === 'connected' || systemStatus?.services?.qwen3?.connected ? 'Connected' : 'Connection Error'}
+                      </span>
+                    </div>
+                    {!(systemStatus?.services?.qwen3?.status === 'connected' || systemStatus?.services?.qwen3?.connected) && (
+                      <p className="text-[11px] text-rose-700 leading-tight">
+                        Connection issue. Please check that Docker or local service is running and click Refresh to reconnect.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* BAAI BGE-M3 */}
+                  <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-700/80 flex flex-col justify-between space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Layers className="w-4 h-4 text-pine" />
+                        <span className="text-xs font-bold text-slate-800 dark:text-white">BAAI BGE-M3</span>
+                      </div>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                        systemStatus?.services?.bge_m3?.status === 'connected' || systemStatus?.services?.bge_m3?.connected
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                          : 'bg-rose-100 text-rose-800 border border-rose-300'
+                      }`}>
+                        {systemStatus?.services?.bge_m3?.status === 'connected' || systemStatus?.services?.bge_m3?.connected ? 'Connected' : 'Connection Error'}
+                      </span>
+                    </div>
+                    {!(systemStatus?.services?.bge_m3?.status === 'connected' || systemStatus?.services?.bge_m3?.connected) && (
+                      <p className="text-[11px] text-rose-700 leading-tight">
+                        Connection issue. Please check that Docker or local service is running and click Refresh to reconnect.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Qdrant */}
+                  <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-700/80 flex flex-col justify-between space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Database className="w-4 h-4 text-pine" />
+                        <span className="text-xs font-bold text-slate-800 dark:text-white">Qdrant</span>
+                      </div>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                        systemStatus?.services?.qdrant?.status === 'connected' || systemStatus?.services?.qdrant?.connected
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                          : 'bg-rose-100 text-rose-800 border border-rose-300'
+                      }`}>
+                        {systemStatus?.services?.qdrant?.status === 'connected' || systemStatus?.services?.qdrant?.connected ? 'Connected' : 'Connection Error'}
+                      </span>
+                    </div>
+                    {!(systemStatus?.services?.qdrant?.status === 'connected' || systemStatus?.services?.qdrant?.connected) && (
+                      <p className="text-[11px] text-rose-700 leading-tight">
+                        Connection issue. Please check that Docker or local service is running and click Refresh to reconnect.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Online Mode View: Gemini API Key, Model Dropdown, Test Connection Button */
+              <div className="space-y-4 pt-1">
+                <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200/80 dark:border-slate-700/80 space-y-3.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
+                      <Key className="w-3.5 h-3.5 text-blue-600" />
+                      Google AI Studio Gemini Cloud Setup
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-semibold">
+                      Online Cloud LLM
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {/* API Key Input */}
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                        Gemini API Key
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showApiKey ? 'text' : 'password'}
+                          value={geminiApiKey}
+                          onChange={(e) => setGeminiApiKey(e.target.value)}
+                          placeholder="Enter your Google AI Studio API Key..."
+                          className="w-full pl-3 pr-9 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowApiKey(!showApiKey)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                          title={showApiKey ? 'Hide key' : 'Show key'}
+                        >
+                          {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-slate-400">
+                        Your key is stored securely in your browser and verified directly with Google.
+                      </p>
+                    </div>
+
+                    {/* Model Dropdown Selector */}
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                        Gemini Model
+                      </label>
+                      <select
+                        value={selectedGeminiModel}
+                        onChange={(e) => setSelectedGeminiModel(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                      >
+                        {availableGeminiModels.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name} {m.badge ? `• ${m.badge}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-[10px] text-slate-400">
+                        Select the model version for clinical reasoning and Ask Care AI.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Test Connection Action */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <button
+                      type="button"
+                      onClick={handleTestGeminiConnection}
+                      disabled={isTestingGemini || !geminiApiKey.trim()}
+                      className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+                    >
+                      {isTestingGemini ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Testing Connection...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Test Connection</span>
+                        </>
+                      )}
+                    </button>
+
+                    {testResult && (
+                      <div className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center justify-between gap-2 select-text cursor-text max-w-full overflow-hidden ${
+                        testResult.status === 'success'
+                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                          : 'bg-rose-50 text-rose-800 border border-rose-200'
+                      }`}>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {testResult.status === 'success' ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          ) : (
+                            <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                          )}
+                          <span className="select-text break-words">{testResult.message}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(testResult.message);
+                            setCopiedTestResult(true);
+                            setTimeout(() => setCopiedTestResult(false), 2000);
+                          }}
+                          className="px-2 py-0.5 rounded-lg bg-black/5 hover:bg-black/10 text-[10px] font-bold shrink-0 flex items-center gap-1 transition cursor-pointer"
+                          title="Copy message to clipboard"
+                        >
+                          {copiedTestResult ? (
+                            <>
+                              <Check className="w-3 h-3 text-emerald-600" />
+                              <span className="text-emerald-700">Copied</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3 text-slate-600" />
+                              <span>Copy</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Upload Nationwide Health Policy Documents */}
@@ -439,47 +680,6 @@ export function SettingsModal() {
             )}
           </div>
 
-          {/* Chat with Uploaded Documents */}
-          <div className="p-4 rounded-2xl bg-mint/15 border border-mint/60 space-y-3">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-jungle" />
-              <h4 className="text-xs font-bold text-pine uppercase tracking-wider">
-                Chat with Uploaded Documents
-              </h4>
-            </div>
-
-            <form onSubmit={handleTestSearch} className="flex gap-2">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Ask anything about your uploaded documents..."
-                className="flex-1 px-3 py-2 text-xs rounded-xl bg-white border border-outline-variant/40 text-pine placeholder:text-outline focus:outline-none focus:ring-1 focus:ring-pine"
-              />
-              <button
-                type="submit"
-                disabled={isSearching || !searchQuery.trim()}
-                className="px-4 py-2 rounded-xl bg-pine hover:bg-pine-light text-white text-xs font-bold disabled:opacity-50 flex items-center gap-1.5 transition cursor-pointer shadow-xs"
-              >
-                {isSearching ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
-                <span>Ask</span>
-              </button>
-            </form>
-
-            {searchResult && (
-              <div className="p-3.5 rounded-xl bg-white border border-outline-variant/30 space-y-2.5 text-xs shadow-2xs">
-                <p className="text-slate-800 leading-relaxed text-xs whitespace-pre-line font-medium">
-                  {searchResult.answer}
-                </p>
-                {searchResult.source && (
-                  <div className="pt-2 border-t border-slate-100 flex items-center gap-1.5 text-[11px] text-slate-500">
-                    <span>Source:</span>
-                    <span className="font-semibold text-pine underline">{searchResult.source}</span>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
         </div>
 
         {/* Modal Footer */}

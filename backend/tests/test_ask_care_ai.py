@@ -18,8 +18,10 @@ import shutil
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.abspath(os.path.join(current_dir, '..'))
 grandparent_dir = os.path.abspath(os.path.join(parent_dir, '..'))
-for d in [parent_dir, grandparent_dir]:
-    if os.path.exists(os.path.join(d, 'app.py')) and d not in sys.path:
+for d in [grandparent_dir, parent_dir]:
+    if os.path.exists(os.path.join(d, 'app.py')):
+        if d in sys.path:
+            sys.path.remove(d)
         sys.path.insert(0, d)
 
 from config import Config
@@ -637,6 +639,491 @@ class GuardianAngelCareAITestCase(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         ans = res.get_json().get('answer', '')
         self.assertTrue('Beta-Thalassemia' in ans or 'Thalassemia' in ans or 'carrier' in ans.lower())
+
+    def test_test_gemini_connection_endpoint(self):
+        """Verify POST /api/ai/test-gemini-connection returns valid JSON."""
+        res_empty = self.client.post('/api/ai/test-gemini-connection', json={'api_key': ''})
+        self.assertEqual(res_empty.status_code, 400)
+        data_empty = res_empty.get_json()
+        self.assertEqual(data_empty.get('status'), 'error')
+        self.assertIn('API key cannot be empty', data_empty.get('message', ''))
+
+        from unittest.mock import patch
+        mock_google_models = {
+            "models": [
+                {
+                    "name": "models/gemini-3.8-flash",
+                    "displayName": "Gemini 3.8 Flash",
+                    "description": "Next Gen Fast model",
+                    "supportedGenerationMethods": ["generateContent"]
+                },
+                {
+                    "name": "models/gemini-2.5-flash",
+                    "displayName": "Gemini 2.5 Flash",
+                    "description": "Stable Fast model",
+                    "supportedGenerationMethods": ["generateContent"]
+                },
+                {
+                    "name": "models/gemini-1.5-flash",
+                    "displayName": "Gemini 1.5 Flash",
+                    "description": "Legacy model",
+                    "supportedGenerationMethods": ["generateContent"]
+                },
+                {
+                    "name": "models/text-embedding-004",
+                    "displayName": "Text Embedding",
+                    "description": "Embedding model",
+                    "supportedGenerationMethods": ["embedContent"]
+                }
+            ]
+        }
+        with patch('backend.gemini_studio_service.requests.get') as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.json.return_value = mock_google_models
+            res_valid = self.client.post('/api/ai/test-gemini-connection', json={'api_key': 'AIzaMockValidKey123'})
+            self.assertEqual(res_valid.status_code, 200)
+            data_valid = res_valid.get_json()
+            self.assertEqual(data_valid.get('status'), 'success')
+            models = data_valid.get('models', [])
+            self.assertEqual(len(models), 2)
+            self.assertEqual(models[0]['id'], 'gemini-3.8-flash')
+            self.assertEqual(models[1]['id'], 'gemini-2.5-flash')
+
+    def test_live_gemini_key_forwarding_in_ask_and_session(self):
+        """Verify that testing connection persists the key in session and forwarded to ask."""
+        from unittest.mock import patch
+        u_id = create_user('gemini_user', 'pass123', 'gemini@test.ae', 'Gemini User')
+        self._login(u_id, 'gemini_user')
+
+        mock_google_models = {
+            "models": [
+                {
+                    "name": "models/gemini-3.8-flash",
+                    "displayName": "Gemini 3.8 Flash",
+                    "supportedGenerationMethods": ["generateContent"]
+                }
+            ]
+        }
+        with patch('backend.gemini_studio_service.requests.get') as mock_get:
+            mock_get.return_value.status_code = 200
+            mock_get.return_value.json.return_value = mock_google_models
+            res_conn = self.client.post('/api/ai/test-gemini-connection', json={'api_key': 'AIzaLiveKey789'})
+            self.assertEqual(res_conn.status_code, 200)
+
+        # Now call /api/ai/ask and /api/ai/ask-studio and verify gemini_studio is invoked with the live key
+        with patch('backend.gemini_studio_service.requests.post') as mock_post:
+            mock_post.return_value.status_code = 200
+            mock_post.return_value.json.return_value = {
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [{"text": "Being a carrier means you carry one healthy gene and one variant copy. You are completely healthy!"}]
+                        }
+                    }
+                ]
+            }
+            res_ask = self.client.post('/api/ai/ask-studio', json={
+                'query': 'What is a carrier?',
+                'api_key': 'AIzaLiveKey789'
+            })
+            self.assertEqual(res_ask.status_code, 200)
+            data_ask = res_ask.get_json()
+            self.assertIn('completely healthy', data_ask.get('answer', ''))
+            # Ensure the misleading static note is absent
+            self.assertNotIn('Set GEMINI_API_KEY to enable', data_ask.get('answer', ''))
+
+    def test_care_ai_date_query_and_no_genwell_branding(self):
+        """Verify Care AI responds naturally to date queries and contains NO GenWell AI references or robotic prefixes."""
+        u_id = create_user('care_user', 'pass123', 'care@test.ae', 'Care User')
+        self._login(u_id, 'care_user')
+
+        # 1. Query for today's date
+        res = self.client.post('/api/ai/ask-studio', json={
+            'query': 'what is the date today',
+            'current_page': 'Dashboard'
+        })
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        ans = data.get('answer', '')
+        self.assertIn('Today is', ans)
+        # Ensure 'GenWell' is completely absent
+        self.assertNotIn('GenWell', ans)
+        self.assertNotIn('GenWell AI reviewed your question', ans)
+
+        # 2. Query for family pedigree tree
+        res_tree = self.client.post('/api/ai/ask-studio', json={
+            'query': 'what is my family pedigree tree',
+            'current_page': 'Family Pedigree Tree'
+        })
+        self.assertEqual(res_tree.status_code, 200)
+        ans_tree = res_tree.get_json().get('answer', '')
+        self.assertNotIn('GenWell', ans_tree)
+        self.assertNotIn('reviewed your question regarding', ans_tree)
+        self.assertIn('pedigree', ans_tree.lower())
+
+    def test_care_ai_page_context_forwarding(self):
+        """Verify Care AI accepts and grounds in current_page and page_context."""
+        from unittest.mock import patch
+        u_id = create_user('couple_user', 'pass123', 'couple@test.ae', 'Couple User')
+        self._login(u_id, 'couple_user')
+
+        with patch('backend.gemini_studio_service.requests.post') as mock_post:
+            mock_post.return_value.status_code = 200
+            mock_post.return_value.json.return_value = {
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [{"text": "Welcome to your Couple Assessment. Both you and your partner have excellent options for a healthy child."}]
+                        }
+                    }
+                ]
+            }
+            res = self.client.post('/api/ai/ask-studio', json={
+                'query': 'Are we safe to get married?',
+                'api_key': 'AIzaMockKey123',
+                'current_page': 'Couple Hereditary Assessment',
+                'page_context': 'User is reviewing couple premarital compatibility and carrier status.'
+            })
+            self.assertEqual(res.status_code, 200)
+            data = res.get_json()
+            self.assertIn('Couple Assessment', data.get('answer', ''))
+            # Check payload sent to AI Studio contains the current_page
+            call_kwargs = mock_post.call_args[1]
+            sent_payload = call_kwargs.get('json', {})
+            sys_parts = sent_payload.get('system_instruction', {}).get('parts', [{}])
+            sent_text = sys_parts[0].get('text', '') if sys_parts else sent_payload['contents'][0]['parts'][0]['text']
+            self.assertIn('Current User Screen: Couple Hereditary Assessment', sent_text)
+            self.assertIn('User is reviewing couple premarital compatibility', sent_text)
+
+    def test_care_ai_when_api_key_provided_no_offline_rules_applied(self):
+        """Verify that when user provides an API key, NO offline rules are applied; live Gemini response or true API error is returned."""
+        from unittest.mock import patch
+        u_id = create_user('live_ai_user', 'pass123', 'live@test.ae', 'Live User')
+        self._login(u_id, 'live_ai_user')
+
+        # 1. Success case: returns live Gemini output free of backend rules
+        with patch('backend.gemini_studio_service.requests.post') as mock_post:
+            mock_post.return_value.status_code = 200
+            mock_post.return_value.json.return_value = {
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [{"text": "OMIM 300377 is the human G6PD locus on Xq28. Heterozygous females carry the allele safely."}]
+                        }
+                    }
+                ]
+            }
+            res = self.client.post('/api/ai/ask-studio', json={
+                'query': 'what is OMIM 300377',
+                'api_key': 'AIzaValidKey789'
+            })
+            self.assertEqual(res.status_code, 200)
+            data = res.get_json()
+            self.assertEqual(data.get('status'), 'success')
+            self.assertIn('OMIM 300377 is the human G6PD locus', data.get('answer', ''))
+            self.assertIn('Google AI Studio', data.get('source', ''))
+
+        # 2. API Failure case: when Google returns error, return Google error, NOT canned backend fallback
+        with patch('backend.gemini_studio_service.requests.post') as mock_post_err:
+            mock_post_err.return_value.status_code = 400
+            mock_post_err.return_value.json.return_value = {
+                "error": {
+                    "code": 400,
+                    "message": "API_KEY_INVALID: User API key is expired"
+                }
+            }
+            res_err = self.client.post('/api/ai/ask-studio', json={
+                'query': 'what is OMIM 300377',
+                'api_key': 'AIzaInvalidKeyBad'
+            })
+            self.assertEqual(res_err.status_code, 200)
+            data_err = res_err.get_json()
+            self.assertEqual(data_err.get('status'), 'error')
+            self.assertIn('API_KEY_INVALID', data_err.get('answer', ''))
+            # Ensure canned offline rule text was NOT applied
+            self.assertNotIn('proactive carrier screening provides you and your partner', data_err.get('answer', ''))
+
+    def test_care_ai_legacy_model_auto_normalized_to_gemini_3_8_flash(self):
+        """Verify that legacy model strings (e.g. gemini-1.5-flash or gemini-2.0-flash) are normalized to gemini-3.8-flash."""
+        from unittest.mock import patch
+        u_id = create_user('norm_user', 'pass123', 'norm@test.ae', 'Norm User')
+        self._login(u_id, 'norm_user')
+
+        with patch('backend.gemini_studio_service.requests.post') as mock_post:
+            mock_post.return_value.status_code = 200
+            mock_post.return_value.json.return_value = {
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [{"text": "Normalized model answer from Gemini 3.8 Flash."}]
+                        }
+                    }
+                ]
+            }
+            res = self.client.post('/api/ai/ask-studio', json={
+                'query': 'Explain carrier testing',
+                'api_key': 'AIzaKey456',
+                'model': 'gemini-1.5-flash'
+            })
+            self.assertEqual(res.status_code, 200)
+            data = res.get_json()
+            self.assertEqual(data.get('status'), 'success')
+            self.assertEqual(data.get('model'), 'gemini-3.8-flash')
+            # Verify the URL called was normalized
+            called_url = mock_post.call_args[0][0]
+            self.assertIn('gemini-3.8-flash:generateContent', called_url)
+            self.assertNotIn('gemini-1.5-flash:generateContent', called_url)
+
+    def test_care_ai_offline_omim_and_transmission_queries(self):
+        """Verify that offline queries (no API key) for OMIM codes and transmission return rich clinical guidance instead of canned placeholders."""
+        u_id = create_user('offline_user', 'pass123', 'off@test.ae', 'Offline User')
+        self._login(u_id, 'offline_user')
+
+        # 1. OMIM 300377 / 305900
+        res_omim = self.client.post('/api/ai/ask-studio', json={
+            'query': 'what is OMIM 300377'
+        })
+        self.assertEqual(res_omim.status_code, 200)
+        ans_omim = res_omim.get_json().get('answer', '')
+        self.assertIn('G6PD Deficiency', ans_omim)
+        self.assertIn('Xq28', ans_omim)
+        self.assertNotIn('proactive carrier screening provides you and your partner with clear, reassuring insights so you can plan your family with complete confidence. How can I assist you with your results or questions today?', ans_omim)
+
+        # 2. Transmission / Healthy Children
+        res_trans = self.client.post('/api/ai/ask-studio', json={
+            'query': 'Can we have healthy children if we both carry traits?'
+        })
+        self.assertEqual(res_trans.status_code, 200)
+        ans_trans = res_trans.get_json().get('answer', '')
+        self.assertIn('75%', ans_trans)
+        self.assertIn('PGT-M', ans_trans)
+
+        # 3. Star Child Symbol
+        res_star = self.client.post('/api/ai/ask-studio', json={
+            'query': 'Explain the projected ★ Star Child symbol in our pedigree'
+        })
+        self.assertEqual(res_star.status_code, 200)
+        ans_star = res_star.get_json().get('answer', '')
+        self.assertIn('Star Child', ans_star)
+        self.assertIn('projected', ans_star)
+
+    def test_care_ai_gemini_3_8_flash_live_generation(self):
+        """Verify that when user selects gemini-3.8-flash, it requests gemini-3.8-flash directly."""
+        from unittest.mock import patch, MagicMock
+        u_id = create_user('gemini38_user', 'pass123', 'g38@test.ae', 'Gemini 3.8 User')
+        self._login(u_id, 'gemini38_user')
+
+        with patch('backend.gemini_studio_service.requests.post') as mock_post:
+            mock_post.return_value.status_code = 200
+            mock_post.return_value.json.return_value = {
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [{"text": "Spinal Muscular Atrophy (SMA) involves deletions in SMN1 Exons 7 and 8."}]
+                        }
+                    }
+                ]
+            }
+
+            res = self.client.post('/api/ai/ask-studio', json={
+                'query': 'explain Spinal Muscular Atrophy (SMA) SMN1 Exon 7-8 Deletion',
+                'api_key': 'AIzaLiveKey2026',
+                'model': 'gemini-3.8-flash'
+            })
+            self.assertEqual(res.status_code, 200)
+            data = res.get_json()
+            self.assertEqual(data.get('status'), 'success')
+            self.assertEqual(data.get('model'), 'gemini-3.8-flash')
+            self.assertIn('Spinal Muscular Atrophy', data.get('answer', ''))
+
+            # Check that mock_post was called with gemini-3.8-flash
+            first_url = mock_post.call_args_list[0][0][0]
+            self.assertIn('gemini-3.8-flash:generateContent', first_url)
+
+    def test_care_ai_gemini_3_8_flash_resolves_via_v1_if_v1beta_404(self):
+        """Verify that if v1beta returns 404, gemini-3.8-flash resolves seamlessly on v1."""
+        from unittest.mock import patch, MagicMock
+        u_id = create_user('g38_v1_user', 'pass123', 'g38v1@test.ae', 'G38 V1 User')
+        self._login(u_id, 'g38_v1_user')
+
+        resp_404 = MagicMock()
+        resp_404.status_code = 404
+        resp_404.json.return_value = {"error": {"message": "models/gemini-3.8-flash is not found for API version v1beta"}}
+
+        resp_200 = MagicMock()
+        resp_200.status_code = 200
+        resp_200.json.return_value = {
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [{"text": "SMA explanation resolved via v1 endpoint."}]
+                    }
+                }
+            ]
+        }
+
+        with patch('backend.gemini_studio_service.requests.post', side_effect=[resp_404, resp_200]) as mock_post:
+            res = self.client.post('/api/ai/ask-studio', json={
+                'query': 'explain Spinal Muscular Atrophy',
+                'api_key': 'AIzaLiveKey2026',
+                'model': 'gemini-3.8-flash'
+            })
+            self.assertEqual(res.status_code, 200)
+            data = res.get_json()
+            self.assertEqual(data.get('status'), 'success')
+            self.assertEqual(data.get('model'), 'gemini-3.8-flash')
+            self.assertIn('SMA explanation resolved via v1 endpoint', data.get('answer', ''))
+            # Verified v1 endpoint was tried
+            self.assertEqual(mock_post.call_count, 2)
+            second_url = mock_post.call_args_list[1][0][0]
+            self.assertIn('v1/models/gemini-3.8-flash:generateContent', second_url)
+
+    def test_care_ai_fallback_when_primary_fails(self):
+        """Verify that if gemini-3.8-flash fails, Care AI automatically falls back to gemini-3.0-flash / gemini-2.5-flash."""
+        from unittest.mock import patch, MagicMock
+        u_id = create_user('g38_fallback_user', 'pass123', 'g38fb@test.ae', 'G38 Fallback User')
+        self._login(u_id, 'g38_fallback_user')
+
+        resp_404_v1beta = MagicMock()
+        resp_404_v1beta.status_code = 404
+        resp_404_v1beta.json.return_value = {"error": {"message": "models/gemini-3.8-flash is not found for API version v1beta"}}
+
+        resp_404_v1 = MagicMock()
+        resp_404_v1.status_code = 404
+        resp_404_v1.json.return_value = {"error": {"message": "models/gemini-3.8-flash is not found for API version v1"}}
+
+        resp_200_30 = MagicMock()
+        resp_200_30.status_code = 200
+        resp_200_30.json.return_value = {
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [{"text": "Carrier explanation resolved via gemini-3.0-flash fallback."}]
+                    }
+                }
+            ]
+        }
+
+        with patch('backend.gemini_studio_service.requests.post', side_effect=[resp_404_v1beta, resp_404_v1, resp_200_30]) as mock_post:
+            res = self.client.post('/api/ai/ask-studio', json={
+                'query': 'Explain our carrier risk',
+                'api_key': 'AIzaLiveKey2026',
+                'model': 'gemini-3.8-flash'
+            })
+            self.assertEqual(res.status_code, 200)
+            data = res.get_json()
+            self.assertEqual(data.get('status'), 'success')
+            self.assertEqual(data.get('model'), 'gemini-3.0-flash')
+            self.assertIn('gemini-3.0-flash fallback', data.get('answer', ''))
+
+
+    def test_care_ai_system_instruction_separated_from_contents(self):
+        """Verify system prompt is passed in system_instruction and maxOutputTokens is 2048."""
+        from unittest.mock import patch
+        u_id = create_user('sys_instr_user', 'pass123', 'sys@test.ae', 'System User')
+        self._login(u_id, 'sys_instr_user')
+
+        with patch('backend.gemini_studio_service.requests.post') as mock_post:
+            mock_post.return_value.status_code = 200
+            mock_post.return_value.json.return_value = {
+                "candidates": [{"content": {"parts": [{"text": "IVF with PGT-M details..."}]}}]
+            }
+            res = self.client.post('/api/ai/ask-studio', json={
+                'query': 'what is IVF Embryo',
+                'api_key': 'AIzaKeySeparated'
+            })
+            self.assertEqual(res.status_code, 200)
+            call_kwargs = mock_post.call_args[1]
+            sent_payload = call_kwargs.get('json', {})
+
+            # 1. system_instruction must be present at top level
+            self.assertIn('system_instruction', sent_payload)
+            sys_text = sent_payload['system_instruction']['parts'][0]['text']
+            self.assertIn('COMMUNICATION GUIDELINES', sys_text)
+
+            # 2. contents must contain ONLY the user prompt, free from system guidelines
+            contents = sent_payload.get('contents', [])
+            self.assertEqual(len(contents), 1)
+            self.assertEqual(contents[0]['parts'][0]['text'], 'what is IVF Embryo')
+
+            # 3. maxOutputTokens must be 2048 to prevent truncation
+            gen_config = sent_payload.get('generationConfig', {})
+            self.assertEqual(gen_config.get('maxOutputTokens'), 2048)
+
+    def test_ask_studio_resolves_chart_id_grounding(self):
+        """Verify /api/ai/ask-studio resolves chart ID from query and passes grounded family context."""
+        from unittest.mock import patch
+        u_id = create_user('kabir_user', 'pass123', 'kabir@test.ae', 'Kabir Al Nuaimi')
+        self._login(u_id, 'kabir_user')
+        fam = create_family(
+            u_id,
+            {
+                'name': 'Spinal Muscular Atrophy (SMA) Screening Chart',
+                'family_id': 'FA-000003'
+            }
+        )
+        add_pedigree_node(u_id, {
+            'family_id': 'FA-000003',
+            'name': 'Immense-Thicket-ta-328526',
+            'relationship': 'husband',
+            'sex': 'male',
+            'generation': 'gen2',
+            'carrier_status': 'Heterozygous Carrier (1 Copy)',
+            'condition_locus': 'Spinal Muscular Atrophy (SMA)'
+        })
+
+        with patch('backend.gemini_studio_service.requests.post') as mock_post:
+            mock_post.return_value.status_code = 200
+            mock_post.return_value.json.return_value = {
+                "candidates": [{"content": {"parts": [{"text": "Chart FA-000003 has 3 members."}]}}]
+            }
+            res = self.client.post('/api/ai/ask-studio', json={
+                'query': 'fetch information about chart-id FA-00003',
+                'api_key': 'AIzaKeyChart3'
+            })
+            self.assertEqual(res.status_code, 200)
+            call_kwargs = mock_post.call_args[1]
+            sent_payload = call_kwargs.get('json', {})
+            sys_text = sent_payload.get('system_instruction', {}).get('parts', [{}])[0].get('text', '')
+
+            # Verify grounded chart ID and members are in system context
+            self.assertIn('FA-000003', sys_text)
+            self.assertIn('Spinal Muscular Atrophy (SMA)', sys_text)
+
+    def test_analyze_assessment_normalizes_string_innovative_technologies(self):
+        """Verify analyze_assessment normalizes innovative_technologies string to list of strings."""
+        from gemini_studio_service import gemini_studio
+        from unittest.mock import patch
+        with patch('backend.gemini_studio_service.requests.post') as mock_post:
+            mock_post.return_value.status_code = 200
+            mock_post.return_value.json.return_value = {
+                "candidates": [{
+                    "content": {
+                        "parts": [{
+                            "text": json.dumps({
+                                "innovative_technologies": "PGT-M with IVF\nNon-Invasive Prenatal Diagnosis",
+                                "next_possible_ways": "Step 1: Counseling\nStep 2: Partner test",
+                                "detected_conditions": [{
+                                    "condition_name": "Beta-Thalassemia",
+                                    "carrier_summary": "Heterozygous"
+                                }]
+                            })
+                        }]
+                    }
+                }]
+            }
+            res = gemini_studio.analyze_assessment(
+                reports=[],
+                pedigree_nodes=[],
+                api_key='AIzaNormTestKey'
+            )
+            self.assertTrue(isinstance(res.get('innovative_technologies'), list))
+            self.assertEqual(len(res['innovative_technologies']), 2)
+            self.assertTrue(isinstance(res.get('next_possible_ways'), list))
+            self.assertEqual(len(res['next_possible_ways']), 2)
+            conds = res.get('detected_conditions', [])
+            self.assertEqual(conds[0].get('name'), 'Beta-Thalassemia')
+            self.assertEqual(conds[0].get('carrier_status'), 'Heterozygous')
 
 
 if __name__ == '__main__':

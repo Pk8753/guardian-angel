@@ -30,6 +30,7 @@ import {
   GitBranch,
   FileText,
   Trash2,
+  Users,
   X
 } from 'lucide-react';
 
@@ -50,7 +51,7 @@ interface ChatMessage {
 }
 
 export default function CoupleAssessmentPage() {
-  const { activeLocale } = useUIStore();
+  const { activeLocale, geminiApiKey, selectedGeminiModel, aiEngineMode } = useUIStore();
   const [assessment, setAssessment] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [userQuery, setUserQuery] = useState('');
@@ -235,16 +236,22 @@ export default function CoupleAssessmentPage() {
 
       const famKey = activeFamId || 'default';
       // 1. Check persistent sessionStorage if not forcing a manual refresh
-      if (!shouldForce && typeof window !== 'undefined') {
+      if (shouldForce && typeof window !== 'undefined') {
+        try {
+          sessionStorage.removeItem(`ga_couple_assessment_${famKey}`);
+        } catch {}
+      } else if (typeof window !== 'undefined') {
         try {
           const saved = sessionStorage.getItem(`ga_couple_assessment_${famKey}`);
           if (saved) {
             const parsed = JSON.parse(saved);
             if (parsed && typeof parsed === 'object') {
-              setAssessment(parsed);
-              if (parsed?.partner_a?.name) setPartnerAName(parsed.partner_a.name);
-              if (parsed?.partner_b?.name) setPartnerBName(parsed.partner_b.name);
-              return;
+              if (!geminiApiKey || parsed.is_llm) {
+                setAssessment(parsed);
+                if (parsed?.partner_a?.name) setPartnerAName(parsed.partner_a.name);
+                if (parsed?.partner_b?.name) setPartnerBName(parsed.partner_b.name);
+                return;
+              }
             }
           }
         } catch (e) {
@@ -256,7 +263,15 @@ export default function CoupleAssessmentPage() {
       const res = await fetch('/api/ai/analyze-assessment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ partner_a: pA, partner_b: pB, family_id: activeFamId })
+        body: JSON.stringify({
+          partner_a: pA,
+          partner_b: pB,
+          family_id: activeFamId,
+          api_key: geminiApiKey ? geminiApiKey.trim() : undefined,
+          model: selectedGeminiModel || 'gemini-3.8-flash',
+          ai_mode: aiEngineMode,
+          force_refresh: Boolean(shouldForce)
+        })
       });
       if (res.ok) {
         const data = await res.json();
@@ -308,12 +323,17 @@ export default function CoupleAssessmentPage() {
         text: m.text
       }));
 
-      const res = await fetch('/api/ai/ask', {
+      const isOnline = aiEngineMode === 'online' || Boolean(geminiApiKey && geminiApiKey.trim());
+      const endpoint = isOnline ? '/api/ai/ask-studio' : '/api/ai/ask';
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           query: userMsgText,
           family_id: activeFamilyId,
+          ai_mode: isOnline ? 'online' : 'offline',
+          model: selectedGeminiModel || 'gemini-3.8-flash',
+          api_key: geminiApiKey ? geminiApiKey.trim() : undefined,
           conversation_history: historyPayload
         })
       });
@@ -368,17 +388,20 @@ export default function CoupleAssessmentPage() {
           <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="px-2.5 py-0.5 rounded-full bg-mint/25 text-pine text-[11px] font-bold tracking-wider uppercase border border-mint">
-                  Pre-Conception Genomic Node
+                <span className="px-2.5 py-0.5 rounded-full bg-mint/25 text-pine text-[11px] font-bold tracking-wider uppercase border border-mint flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-jungle"></span>
+                  {activeLocale === 'ar' ? 'فحص التوافق الصحي للزوجين' : 'Couple Premarital Genetic Assessment'}
                 </span>
                 <span className="text-slate-400 text-xs">&bull;</span>
-                <span className="text-slate-500 text-xs font-mono">CRYPT-ID: #CP-8492</span>
+                <span className="text-slate-600 text-xs font-medium">
+                  {activeLocale === 'ar' ? 'معتمد وفق الإرشادات الوطنية' : 'UAE Premarital Protocol Aligned'}
+                </span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-extrabold text-pine tracking-tight">
-                {t('couple_assessment_title', activeLocale)} &mdash; {partnerAName} &amp; {partnerBName}
+                {activeLocale === 'ar' ? 'تقييم التوافق الوراثي للزوجين' : 'Couple Hereditary Compatibility & Health Assessment'}
               </h1>
               <p className="text-xs sm:text-sm text-slate-500">
-                {t('couple_assessment_subtitle', activeLocale)}
+                {partnerAName} &amp; {partnerBName} &mdash; {t('couple_assessment_subtitle', activeLocale)}
               </p>
             </div>
 
@@ -399,7 +422,7 @@ export default function CoupleAssessmentPage() {
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-xs transition cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5 text-pine" />
-                <span>Export Clinical Brief</span>
+                <span>Export Summary</span>
               </button>
               <button
                 type="button"
@@ -407,7 +430,7 @@ export default function CoupleAssessmentPage() {
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-pine hover:bg-pine-light rounded-xl shadow-xs transition"
               >
                 <Stethoscope className="w-3.5 h-3.5" />
-                <span>Review with Geneticist</span>
+                <span>Consult Specialist</span>
               </button>
             </div>
           </div>
@@ -419,9 +442,9 @@ export default function CoupleAssessmentPage() {
                 <Sparkles className="w-6 h-6 text-pine" />
               </div>
               <div className="max-w-lg mx-auto space-y-1.5">
-                <h3 className="text-base font-bold text-pine">No Parents Screening Reports or Pedigree Tree Uploaded Yet</h3>
+                <h3 className="text-base font-bold text-pine">Upload Screening Reports or Create Family Tree</h3>
                 <p className="text-xs text-on-surface-variant leading-relaxed">
-                  To compute dual-parent genomic concordance, recessive offspring transmission risk, and personalized reproductive counseling, please upload parents&apos; reports or build the family tree below:
+                  To view your combined carrier analysis, inheritance probabilities, and proactive family planning options, please upload premarital screening reports or map your family tree below:
                 </p>
               </div>
 
@@ -429,10 +452,10 @@ export default function CoupleAssessmentPage() {
                 <div className="p-4 bg-white rounded-2xl border border-outline-variant/30 text-left space-y-2 shadow-xs">
                   <div className="flex items-center gap-2 text-xs font-bold text-pine">
                     <span className="w-5 h-5 rounded-full bg-pine text-white flex items-center justify-center text-[10px]">1</span>
-                    <span>Upload Parents Reports</span>
+                    <span>Upload Screening Reports</span>
                   </div>
                   <p className="text-[11px] text-on-surface-variant leading-relaxed">
-                    Upload official premarital screening PDFs for prospective parents to extract carrier traits.
+                    Upload official premarital screening lab reports to extract carrier status.
                   </p>
                   <Link
                     href="/dashboard"
@@ -446,10 +469,10 @@ export default function CoupleAssessmentPage() {
                 <div className="p-4 bg-white rounded-2xl border border-outline-variant/30 text-left space-y-2 shadow-xs">
                   <div className="flex items-center gap-2 text-xs font-bold text-pine">
                     <span className="w-5 h-5 rounded-full bg-pine text-white flex items-center justify-center text-[10px]">2</span>
-                    <span>Build Family Pedigree</span>
+                    <span>Build Family Tree</span>
                   </div>
                   <p className="text-[11px] text-on-surface-variant leading-relaxed">
-                    Map prospective parents and projected offspring (★) with documented phenotypes.
+                    Map family connections and future children to visualize hereditary traits.
                   </p>
                   <Link
                     href="/pedigree"
@@ -463,26 +486,6 @@ export default function CoupleAssessmentPage() {
             </div>
           ) : (
             <>
-              {/* Clinical Protocol Recommendation Banner */}
-              <div className="p-4 rounded-2xl bg-mint/20 border border-mint/60 flex items-start gap-4 shadow-xs">
-                <div className="w-10 h-10 rounded-xl bg-pine flex items-center justify-center text-white shrink-0 shadow-xs">
-                  <ShieldCheck className="w-6 h-6" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <span className="text-xs font-bold text-pine uppercase tracking-wider">
-                      Clinical Recommendation &bull; Guideline Tier 2
-                    </span>
-                    <span className="text-xs text-pine font-bold">Standard Protocol (ACMG / SHG)</span>
-                  </div>
-                  <p className="text-xs text-slate-700 mt-1 leading-relaxed">
-                    {assessment.clinical_recommendation || (
-                      `Carrier Screening Protocol Advised for ${partnerAName} & ${partnerBName}. Verified genomic parameters support proactive counseling and routine carrier screening.`
-                    )}
-                  </p>
-                </div>
-              </div>
-
               {/* 3-Column Comparative Genetic Synthesis Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
                 {/* Partner A */}
@@ -495,7 +498,7 @@ export default function CoupleAssessmentPage() {
                         </div>
                         <div>
                           <h4 className="font-bold text-slate-800 text-sm">{assessment.partner_a?.name || partnerAName}</h4>
-                          <p className="text-[11px] text-slate-500">{assessment.partner_a?.role || 'Target Proband (Partner A)'}</p>
+                          <p className="text-[11px] text-slate-500">{assessment.partner_a?.role || 'Partner A'}</p>
                         </div>
                       </div>
                       <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-mono text-[10px]">
@@ -519,7 +522,7 @@ export default function CoupleAssessmentPage() {
 
                       {assessment.partner_a?.findings && assessment.partner_a.findings.length > 0 ? (
                         <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1.5">
-                          <span className="font-bold text-slate-700 block text-[11px]">Laboratory Biomarkers:</span>
+                          <span className="font-bold text-slate-700 block text-[11px]">Laboratory Test Findings:</span>
                           {assessment.partner_a.findings.slice(0, 2).map((f: any, idx: number) => (
                             <div key={idx} className="flex items-center justify-between text-[11px] text-slate-600">
                               <span>{f.parameter || f.name}</span>
@@ -546,27 +549,27 @@ export default function CoupleAssessmentPage() {
                       <div className="flex items-center gap-2">
                         <GitMerge className="w-5 h-5 text-mint" />
                         <span className="font-bold text-xs uppercase tracking-wider text-mint">
-                          Synthesis Core
+                          Combined Compatibility Analysis
                         </span>
                       </div>
                       <span className="px-2 py-0.5 rounded bg-pine-light text-mint font-mono text-[10px]">
-                        ACMG Class II
+                        Premarital Standards
                       </span>
                     </div>
 
                     <div className="text-center py-2 space-y-1">
                       <span className="text-[10px] uppercase tracking-widest text-mint font-bold">
-                        Inbreeding Coefficient (F-Calc)
+                        Family Lineage Connection
                       </span>
                       <div className="text-3xl font-black text-white">{assessment.synthesis?.inbreeding_coefficient || 'F = 0.000'}</div>
                       <span className="text-xs text-mint">
-                        {assessment.synthesis?.kinship_level || 'Non-Consanguineous / Population Baseline'}
+                        {assessment.synthesis?.kinship_level || 'Standard Population Lineage'}
                       </span>
                     </div>
 
                     <div className="p-3 bg-pine-light/80 rounded-xl border border-pine-light space-y-2 text-xs">
                       <div className="flex items-center justify-between font-bold text-white">
-                        <span>Recessive Offspring Risk</span>
+                        <span>Newborn Inheritance Chance</span>
                         <span className="text-amber-300 text-sm">{assessment.synthesis?.recessive_risk || '25% (1 in 4)'}</span>
                       </div>
                       <p className="text-[11px] text-mint/90 leading-relaxed">
@@ -576,8 +579,8 @@ export default function CoupleAssessmentPage() {
                   </div>
 
                   <div className="pt-4 border-t border-pine-light flex items-center justify-between text-xs text-mint">
-                    <span>{assessment.synthesis?.consanguinity_active ? 'Consanguinity double-bar active' : 'Lineage linkage verified'}</span>
-                    <span className="font-mono">{assessment.synthesis?.child_node_status || 'Child Node ★ Linked'}</span>
+                    <span>{assessment.synthesis?.consanguinity_active ? 'Shared family lineage recorded' : 'Family lineage verified'}</span>
+                    <span className="font-mono">{assessment.synthesis?.child_node_status || 'Projected Offspring ★'}</span>
                   </div>
                 </div>
 
@@ -591,7 +594,7 @@ export default function CoupleAssessmentPage() {
                         </div>
                         <div>
                           <h4 className="font-bold text-slate-800 text-sm">{assessment.partner_b?.name || partnerBName}</h4>
-                          <p className="text-[11px] text-slate-500">{assessment.partner_b?.role || 'Candidate Target (Partner B)'}</p>
+                          <p className="text-[11px] text-slate-500">{assessment.partner_b?.role || 'Partner B'}</p>
                         </div>
                       </div>
                       <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-mono text-[10px]">
@@ -615,7 +618,7 @@ export default function CoupleAssessmentPage() {
 
                       {assessment.partner_b?.findings && assessment.partner_b.findings.length > 0 ? (
                         <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1.5">
-                          <span className="font-bold text-slate-700 block text-[11px]">Laboratory Biomarkers:</span>
+                          <span className="font-bold text-slate-700 block text-[11px]">Laboratory Test Findings:</span>
                           {assessment.partner_b.findings.slice(0, 2).map((f: any, idx: number) => (
                             <div key={idx} className="flex items-center justify-between text-[11px] text-slate-600">
                               <span>{f.parameter || f.name}</span>
@@ -644,19 +647,19 @@ export default function CoupleAssessmentPage() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-outline-variant/20 pb-4">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-2xl bg-pine text-white flex items-center justify-center shadow-xs">
-                    <Cpu className="w-5 h-5 text-mint" />
+                    <Heart className="w-5 h-5 text-mint" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className="text-base sm:text-lg font-extrabold text-pine">
-                        Qwen3 Clinical Brain &bull; Couple Assessment
+                        {assessment?.source ? `${assessment.source} • ` : ''}Couple Hereditary Assessment
                       </h3>
                       <span className="px-2.5 py-0.5 rounded-full bg-mint/25 text-pine text-[10px] font-bold border border-mint">
-                        Compassionate Guidance
+                        {assessment.compatibility_status || 'Compatible with Guidance'}
                       </span>
                     </div>
                     <p className="text-xs text-on-surface-variant">
-                      Personalized genomic counseling synthesis to navigate pre-conception pathways
+                      Compassionate premarital counseling synthesis aligned with UAE guidelines
                     </p>
                   </div>
                 </div>
@@ -672,33 +675,70 @@ export default function CoupleAssessmentPage() {
               </div>
 
               <div className="space-y-6">
-                {/* Positive Guidance Banner */}
-                <div className="p-5 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 space-y-2">
-                  <div className="flex items-center gap-2 text-emerald-900 font-bold text-sm">
-                    <Heart className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Positive Couple Assessment: {assessment.compatibility_status}</span>
+                {/* Visual 4-Card Digestible Breakdown (UAE Respectful & Destigmatizing) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Card 1: 75% Healthy Offspring Metric */}
+                  <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-50 to-mint/15 border border-emerald-200 shadow-2xs space-y-2">
+                    <div className="flex items-center gap-2 text-emerald-900 font-bold text-xs uppercase tracking-wider">
+                      <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0" />
+                      <span>75% Healthy Child Guarantee</span>
+                    </div>
+                    <h4 className="text-sm font-extrabold text-emerald-950">
+                      75% probability in each pregnancy of a child born free of condition
+                    </h4>
+                    <p className="text-xs text-emerald-800 leading-relaxed">
+                      Even if both partners carry the identical autosomal recessive trait, there is a 3-in-4 chance in every pregnancy of a healthy baby (50% asymptomatic carrier, 25% non-carrier).
+                    </p>
                   </div>
-                  <p className="text-xs text-emerald-800 leading-relaxed">
-                    {assessment.positive_summary}
-                  </p>
-                </div>
 
-                {/* Motivational Destigmatization */}
-                <div className="p-5 rounded-2xl bg-mint/20 border border-mint space-y-2">
-                  <div className="flex items-center gap-2 text-pine font-bold text-xs uppercase tracking-wider">
-                    <Sparkles className="w-4 h-4 text-jungle shrink-0" />
-                    <span>Motivational Insight</span>
+                  {/* Card 2: Destigmatization & Health */}
+                  <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-mint/20 to-fog-light border border-mint shadow-2xs space-y-2">
+                    <div className="flex items-center gap-2 text-pine font-bold text-xs uppercase tracking-wider">
+                      <Sparkles className="w-4 h-4 text-jungle shrink-0" />
+                      <span>Carriers Are Completely Healthy</span>
+                    </div>
+                    <h4 className="text-sm font-extrabold text-pine">
+                      Normal biological variation &mdash; not an illness
+                    </h4>
+                    <p className="text-xs text-slate-700 leading-relaxed">
+                      {assessment.positive_summary || 'Being a carrier is a natural biological variation. Carriers lead active, healthy, and fulfilling lives with no symptoms.'}
+                    </p>
                   </div>
-                  <p className="text-xs text-slate-700 leading-relaxed font-medium">
-                    {assessment.motivational_insight}
-                  </p>
+
+                  {/* Card 3: UAE Kinship & Family Heritage */}
+                  <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-amber-50/60 to-white border border-amber-200/80 shadow-2xs space-y-2">
+                    <div className="flex items-center gap-2 text-amber-900 font-bold text-xs uppercase tracking-wider">
+                      <Users className="w-4 h-4 text-amber-700 shrink-0" />
+                      <span>Honoring Family Wisdom &amp; Lineage</span>
+                    </div>
+                    <h4 className="text-sm font-extrabold text-amber-950">
+                      Premarital screening protects future generations
+                    </h4>
+                    <p className="text-xs text-amber-900 leading-relaxed">
+                      {assessment.motivational_insight || 'Premarital screening honors family commitment and national health wisdom, protecting loved ones with proactive medical clarity.'}
+                    </p>
+                  </div>
+
+                  {/* Card 4: Modern Reproductive Pathways */}
+                  <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-pine/5 to-white border border-pine/20 shadow-2xs space-y-2">
+                    <div className="flex items-center gap-2 text-pine font-bold text-xs uppercase tracking-wider">
+                      <CheckCircle2 className="w-4 h-4 text-pine shrink-0" />
+                      <span>Proactive Medical Solutions (PGT-M)</span>
+                    </div>
+                    <h4 className="text-sm font-extrabold text-pine">
+                      Modern reproductive technologies ensure peace of mind
+                    </h4>
+                    <p className="text-xs text-slate-700 leading-relaxed">
+                      Options such as Pre-implantation Genetic Testing (PGT-M) with IVF and non-invasive prenatal checks empower couples to have healthy children with 100% confidence.
+                    </p>
+                  </div>
                 </div>
 
                 {/* Next Possible Ways */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 text-pine font-bold text-xs uppercase tracking-wider">
                     <Compass className="w-4 h-4 text-pine" />
-                    <span>Next Possible Ways &amp; Proactive Solutions:</span>
+                    <span>Recommended Proactive Pathways:</span>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {assessment.next_possible_ways?.map((way: string, idx: number) => (
@@ -754,12 +794,14 @@ export default function CoupleAssessmentPage() {
                   {/* Scrollable Conversation Viewport */}
                   <div
                     ref={chatScrollRef}
-                    className="h-64 sm:h-72 overflow-y-auto space-y-3 p-3.5 bg-fog/60 rounded-2xl border border-outline-variant/20 scroll-smooth"
+                    className="h-64 sm:h-72 overflow-y-auto space-y-3 p-3.5 bg-fog/60 rounded-2xl border border-outline-variant/20 scroll-smooth select-text"
+                    style={{ userSelect: 'text', WebkitUserSelect: 'text' }}
                   >
                     {chatMessages.map((msg) => (
                       <div
                         key={msg.id}
-                        className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start items-start gap-2'}`}
+                        className={`flex select-text ${msg.sender === 'user' ? 'justify-end' : 'justify-start items-start gap-2'}`}
+                        style={{ userSelect: 'text', WebkitUserSelect: 'text' }}
                       >
                         {msg.sender === 'ai' && (
                           <div className="w-6 h-6 rounded-full bg-mint text-pine flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
@@ -767,17 +809,19 @@ export default function CoupleAssessmentPage() {
                           </div>
                         )}
                         <div
-                          className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 shadow-xs text-xs space-y-1.5 ${
+                          className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 shadow-xs text-xs space-y-1.5 select-text ${
                             msg.sender === 'user'
                               ? 'bg-pine text-white rounded-tr-xs'
                               : 'bg-white text-pine border border-outline-variant/30 rounded-tl-xs'
                           }`}
+                          style={{ userSelect: 'text', WebkitUserSelect: 'text' }}
                         >
                           {renderFormattedText(msg.text)}
                           <div
-                            className={`flex flex-col gap-1 text-[9px] pt-0.5 ${
+                            className={`flex flex-col gap-1 text-[9px] pt-0.5 select-text ${
                               msg.sender === 'user' ? 'text-white/70' : 'text-on-surface-variant/70'
                             }`}
+                            style={{ userSelect: 'text', WebkitUserSelect: 'text' }}
                           >
                             {msg.sender === 'ai' && (
                               <div className="flex flex-wrap items-center gap-1 pt-0.5">

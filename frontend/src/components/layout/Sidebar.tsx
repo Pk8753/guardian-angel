@@ -8,6 +8,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { t } from '@/lib/translations';
 import { LogOut, Settings } from 'lucide-react';
 import { SettingsModal } from '@/components/settings/SettingsModal';
+import { CareAIFloatingChat } from '@/components/ai/CareAIFloatingChat';
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -39,12 +40,6 @@ export function Sidebar() {
       mobileLabel: activeLocale === 'ar' ? 'التوافق' : 'Couple',
       href: '/couple-assessment',
       icon: 'diversity_1'
-    },
-    {
-      label: t('nav_privacy', activeLocale),
-      mobileLabel: activeLocale === 'ar' ? 'الخزينة' : 'Vault',
-      href: '/privacy-security',
-      icon: 'shield_lock'
     },
     {
       label: t('nav_profile', activeLocale),
@@ -86,17 +81,6 @@ export function Sidebar() {
             </div>
           </Link>
 
-          {/* Certified Node Badge */}
-          <div className="px-3">
-            <div className="p-3 rounded-xl bg-surface-container-low border border-outline-variant/40 flex items-center gap-3">
-              <span className="material-symbols-outlined text-jungle text-[20px]">verified_user</span>
-              <div className="flex flex-col">
-                <span className="text-xs font-bold text-pine">{t('engine_title', activeLocale)}</span>
-                <span className="text-[11px] text-on-surface-variant">{t('engine_sub', activeLocale)}</span>
-              </div>
-            </div>
-          </div>
-
           {/* Navigation Items */}
           <nav className="flex flex-col gap-1.5 px-1">
             {navItems.map((item) => {
@@ -121,24 +105,8 @@ export function Sidebar() {
           </nav>
         </div>
 
-        {/* Sidebar Bottom Trust Block & Controls */}
+        {/* Sidebar Bottom Controls */}
         <div className="flex flex-col gap-3 px-2 pt-4">
-          <div className="p-3.5 rounded-xl bg-surface-container-low border border-outline-variant/40 flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">
-                {t('genomic_privacy', activeLocale)}
-              </span>
-              <span className="flex h-2 w-2 relative">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-jungle opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-jungle"></span>
-              </span>
-            </div>
-            <p className="text-xs font-bold text-pine">{t('vault_title', activeLocale)}</p>
-            <p className="text-[11px] text-on-surface-variant leading-tight">
-              {t('vault_desc', activeLocale)}
-            </p>
-          </div>
-
           {/* Settings Window Button with Gear Logo (above signout) */}
           <button
             type="button"
@@ -161,6 +129,8 @@ export function Sidebar() {
 
         {/* Global Settings Window Modal */}
         <SettingsModal />
+        {/* Floating Ask Care AI Popup Chatbot */}
+        <CareAIFloatingChat />
       </aside>
 
       {/* ==================== MOBILE BOTTOM APP NAVIGATION BAR ==================== */}
