@@ -39,6 +39,9 @@ export function useAuthFlow() {
   const [otpInput, setOtpInput] = React.useState('');
   const [otpLoading, setOtpLoading] = React.useState(false);
 
+  // Registration Success Screen State
+  const [isRegistrationSuccess, setIsRegistrationSuccess] = React.useState(false);
+
   // Field validation error tracking
   const [fieldErrors, setFieldErrors] = React.useState<FieldErrors>({});
 
@@ -63,15 +66,40 @@ export function useAuthFlow() {
     setAuthError(null);
   }, []);
 
+  const resetRegistrationFields = React.useCallback(() => {
+    setRegFirstName('');
+    setRegSecondName('');
+    setRegUsername('');
+    setRegDob('');
+    setRegEmail('');
+    setRegLocation('');
+    setRegPassword('');
+    setShowRegPassword(false);
+    setOtpSent(false);
+    setOtpVerified(false);
+    setOtpInput('');
+    setOtpLoading(false);
+    setFieldErrors({});
+  }, []);
+
   const openAuth = React.useCallback((mode: AuthMode = 'signin') => {
     setActiveTab(mode);
+    setIsRegistrationSuccess(false);
     setAuthError(null);
     setAuthSuccess(null);
     setIsAuthOpen(true);
   }, []);
 
   const closeAuth = React.useCallback(() => {
+    setIsRegistrationSuccess(false);
     setIsAuthOpen(false);
+  }, []);
+
+  const goToSignInFromSuccess = React.useCallback(() => {
+    setIsRegistrationSuccess(false);
+    setActiveTab('signin');
+    setAuthError(null);
+    setAuthSuccess(null);
   }, []);
 
   const fillDemoCreds = React.useCallback((u: string, p: string) => {
@@ -253,7 +281,7 @@ export function useAuthFlow() {
 
       const data = await res.json();
 
-      if (data.status === 'error' || !data.user_id) {
+      if (!res.ok || data.status === 'error' || (!data.user_id && data.status !== 'success')) {
         setAuthError(data.message || 'Failed to create vault account. Please try again.');
         setIsRegSubmitting(false);
         return;
@@ -266,13 +294,13 @@ export function useAuthFlow() {
       return;
     }
 
+    resetRegistrationFields();
     setSignInUsername('');
     setSignInPassword('');
     setIsRegSubmitting(false);
-    setActiveTab('signin');
-    setAuthSuccess(
-      'Your account has been created successfully! Please sign in with your credentials to access your health vault.'
-    );
+    setAuthError(null);
+    setAuthSuccess(null);
+    setIsRegistrationSuccess(true);
   };
 
   return {
@@ -284,6 +312,10 @@ export function useAuthFlow() {
     setAuthError,
     authSuccess,
     setAuthSuccess,
+    isRegistrationSuccess,
+    setIsRegistrationSuccess,
+    resetRegistrationFields,
+    goToSignInFromSuccess,
     signInUsername,
     setSignInUsername,
     signInPassword,

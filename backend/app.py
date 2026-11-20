@@ -304,7 +304,8 @@ def login():
                 return jsonify({
                     "status": "success",
                     "message": "Your account has been created successfully! Please sign in with your credentials to access your health vault.",
-                    "username": username
+                    "username": username,
+                    "user_id": user_id
                 }), 201
             else:
                 return jsonify({"status": "error", "message": "Failed to create vault account. Please try again."}), 500
