@@ -86,8 +86,8 @@ export function Navbar() {
         </button>
       </div>
 
-      {/* DUAL-LENS PERSONA TOGGLE (Patient vs Provider View) - PINNED AT TOP ON BOTH MOBILE & DESKTOP */}
-      <div className="flex items-center gap-0.5 bg-surface-container-low p-1 rounded-full border border-outline-variant/40 shadow-2xs text-[11px] font-bold shrink-0">
+      {/* DUAL-LENS PERSONA TOGGLE (Patient vs Provider View) - Shown on Desktop, moved to mobile dropdown/bottom on Mobile */}
+      <div className="hidden sm:flex items-center gap-0.5 bg-surface-container-low p-1 rounded-full border border-outline-variant/40 shadow-2xs text-[11px] font-bold shrink-0">
         <button
           type="button"
           onClick={() => setViewMode('patient')}
@@ -203,6 +203,45 @@ export function Navbar() {
                 {user?.email && (
                   <p className="text-[10px] text-on-surface-variant mt-1 truncate">{user.email}</p>
                 )}
+              </div>
+
+              {/* Mobile View Mode Switcher (Patient vs Provider View) */}
+              <div className="sm:hidden px-4 py-2 border-b border-outline-variant/20">
+                <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider block mb-1.5">
+                  View Mode
+                </span>
+                <div className="grid grid-cols-2 gap-1 bg-surface-container-low p-1 rounded-xl border border-outline-variant/30 text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setViewMode('patient');
+                      setIsDropdownOpen(false);
+                    }}
+                    className={`flex items-center justify-center gap-1.5 py-1.5 rounded-lg transition-all ${
+                      viewMode === 'patient'
+                        ? 'bg-teal-700 text-white shadow-xs font-bold'
+                        : 'text-on-surface-variant hover:text-teal-800'
+                    }`}
+                  >
+                    <span>👤</span>
+                    <span>Patient</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setViewMode('provider');
+                      setIsDropdownOpen(false);
+                    }}
+                    className={`flex items-center justify-center gap-1.5 py-1.5 rounded-lg transition-all ${
+                      viewMode === 'provider'
+                        ? 'bg-slate-900 text-white shadow-xs font-bold'
+                        : 'text-on-surface-variant hover:text-slate-900'
+                    }`}
+                  >
+                    <span>🩺</span>
+                    <span>Provider</span>
+                  </button>
+                </div>
               </div>
 
               {/* Mobile Language Switcher (Visible in dropdown on small screens) */}

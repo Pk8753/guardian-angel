@@ -95,7 +95,30 @@ export function CareAIFloatingChat() {
     }
   }, [careAIChatMessages, isAiLoading, thinkingStep]);
 
-  if (!isCareAIOpen) return null;
+  if (!isCareAIOpen) {
+    return (
+      <div className="fixed bottom-20 right-4 sm:bottom-6 sm:right-6 z-40 animate-in fade-in slide-in-from-bottom-2">
+        <button
+          type="button"
+          onClick={() => {
+            setCareAIOpen(true);
+            setCareAIWindowState('normal');
+          }}
+          className="flex items-center gap-2.5 px-4 py-2.5 rounded-full bg-pine hover:bg-pine-light text-white font-bold shadow-2xl border border-mint/40 transition-all hover:scale-105 active:scale-95 cursor-pointer group"
+          title="Ask Care AI — Clinical Genetics & Screening Assistant"
+          aria-label="Ask Care AI"
+        >
+          <div className="w-6 h-6 rounded-full bg-mint/20 flex items-center justify-center text-mint group-hover:rotate-12 transition-transform">
+            <Sparkles className="w-3.5 h-3.5 text-jungle animate-pulse" />
+          </div>
+          <span className="text-xs tracking-tight">Ask Care AI</span>
+          <span className="hidden sm:inline-block text-[10px] px-2 py-0.5 rounded-full bg-white/20 text-white/90 font-medium">
+            {aiEngineMode === 'online' ? 'Gemini' : 'Qwen'}
+          </span>
+        </button>
+      </div>
+    );
+  }
 
   const handleClearChat = () => {
     clearCareAIChatMessages();
@@ -308,11 +331,11 @@ export function CareAIFloatingChat() {
   // Minimized floating pill docked at bottom-right
   if (careAIWindowState === 'minimized') {
     return (
-      <div className="fixed bottom-4 right-4 z-50 bg-pine text-white rounded-full shadow-2xl border border-mint/40 px-4 py-2.5 flex items-center gap-3 cursor-pointer hover:bg-pine-light transition-all animate-in fade-in slide-in-from-bottom-2">
+      <div className="fixed bottom-20 right-4 sm:bottom-6 sm:right-6 z-50 bg-pine text-white rounded-full shadow-2xl border border-mint/40 px-4 py-2.5 flex items-center gap-3 cursor-pointer hover:bg-pine-light transition-all animate-in fade-in slide-in-from-bottom-2">
         <button
           type="button"
           onClick={() => setCareAIWindowState('normal')}
-          className="flex items-center gap-2 text-xs font-bold"
+          className="flex items-center gap-2 text-xs font-bold cursor-pointer"
         >
           <Sparkles className="w-4 h-4 text-jungle animate-pulse" />
           <span>Ask Care AI</span>
@@ -324,7 +347,7 @@ export function CareAIFloatingChat() {
           <button
             type="button"
             onClick={() => setCareAIWindowState('normal')}
-            className="p-1 hover:bg-white/10 rounded-md transition"
+            className="p-1 hover:bg-white/10 rounded-md transition cursor-pointer"
             title="Restore Window"
           >
             <Maximize2 className="w-3.5 h-3.5" />
@@ -332,7 +355,7 @@ export function CareAIFloatingChat() {
           <button
             type="button"
             onClick={() => setCareAIOpen(false)}
-            className="p-1 hover:bg-white/10 rounded-md transition text-white/70 hover:text-white"
+            className="p-1 hover:bg-white/10 rounded-md transition text-white/70 hover:text-white cursor-pointer"
             title="Close"
           >
             <X className="w-3.5 h-3.5" />
@@ -347,10 +370,10 @@ export function CareAIFloatingChat() {
   return (
     <>
       <div
-        className={`fixed z-50 bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-outline-variant/40 flex flex-col overflow-hidden transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 ${
+        className={`fixed z-[60] bg-white dark:bg-slate-900 flex flex-col overflow-hidden transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 shadow-2xl border border-outline-variant/40 ${
           isMaximized
-            ? 'top-4 bottom-4 right-4 left-4 sm:left-auto sm:w-[720px] max-w-[96vw]'
-            : 'bottom-4 right-4 w-[420px] max-w-[calc(100vw-32px)] h-[640px] max-h-[86vh]'
+            ? 'inset-0 w-full h-[100dvh] rounded-none sm:top-4 sm:bottom-4 sm:right-4 sm:left-auto sm:w-[720px] sm:max-w-[96vw] sm:rounded-3xl'
+            : 'inset-0 w-full h-[100dvh] rounded-none sm:inset-auto sm:bottom-6 sm:right-6 sm:w-[430px] sm:h-[640px] sm:max-h-[86vh] sm:rounded-3xl'
         }`}
       >
         {/* Header Bar - Navy Blue Branded */}
@@ -396,7 +419,7 @@ export function CareAIFloatingChat() {
               type="button"
               onClick={() => setCareAIWindowState('minimized')}
               title="Minimize to bar"
-              className="p-1.5 text-white/80 hover:text-white hover:bg-white/20 rounded-lg transition cursor-pointer"
+              className="hidden sm:inline-flex p-1.5 text-white/80 hover:text-white hover:bg-white/20 rounded-lg transition cursor-pointer"
             >
               <Minus className="w-3.5 h-3.5" />
             </button>
@@ -404,7 +427,7 @@ export function CareAIFloatingChat() {
               type="button"
               onClick={() => setCareAIWindowState(isMaximized ? 'normal' : 'maximized')}
               title={isMaximized ? "Restore size" : "Maximize window"}
-              className="p-1.5 text-white/80 hover:text-white hover:bg-white/20 rounded-lg transition cursor-pointer"
+              className="hidden sm:inline-flex p-1.5 text-white/80 hover:text-white hover:bg-white/20 rounded-lg transition cursor-pointer"
             >
               {isMaximized ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
             </button>
@@ -551,7 +574,7 @@ export function CareAIFloatingChat() {
       </div>
 
         {/* Input & Suggestions Footer */}
-        <div className="p-3.5 border-t border-outline-variant/20 bg-white dark:bg-slate-900 space-y-2.5 shrink-0">
+        <div className="p-3.5 border-t border-outline-variant/20 bg-white dark:bg-slate-900 space-y-2.5 shrink-0 pb-[max(0.875rem,env(safe-area-inset-bottom))]">
           {/* Question Input Box */}
           <form
             onSubmit={(e) => {
@@ -603,7 +626,7 @@ export function CareAIFloatingChat() {
 
       {/* Citation Preview Modal */}
       {activeCitationPreview && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
           <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-5 border border-outline-variant/40 shadow-2xl space-y-3">
             <div className="flex items-center justify-between">
               <h4 className="text-xs font-bold text-pine dark:text-white flex items-center gap-1.5">

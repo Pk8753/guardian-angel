@@ -14,7 +14,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { logout } = useAuthStore();
-  const { activeLocale, setSettingsModalOpen } = useUIStore();
+  const { activeLocale, setSettingsModalOpen, isCareAIOpen, toggleCareAIOpen } = useUIStore();
 
   const navItems = [
     {
@@ -126,12 +126,13 @@ export function Sidebar() {
             <span>{t('sign_out', activeLocale)}</span>
           </button>
         </div>
-
-        {/* Global Settings Window Modal */}
-        <SettingsModal />
-        {/* Floating Ask Care AI Popup Chatbot */}
-        <CareAIFloatingChat />
       </aside>
+
+      {/* ==================== GLOBAL MODALS & FLOATING CONTROLS ==================== */}
+      {/* Global Settings Window Modal (accessible on both desktop and mobile) */}
+      <SettingsModal />
+      {/* Floating Ask Care AI Chatbot & Trigger (accessible on both desktop and mobile) */}
+      <CareAIFloatingChat />
 
       {/* ==================== MOBILE BOTTOM APP NAVIGATION BAR ==================== */}
       <nav
@@ -180,6 +181,44 @@ export function Sidebar() {
               </Link>
             );
           })}
+
+          {/* 6th Tab Button: Dedicated Care AI Bot Trigger */}
+          <button
+            type="button"
+            onClick={toggleCareAIOpen}
+            aria-label="Ask Care AI"
+            className={`flex flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all relative group min-h-[48px] cursor-pointer ${
+              isCareAIOpen
+                ? 'text-teal-800 dark:text-emerald-400 font-bold'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium'
+            }`}
+          >
+            {isCareAIOpen && (
+              <span className="absolute top-0 w-7 h-1 bg-teal-700 dark:bg-emerald-400 rounded-full shadow-[0_0_8px_rgba(15,118,110,0.4)]" />
+            )}
+
+            <div
+              className={`flex items-center justify-center w-7 h-7 rounded-lg transition-transform ${
+                isCareAIOpen ? 'scale-110' : 'group-active:scale-95'
+              }`}
+            >
+              <span
+                className={`material-symbols-outlined text-[20px] ${
+                  isCareAIOpen ? 'text-teal-700 dark:text-emerald-400 font-bold' : 'text-slate-500 dark:text-slate-400'
+                }`}
+              >
+                auto_awesome
+              </span>
+            </div>
+
+            <span
+              className={`text-[10px] tracking-tight leading-none mt-0.5 truncate max-w-full ${
+                isCareAIOpen ? 'font-bold text-teal-800 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400'
+              }`}
+            >
+              {activeLocale === 'ar' ? 'المساعد' : 'Care AI'}
+            </span>
+          </button>
         </div>
       </nav>
     </>
