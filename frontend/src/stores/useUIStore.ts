@@ -91,6 +91,14 @@ const getInitialCareAIOpen = (): boolean => {
   return false;
 };
 
+const getInitialViewMode = (): 'patient' | 'provider' => {
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('ga_view_mode') as 'patient' | 'provider' | null;
+    if (saved === 'patient' || saved === 'provider') return saved;
+  }
+  return 'provider';
+};
+
 const DEFAULT_GEMINI_MODELS = [
   { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', badge: 'Next Gen Fast', description: 'Active high-speed multimodal intelligence' },
   { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro Preview', badge: 'Deep Reasoning', description: 'Advanced reasoning model for complex clinical genetics' },
@@ -239,8 +247,15 @@ export const useUIStore = create<UIState>((set) => ({
   setAddMemberModalOpen: (open) => set({ isAddMemberModalOpen: open }),
   selectedMemberForEdit: null,
   setSelectedMemberForEdit: (member) => set({ selectedMemberForEdit: member }),
-  viewMode: 'patient',
-  setViewMode: (mode) => set({ viewMode: mode }),
+  viewMode: getInitialViewMode(),
+  setViewMode: (mode) => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('ga_view_mode', mode);
+      } catch {}
+    }
+    set({ viewMode: mode });
+  },
   isCareAIOpen: getInitialCareAIOpen(),
   setCareAIOpen: (open) => {
     if (typeof window !== 'undefined') {

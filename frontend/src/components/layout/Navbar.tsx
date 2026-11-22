@@ -42,8 +42,8 @@ export function Navbar() {
 
       {/* Left-side Controls: Language Selector & Theme Toggle (Moved from right side, replacing search) */}
       <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 rtl:left-auto rtl:right-3 rtl:pl-4 rtl:pr-9">
-        {/* Language Selector: USA English & UAE Arabic */}
-        <div className="flex items-center gap-0.5 sm:gap-1 bg-surface-container-low px-1.5 sm:px-2 py-1 rounded-full border border-outline-variant/30 text-[11px] font-bold shrink-0">
+        {/* Language Selector: USA English & UAE Arabic (Shown on desktop, available in dropdown on mobile) */}
+        <div className="hidden sm:flex items-center gap-0.5 sm:gap-1 bg-surface-container-low px-1.5 sm:px-2 py-1 rounded-full border border-outline-variant/30 text-[11px] font-bold shrink-0">
           <button
             type="button"
             onClick={() => setActiveLocale('en')}
@@ -86,12 +86,12 @@ export function Navbar() {
         </button>
       </div>
 
-      {/* DUAL-LENS PERSONA TOGGLE (Patient vs Provider View) - Shown on Desktop, moved to mobile dropdown/bottom on Mobile */}
-      <div className="hidden sm:flex items-center gap-0.5 bg-surface-container-low p-1 rounded-full border border-outline-variant/40 shadow-2xs text-[11px] font-bold shrink-0">
+      {/* DUAL-LENS PERSONA TOGGLE (Patient vs Provider View) - Shown on both Mobile & Desktop */}
+      <div className="flex items-center gap-0.5 bg-surface-container-low p-0.5 sm:p-1 rounded-full border border-outline-variant/40 shadow-2xs text-[10px] sm:text-[11px] font-bold shrink-0">
         <button
           type="button"
           onClick={() => setViewMode('patient')}
-          className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 rounded-full cursor-pointer transition-all ${
+          className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 rounded-full cursor-pointer transition-all ${
             viewMode === 'patient'
               ? 'bg-teal-700 text-white shadow-xs font-extrabold'
               : 'text-on-surface-variant hover:text-teal-800'
@@ -99,13 +99,13 @@ export function Navbar() {
           title="Switch to Patient / Plain-English View"
         >
           <span className="text-xs">👤</span>
-          <span className="text-xs">Patient</span>
+          <span className="text-[10px] sm:text-xs">Patient</span>
           <span className="hidden sm:inline">View</span>
         </button>
         <button
           type="button"
           onClick={() => setViewMode('provider')}
-          className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 rounded-full cursor-pointer transition-all ${
+          className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 rounded-full cursor-pointer transition-all ${
             viewMode === 'provider'
               ? 'bg-slate-900 text-white shadow-xs font-extrabold'
               : 'text-on-surface-variant hover:text-slate-900'
@@ -113,7 +113,7 @@ export function Navbar() {
           title="Switch to Clinical Provider / Genetics Specialist View"
         >
           <span className="text-xs">🩺</span>
-          <span className="text-xs">Provider</span>
+          <span className="text-[10px] sm:text-xs">Provider</span>
           <span className="hidden sm:inline">View</span>
         </button>
       </div>

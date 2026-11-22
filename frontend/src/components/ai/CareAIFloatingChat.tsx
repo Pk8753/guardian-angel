@@ -370,10 +370,10 @@ export function CareAIFloatingChat() {
   return (
     <>
       <div
-        className={`fixed z-[60] bg-white dark:bg-slate-900 flex flex-col overflow-hidden transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 shadow-2xl border border-outline-variant/40 ${
+        className={`fixed z-40 bg-white dark:bg-slate-900 flex flex-col overflow-hidden transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 shadow-2xl border border-outline-variant/40 ${
           isMaximized
-            ? 'inset-0 w-full h-[100dvh] rounded-none sm:top-4 sm:bottom-4 sm:right-4 sm:left-auto sm:w-[720px] sm:max-w-[96vw] sm:rounded-3xl'
-            : 'inset-0 w-full h-[100dvh] rounded-none sm:inset-auto sm:bottom-6 sm:right-6 sm:w-[430px] sm:h-[640px] sm:max-h-[86vh] sm:rounded-3xl'
+            ? 'inset-x-0 top-0 bottom-[calc(4rem+env(safe-area-inset-bottom,0px))] rounded-none sm:top-4 sm:bottom-4 sm:right-4 sm:left-auto sm:w-[720px] sm:max-w-[96vw] sm:rounded-3xl'
+            : 'inset-x-0 top-0 bottom-[calc(4rem+env(safe-area-inset-bottom,0px))] rounded-none sm:inset-auto sm:bottom-6 sm:right-6 sm:w-[430px] sm:h-[640px] sm:max-h-[86vh] sm:rounded-3xl'
         }`}
       >
         {/* Header Bar - Navy Blue Branded */}
@@ -574,7 +574,7 @@ export function CareAIFloatingChat() {
       </div>
 
         {/* Input & Suggestions Footer */}
-        <div className="p-3.5 border-t border-outline-variant/20 bg-white dark:bg-slate-900 space-y-2.5 shrink-0 pb-[max(0.875rem,env(safe-area-inset-bottom))]">
+        <div className="p-3.5 border-t border-outline-variant/20 bg-white dark:bg-slate-900 space-y-2.5 shrink-0">
           {/* Question Input Box */}
           <form
             onSubmit={(e) => {
