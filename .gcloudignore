@@ -1,0 +1,16 @@
+.gcloudignore
+.git
+.gitignore
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+frontend/
+venv/
+**/venv/
+__pycache__/
+*.pyc
+*.tsbuildinfo
+data/*.db
+data/gcs_local_storage
+ui-screen/
