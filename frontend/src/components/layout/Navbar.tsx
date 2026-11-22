@@ -163,9 +163,6 @@ export function Navbar() {
               </>
             )}
           </span>
-          <span className="lg:hidden font-mono text-[10px]">
-            {isSudoMode ? 'ON' : 'OFF'}
-          </span>
         </button>
 
         {/* User Identity Chip */}

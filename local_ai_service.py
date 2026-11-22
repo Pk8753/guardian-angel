@@ -1643,27 +1643,27 @@ class Qwen3BrainService:
                 compatibility_label = "Genetically Compatible (Baseline Risk)"
         else:
             if is_pa_carrier and is_pb_carrier and same_locus:
-                recessive_risk = "25% (1 in 4)"
+                recessive_risk = "25% (75% Healthy Child Chance)"
                 risk_summary = (
-                    f"Identical By Descent (IBD) concordant carrier risk at locus {pa_locus} ({pa_cond}). "
-                    "In each pregnancy, there is a 25% homozygous transmission probability, 50% asymptomatic carrier inheritance, "
-                    "and 25% non-carrier inheritance. Pre-implantation Genetic Testing (PGT-M) or early non-invasive prenatal diagnosis ensures healthy offspring."
+                    f"Both partners carry a trait for {pa_cond}. "
+                    "In each pregnancy, there is a 75% chance (3 out of 4) that your baby will NOT have the condition (50% healthy carrier, 25% non-carrier). "
+                    "Modern options like IVF with PGT-M ensure healthy children with total peace of mind."
                 )
                 recommendation_banner = (
-                    f"Target Carrier Counseling Advised for {name_a} & {name_b}. Both partners carry concordant {pa_locus} alleles. "
-                    "This identified pathway supports proactive counseling and non-invasive prenatal options with a 75% probability of healthy offspring in each pregnancy."
+                    f"Premarital Guidance for {name_a} & {name_b}: Both partners carry a {pa_cond} trait. "
+                    "Carriers are completely healthy and symptom-free. You have a 75% chance of having a healthy baby in every pregnancy."
                 )
                 compatibility_label = "Compatible with Proactive Reproductive Guidance"
             elif is_pa_carrier or is_pb_carrier:
                 carrier_p = name_a if is_pa_carrier else name_b
                 trait_locus = pa_locus if is_pa_carrier else pb_locus
-                recessive_risk = "0% Disease Risk (50% Carrier)"
+                recessive_risk = "0% Disease Risk (50% Harmless Carrier)"
                 risk_summary = (
-                    f"Single-parent carrier inheritance: {carrier_p} carries a benign trait for {trait_locus}. "
-                    "Newborn transmission risk for the disease is 0%, with a 50% chance of healthy, asymptomatic carrier inheritance."
+                    f"Single-parent carrier: {carrier_p} carries a harmless trait for {trait_locus}. "
+                    "Your baby has a 0% risk of having the disease, with a 50% chance of inheriting the same harmless carrier trait."
                 )
                 recommendation_banner = (
-                    f"Screening Complete for {name_a} & {name_b}. Single-parent carrier trait confirmed with 0% risk of newborn disease. "
+                    f"Screening Complete for {name_a} & {name_b}. Single-parent carrier trait confirmed with 0% risk of disease for your child. "
                     "Routine premarital counseling and standard pediatric care recommended."
                 )
                 compatibility_label = "Genetically Compatible & Clear"

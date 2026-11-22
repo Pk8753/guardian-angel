@@ -24,7 +24,8 @@ import {
   EyeOff,
   Key,
   Copy,
-  Check
+  Check,
+  Save
 } from 'lucide-react';
 
 interface PolicyDoc {
@@ -82,6 +83,7 @@ export function SettingsModal() {
   const [testResult, setTestResult] = useState<{ status: 'success' | 'error'; message: string } | null>(null);
   const [copiedTestResult, setCopiedTestResult] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
+  const [isSavedGemini, setIsSavedGemini] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -164,6 +166,33 @@ export function SettingsModal() {
     } finally {
       setIsTestingGemini(false);
     }
+  };
+
+  const handleSaveGeminiKey = async () => {
+    const key = geminiApiKey.trim();
+    if (!key) {
+      setTestResult({ status: 'error', message: 'Please enter a Gemini API Key before saving.' });
+      return;
+    }
+    setGeminiApiKey(key);
+    setSelectedGeminiModel(selectedGeminiModel);
+    setAIEngineMode('online');
+    setIsSavedGemini(true);
+    setTestResult({
+      status: 'success',
+      message: 'Gemini API Key and Model configuration saved successfully!'
+    });
+    try {
+      await fetch('/api/ai/test-gemini-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          api_key: key,
+          model_id: selectedGeminiModel
+        })
+      });
+    } catch {}
+    setTimeout(() => setIsSavedGemini(false), 2500);
   };
 
   const loadSystemStatus = async () => {
@@ -474,26 +503,48 @@ export function SettingsModal() {
                     </div>
                   </div>
 
-                  {/* Test Connection Action */}
+                  {/* Test Connection & Save Action */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
-                    <button
-                      type="button"
-                      onClick={handleTestGeminiConnection}
-                      disabled={isTestingGemini || !geminiApiKey.trim()}
-                      className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
-                    >
-                      {isTestingGemini ? (
-                        <>
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          <span>Testing Connection...</span>
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>Test Connection</span>
-                        </>
-                      )}
-                    </button>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={handleTestGeminiConnection}
+                        disabled={isTestingGemini || !geminiApiKey.trim()}
+                        className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+                      >
+                        {isTestingGemini ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Testing Connection...</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Test Connection</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleSaveGeminiKey}
+                        disabled={!geminiApiKey.trim()}
+                        className="px-4 py-2 rounded-xl bg-pine hover:bg-pine-light text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+                        title="Save Gemini API Key & Model Configuration"
+                      >
+                        {isSavedGemini ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-mint" />
+                            <span>Saved!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Save className="w-3.5 h-3.5" />
+                            <span>Save</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
 
                     {testResult && (
                       <div className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center justify-between gap-2 select-text cursor-text max-w-full overflow-hidden ${
