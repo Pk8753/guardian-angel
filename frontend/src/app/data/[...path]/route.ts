@@ -50,3 +50,4 @@ async function handleDataProxy(request: NextRequest) {
 export const dynamic = 'force-dynamic';
 export const GET = handleDataProxy;
 export const HEAD = handleDataProxy;
+
