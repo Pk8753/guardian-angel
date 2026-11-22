@@ -26,6 +26,15 @@ export function Navbar() {
   const { user, logout } = useAuthStore();
   const [isDropdownOpen, setIsDropdownOpen] = React.useState(false);
 
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const isDark = document.documentElement.classList.contains('dark');
+      if (isDark !== isDarkMode) {
+        useUIStore.getState().setDarkMode(isDark);
+      }
+    }
+  }, []);
+
   const realName = user?.fullName || user?.username || 'Patient';
   const aliasName = user?.aliasName || 'Anonymous-Patient';
   const displayName = isSudoMode ? aliasName : realName;
@@ -81,7 +90,7 @@ export function Navbar() {
           {isDarkMode ? (
             <Sun className="w-4 h-4 text-amber-400 transition-transform hover:rotate-45" />
           ) : (
-            <Moon className="w-4 h-4 text-slate-700 transition-transform hover:-rotate-12" />
+            <Moon className="w-4 h-4 text-slate-700 dark:text-slate-300 transition-transform hover:-rotate-12" />
           )}
         </button>
       </div>

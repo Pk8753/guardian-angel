@@ -199,6 +199,18 @@ if (typeof window !== 'undefined') {
   syncLocaleToDOM(initialLocale);
 }
 
+const getInitialDarkMode = (): boolean => {
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('guardian_theme');
+      if (saved) return saved === 'dark';
+      return document.documentElement.classList.contains('dark') ||
+        Boolean(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    } catch {}
+  }
+  return false;
+};
+
 export const useUIStore = create<UIState>((set) => ({
   isSudoMode: false,
   toggleSudoMode: () => set((state) => ({ isSudoMode: !state.isSudoMode })),
@@ -216,7 +228,7 @@ export const useUIStore = create<UIState>((set) => ({
     syncLocaleToDOM(locale);
     set({ activeLocale: locale });
   },
-  isDarkMode: false,
+  isDarkMode: getInitialDarkMode(),
   toggleDarkMode: () =>
     set((state) => {
       const next = !state.isDarkMode;
