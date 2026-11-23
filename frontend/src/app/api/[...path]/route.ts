@@ -50,6 +50,23 @@ function handleRemoveConfigFallback(): NextResponse {
   });
 }
 
+function handleSaveConfigFallback(bodyJson: any): NextResponse {
+  const apiKey = (bodyJson?.api_key || bodyJson?.gemini_api_key || '').trim();
+  const modelId = (bodyJson?.model_id || bodyJson?.model || fallbackGlobalGeminiModel || 'gemini-3.8-flash').trim();
+  if (!apiKey) {
+    return NextResponse.json({ status: 'error', message: 'API key cannot be empty' }, { status: 400 });
+  }
+  fallbackGlobalGeminiKey = apiKey;
+  if (modelId) fallbackGlobalGeminiModel = modelId;
+  return NextResponse.json({
+    status: 'success',
+    has_key: true,
+    ai_mode: 'online',
+    current_model: fallbackGlobalGeminiModel,
+    message: 'Gemini API key saved globally across all devices.'
+  });
+}
+
 function getBackendBase(): string {
   const isDev = process.env.NODE_ENV !== 'production';
   const defaultBackend = isDev ? 'http://127.0.0.1:5000' : 'https://guardian-angel-703744831646.us-central1.run.app';
@@ -350,6 +367,9 @@ async function handleProxy(request: NextRequest) {
       if (pathname === '/api/ai/config') {
         return handleConfigFallback();
       }
+      if (pathname === '/api/ai/save-gemini-config') {
+        return handleSaveConfigFallback(bodyJson);
+      }
       if (pathname === '/api/ai/remove-gemini-config') {
         return handleRemoveConfigFallback();
       }
@@ -364,7 +384,7 @@ async function handleProxy(request: NextRequest) {
       }
     }
 
-    if (pathname === '/api/ai/test-gemini-connection' && backendRes.ok && bodyJson?.api_key) {
+    if ((pathname === '/api/ai/test-gemini-connection' || pathname === '/api/ai/save-gemini-config') && backendRes.ok && bodyJson?.api_key) {
       fallbackGlobalGeminiKey = bodyJson.api_key;
       if (bodyJson.model_id) fallbackGlobalGeminiModel = bodyJson.model_id;
     }
@@ -386,6 +406,9 @@ async function handleProxy(request: NextRequest) {
     // If backend is unreachable or down, provide direct fallback for AI studio endpoints
     if (pathname === '/api/ai/config') {
       return handleConfigFallback();
+    }
+    if (pathname === '/api/ai/save-gemini-config') {
+      return handleSaveConfigFallback(bodyJson);
     }
     if (pathname === '/api/ai/remove-gemini-config') {
       return handleRemoveConfigFallback();

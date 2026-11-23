@@ -89,6 +89,9 @@ backend/data/gcs_local_storage/
 .secret*
 *.pem
 *.key
+*system_config.json
+data/system_config.json
+backend/data/system_config.json
 
 # Antigravity / AI local scratch files
 .system_generated/

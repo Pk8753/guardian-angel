@@ -743,6 +743,29 @@ def api_ai_test_gemini_connection():
     status_code = 200 if result.get('status') == 'success' else 400
     return jsonify(result), status_code
 
+@app.route('/api/ai/save-gemini-config', methods=['POST'])
+def api_ai_save_gemini_config():
+    """Saves Gemini API key and model globally across all devices."""
+    data = request.get_json(silent=True) or {}
+    api_key = (data.get('api_key') or data.get('gemini_api_key') or '').strip()
+    model_id = (data.get('model_id') or data.get('model') or get_global_gemini_model() or 'gemini-3.8-flash').strip()
+    if not api_key:
+        return jsonify({"status": "error", "message": "API key cannot be empty"}), 400
+    save_global_gemini_key(api_key)
+    if model_id:
+        save_global_gemini_model(model_id)
+    session['gemini_api_key'] = api_key
+    session['ai_mode'] = 'online'
+    if model_id:
+        session['gemini_model'] = model_id
+    return jsonify({
+        "status": "success",
+        "has_key": True,
+        "ai_mode": "online",
+        "current_model": model_id,
+        "message": "Gemini API key saved globally across all devices."
+    })
+
 @app.route('/api/ai/remove-gemini-config', methods=['POST'])
 def api_ai_remove_gemini_config():
     """Removes global Gemini API key and resets AI mode."""

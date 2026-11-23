@@ -2231,6 +2231,34 @@ def delete_system_setting(key: str) -> bool:
     except Exception:
         return False
 
+def _sync_system_config_to_gcs(config_dict: dict) -> bool:
+    try:
+        from google.cloud import storage
+        client = storage.Client(project=getattr(Config, 'GCP_PROJECT_ID', None))
+        bucket_name = getattr(Config, 'GCS_BUCKET_NAME', 'genai-builder-cup-clinical-vault')
+        if bucket_name:
+            bucket = client.bucket(bucket_name)
+            blob = bucket.blob('system_config.json')
+            blob.upload_from_string(json.dumps(config_dict), content_type='application/json')
+            return True
+    except Exception:
+        pass
+    return False
+
+def _fetch_system_config_from_gcs() -> dict:
+    try:
+        from google.cloud import storage
+        client = storage.Client(project=getattr(Config, 'GCP_PROJECT_ID', None))
+        bucket_name = getattr(Config, 'GCS_BUCKET_NAME', 'genai-builder-cup-clinical-vault')
+        if bucket_name:
+            bucket = client.bucket(bucket_name)
+            blob = bucket.blob('system_config.json')
+            if blob.exists():
+                return json.loads(blob.download_as_text())
+    except Exception:
+        pass
+    return {}
+
 def get_global_gemini_key() -> str:
     # 1. Check system_settings table in SQLite
     key = get_system_setting("gemini_api_key")
@@ -2248,7 +2276,17 @@ def get_global_gemini_key() -> str:
     except Exception:
         pass
     # 3. Check environment
-    return (os.environ.get('GEMINI_API_KEY') or getattr(Config, 'GEMINI_API_KEY', '') or '').strip()
+    env_k = (os.environ.get('GEMINI_API_KEY') or getattr(Config, 'GEMINI_API_KEY', '') or '').strip()
+    if env_k:
+        return env_k
+    # 4. Check GCS bucket (multi-instance Cloud Run persistence)
+    gcs_data = _fetch_system_config_from_gcs()
+    if gcs_data.get('gemini_api_key'):
+        g_key = str(gcs_data['gemini_api_key']).strip()
+        set_system_setting("gemini_api_key", g_key)
+        os.environ['GEMINI_API_KEY'] = g_key
+        return g_key
+    return ''
 
 def save_global_gemini_key(key: str) -> bool:
     cleaned = (key or '').strip()
@@ -2257,6 +2295,7 @@ def save_global_gemini_key(key: str) -> bool:
     # 1. Save in system_settings table
     set_system_setting("gemini_api_key", cleaned)
     # 2. Save in JSON file in data directory for multi-worker persistence
+    cfg_data = {'gemini_api_key': cleaned, 'gemini_model': get_global_gemini_model()}
     try:
         data_dir = getattr(Config, 'DATA_DIR', os.path.dirname(os.path.abspath(Config.DATABASE_PATH)))
         os.makedirs(data_dir, exist_ok=True)
@@ -2269,12 +2308,15 @@ def save_global_gemini_key(key: str) -> bool:
             except Exception:
                 existing = {}
         existing['gemini_api_key'] = cleaned
+        cfg_data = existing
         with open(cfg_path, 'w', encoding='utf-8') as f:
             json.dump(existing, f)
     except Exception:
         pass
     # 3. Update environment in current process
     os.environ['GEMINI_API_KEY'] = cleaned
+    # 4. Sync to GCS
+    _sync_system_config_to_gcs(cfg_data)
     return True
 
 def remove_global_gemini_key() -> bool:
@@ -2288,6 +2330,7 @@ def remove_global_gemini_key() -> bool:
             existing.pop('gemini_api_key', None)
             with open(cfg_path, 'w', encoding='utf-8') as f:
                 json.dump(existing, f)
+            _sync_system_config_to_gcs(existing)
     except Exception:
         pass
     os.environ.pop('GEMINI_API_KEY', None)
@@ -2307,6 +2350,9 @@ def get_global_gemini_model() -> str:
                     return str(data['gemini_model']).strip()
     except Exception:
         pass
+    gcs_data = _fetch_system_config_from_gcs()
+    if gcs_data.get('gemini_model'):
+        return str(gcs_data['gemini_model']).strip()
     return os.environ.get('GEMINI_MODEL', 'gemini-3.8-flash').strip()
 
 def save_global_gemini_model(model: str) -> bool:
@@ -2314,6 +2360,7 @@ def save_global_gemini_model(model: str) -> bool:
     if not cleaned:
         return False
     set_system_setting("gemini_model", cleaned)
+    cfg_data = {'gemini_api_key': get_global_gemini_key(), 'gemini_model': cleaned}
     try:
         data_dir = getattr(Config, 'DATA_DIR', os.path.dirname(os.path.abspath(Config.DATABASE_PATH)))
         os.makedirs(data_dir, exist_ok=True)
@@ -2326,11 +2373,13 @@ def save_global_gemini_model(model: str) -> bool:
             except Exception:
                 existing = {}
         existing['gemini_model'] = cleaned
+        cfg_data = existing
         with open(cfg_path, 'w', encoding='utf-8') as f:
             json.dump(existing, f)
     except Exception:
         pass
     os.environ['GEMINI_MODEL'] = cleaned
+    _sync_system_config_to_gcs(cfg_data)
     return True
 
 

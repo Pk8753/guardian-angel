@@ -350,38 +350,70 @@ export const useUIStore = create<UIState>((set) => ({
     })),
   fetchGlobalAIConfig: async () => {
     try {
+      const localKey = typeof window !== 'undefined' ? (localStorage.getItem('ga_gemini_key') || '').trim() : '';
       const res = await fetch('/api/ai/config');
+      let hasKeyOnServer = false;
+      let serverModel = 'gemini-3.8-flash';
+      let serverModels: any[] = [];
+
       if (res.ok) {
         const data = await res.json();
         if (data.status === 'success') {
-          const hasKey = Boolean(data.has_key);
-          const updates: Partial<UIState> = {
-            hasGlobalGeminiKey: hasKey,
-          };
-          if (hasKey) {
-            updates.aiEngineMode = 'online';
-            if (typeof window !== 'undefined') {
-              localStorage.setItem('ga_ai_mode', 'online');
-            }
-          }
-          if (data.current_model && isGeminiModelValid(data.current_model)) {
-            updates.selectedGeminiModel = data.current_model;
-            if (typeof window !== 'undefined') {
-              localStorage.setItem('ga_gemini_model', data.current_model);
-            }
-          }
-          if (Array.isArray(data.models) && data.models.length > 0) {
-            const valid = data.models.filter((m: any) => m && m.id && isGeminiModelValid(m.id));
-            if (valid.length > 0) {
-              updates.availableGeminiModels = valid;
-              if (typeof window !== 'undefined') {
-                localStorage.setItem('ga_gemini_available_models', JSON.stringify(valid));
-              }
-            }
-          }
-          set(updates);
+          hasKeyOnServer = Boolean(data.has_key);
+          serverModel = data.current_model || serverModel;
+          serverModels = Array.isArray(data.models) ? data.models : [];
         }
       }
+
+      // CRITICAL: If server does not have the key yet, but this browser (e.g. desktop) has a localKey:
+      // Auto-sync the local key to the global server!
+      if (!hasKeyOnServer && localKey) {
+        try {
+          const syncRes = await fetch('/api/ai/save-gemini-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              api_key: localKey,
+              model_id: serverModel || (typeof window !== 'undefined' ? localStorage.getItem('ga_gemini_model') : '') || 'gemini-3.8-flash'
+            })
+          });
+          if (syncRes.ok) {
+            const syncData = await syncRes.json();
+            if (syncData.status === 'success') {
+              hasKeyOnServer = true;
+            }
+          }
+        } catch (syncErr) {
+          console.warn('Auto-sync key error:', syncErr);
+        }
+      }
+
+      const effectiveHasKey = Boolean(hasKeyOnServer || localKey);
+      const updates: Partial<UIState> = {
+        hasGlobalGeminiKey: effectiveHasKey,
+      };
+      if (effectiveHasKey) {
+        updates.aiEngineMode = 'online';
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('ga_ai_mode', 'online');
+        }
+      }
+      if (serverModel && isGeminiModelValid(serverModel)) {
+        updates.selectedGeminiModel = serverModel;
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('ga_gemini_model', serverModel);
+        }
+      }
+      if (serverModels.length > 0) {
+        const valid = serverModels.filter((m: any) => m && m.id && isGeminiModelValid(m.id));
+        if (valid.length > 0) {
+          updates.availableGeminiModels = valid;
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('ga_gemini_available_models', JSON.stringify(valid));
+          }
+        }
+      }
+      set(updates);
     } catch (err) {
       console.warn('Failed to fetch global AI config:', err);
     }

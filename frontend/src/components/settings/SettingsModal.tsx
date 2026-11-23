@@ -203,14 +203,16 @@ export function SettingsModal() {
       message: 'Gemini API Key and Model configuration saved globally!'
     });
     try {
-      await fetch('/api/ai/test-gemini-connection', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          api_key: keyToSave || undefined,
-          model_id: selectedGeminiModel
-        })
-      });
+      if (keyToSave) {
+        await fetch('/api/ai/save-gemini-config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            api_key: keyToSave,
+            model_id: selectedGeminiModel
+          })
+        });
+      }
     } catch {}
     setTimeout(() => setIsSavedGemini(false), 2500);
   };
@@ -489,18 +491,44 @@ export function SettingsModal() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {/* API Key Input */}
-                    <div className="space-y-1">
+                    <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
                         <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                          Gemini API Key
+                          {hasStoredKey ? 'Gemini API Key (Configured)' : 'Gemini API Key'}
                         </label>
                         {hasStoredKey && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-                            <Lock className="w-2.5 h-2.5" />
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                            <Lock className="w-2.5 h-2.5 text-emerald-600" />
                             Key Saved (Global Cloud)
                           </span>
                         )}
                       </div>
+
+                      {hasStoredKey && (
+                        <div className="p-2.5 rounded-xl bg-emerald-50/90 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-6 h-6 rounded-lg bg-emerald-200/70 dark:bg-emerald-900/60 flex items-center justify-center text-emerald-800 dark:text-emerald-300 shrink-0">
+                              <Lock className="w-3.5 h-3.5" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-mono font-bold tracking-widest text-emerald-900 dark:text-emerald-200 select-none">
+                                ••••••••••••••••••••••••
+                              </p>
+                              <p className="text-[10px] text-emerald-700 dark:text-emerald-400 truncate">
+                                Active on all desktop & mobile sessions
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleRemoveGeminiKey}
+                            className="text-[11px] text-rose-600 dark:text-rose-400 hover:text-rose-800 font-bold hover:underline shrink-0 px-2 py-0.5 rounded cursor-pointer"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      )}
+
                       <div className="relative">
                         <input
                           type="password"
@@ -512,30 +540,22 @@ export function SettingsModal() {
                           spellCheck={false}
                           placeholder={
                             hasStoredKey
-                              ? "•••••••••••••••••••••••• (Saved Globally • Enter new key to update)"
+                              ? "Enter new API key to update..."
                               : "Enter your Google AI Studio API Key..."
                           }
                           className="w-full pl-3 pr-9 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono select-none"
                         />
                         <div className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                          <Lock className="w-3.5 h-3.5 text-slate-400" />
+                          <Key className="w-3.5 h-3.5 text-slate-400" />
                         </div>
                       </div>
+
                       <div className="flex items-center justify-between text-[10px]">
                         <p className="text-slate-400">
                           {hasStoredKey
-                            ? "Key is saved globally on cloud backend. Viewing and copying are disabled."
-                            : "Your key is stored globally on cloud backend and verified directly with Google."}
+                            ? "To update the global key, enter a new key above and click Save."
+                            : "Your key is stored globally on the cloud backend and verified directly with Google."}
                         </p>
-                        {hasStoredKey && (
-                          <button
-                            type="button"
-                            onClick={handleRemoveGeminiKey}
-                            className="text-rose-500 hover:text-rose-700 hover:underline shrink-0 ml-2 cursor-pointer font-medium"
-                          >
-                            Remove Key
-                          </button>
-                        )}
                       </div>
                     </div>
 
