@@ -20,12 +20,11 @@ import {
   HelpCircle,
   RefreshCw,
   Globe,
-  Eye,
-  EyeOff,
   Key,
   Copy,
   Check,
-  Save
+  Save,
+  Lock
 } from 'lucide-react';
 
 interface PolicyDoc {
@@ -82,7 +81,7 @@ export function SettingsModal() {
   const [isTestingGemini, setIsTestingGemini] = useState(false);
   const [testResult, setTestResult] = useState<{ status: 'success' | 'error'; message: string } | null>(null);
   const [copiedTestResult, setCopiedTestResult] = useState(false);
-  const [showApiKey, setShowApiKey] = useState(false);
+  const [inputApiKey, setInputApiKey] = useState('');
   const [isSavedGemini, setIsSavedGemini] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -92,13 +91,15 @@ export function SettingsModal() {
       loadSystemStatus();
       loadDocuments();
       loadGeminiModels();
+      setInputApiKey('');
     }
   }, [isSettingsModalOpen]);
 
   const loadGeminiModels = async () => {
     try {
-      const url = geminiApiKey.trim()
-        ? `/api/ai/models?key=${encodeURIComponent(geminiApiKey.trim())}`
+      const activeKey = inputApiKey.trim() || geminiApiKey.trim();
+      const url = activeKey
+        ? `/api/ai/models?key=${encodeURIComponent(activeKey)}`
         : '/api/ai/models';
       const res = await fetch(url);
       if (res.ok) {
@@ -113,7 +114,8 @@ export function SettingsModal() {
   };
 
   const handleTestGeminiConnection = async () => {
-    if (!geminiApiKey.trim()) {
+    const keyToTest = inputApiKey.trim() || geminiApiKey.trim();
+    if (!keyToTest) {
       setTestResult({ status: 'error', message: 'Please enter a Gemini API Key to test.' });
       return;
     }
@@ -124,7 +126,7 @@ export function SettingsModal() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          api_key: geminiApiKey.trim(),
+          api_key: keyToTest,
           model_id: selectedGeminiModel
         })
       });
@@ -148,6 +150,10 @@ export function SettingsModal() {
           }
         }
         setAIEngineMode('online');
+        if (inputApiKey.trim()) {
+          setGeminiApiKey(inputApiKey.trim());
+          setInputApiKey('');
+        }
         setTestResult({
           status: 'success',
           message: data.message || `Successfully connected to Google AI Studio (${fetchedModels.length} models available)!`
@@ -169,12 +175,13 @@ export function SettingsModal() {
   };
 
   const handleSaveGeminiKey = async () => {
-    const key = geminiApiKey.trim();
-    if (!key) {
+    const keyToSave = inputApiKey.trim() || geminiApiKey.trim();
+    if (!keyToSave) {
       setTestResult({ status: 'error', message: 'Please enter a Gemini API Key before saving.' });
       return;
     }
-    setGeminiApiKey(key);
+    setGeminiApiKey(keyToSave);
+    setInputApiKey('');
     setSelectedGeminiModel(selectedGeminiModel);
     setAIEngineMode('online');
     setIsSavedGemini(true);
@@ -187,12 +194,22 @@ export function SettingsModal() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          api_key: key,
+          api_key: keyToSave,
           model_id: selectedGeminiModel
         })
       });
     } catch {}
     setTimeout(() => setIsSavedGemini(false), 2500);
+  };
+
+  const handleRemoveGeminiKey = () => {
+    setGeminiApiKey('');
+    setInputApiKey('');
+    setTestResult({
+      status: 'success',
+      message: 'Gemini API Key removed from browser storage.'
+    });
+    setTimeout(() => setTestResult(null), 3000);
   };
 
   const loadSystemStatus = async () => {
@@ -456,29 +473,53 @@ export function SettingsModal() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {/* API Key Input */}
                     <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                        Gemini API Key
-                      </label>
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                          Gemini API Key
+                        </label>
+                        {Boolean(geminiApiKey && geminiApiKey.trim()) && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                            <Lock className="w-2.5 h-2.5" />
+                            Key Saved
+                          </span>
+                        )}
+                      </div>
                       <div className="relative">
                         <input
-                          type={showApiKey ? 'text' : 'password'}
-                          value={geminiApiKey}
-                          onChange={(e) => setGeminiApiKey(e.target.value)}
-                          placeholder="Enter your Google AI Studio API Key..."
-                          className="w-full pl-3 pr-9 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
+                          type="password"
+                          value={inputApiKey}
+                          onChange={(e) => setInputApiKey(e.target.value)}
+                          onCopy={(e) => e.preventDefault()}
+                          onCut={(e) => e.preventDefault()}
+                          autoComplete="new-password"
+                          spellCheck={false}
+                          placeholder={
+                            Boolean(geminiApiKey && geminiApiKey.trim())
+                              ? "•••••••••••••••••••••••• (Saved • Enter new key to update)"
+                              : "Enter your Google AI Studio API Key..."
+                          }
+                          className="w-full pl-3 pr-9 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono select-none"
                         />
-                        <button
-                          type="button"
-                          onClick={() => setShowApiKey(!showApiKey)}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                          title={showApiKey ? 'Hide key' : 'Show key'}
-                        >
-                          {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                        </button>
+                        <div className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                          <Lock className="w-3.5 h-3.5 text-slate-400" />
+                        </div>
                       </div>
-                      <p className="text-[10px] text-slate-400">
-                        Your key is stored securely in your browser and verified directly with Google.
-                      </p>
+                      <div className="flex items-center justify-between text-[10px]">
+                        <p className="text-slate-400">
+                          {Boolean(geminiApiKey && geminiApiKey.trim())
+                            ? "Key is saved securely. Viewing and copying are disabled."
+                            : "Your key is stored securely in your browser and verified directly with Google."}
+                        </p>
+                        {Boolean(geminiApiKey && geminiApiKey.trim()) && (
+                          <button
+                            type="button"
+                            onClick={handleRemoveGeminiKey}
+                            className="text-rose-500 hover:text-rose-700 hover:underline shrink-0 ml-2 cursor-pointer font-medium"
+                          >
+                            Remove Key
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     {/* Model Dropdown Selector */}
@@ -509,7 +550,7 @@ export function SettingsModal() {
                       <button
                         type="button"
                         onClick={handleTestGeminiConnection}
-                        disabled={isTestingGemini || !geminiApiKey.trim()}
+                        disabled={isTestingGemini || (!inputApiKey.trim() && !geminiApiKey.trim())}
                         className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
                       >
                         {isTestingGemini ? (
@@ -528,7 +569,7 @@ export function SettingsModal() {
                       <button
                         type="button"
                         onClick={handleSaveGeminiKey}
-                        disabled={!geminiApiKey.trim()}
+                        disabled={!inputApiKey.trim() && !geminiApiKey.trim()}
                         className="px-4 py-2 rounded-xl bg-pine hover:bg-pine-light text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
                         title="Save Gemini API Key & Model Configuration"
                       >
