@@ -50,7 +50,8 @@ interface ChatMessage {
 }
 
 export default function CoupleAssessmentPage() {
-  const { activeLocale, geminiApiKey, selectedGeminiModel, aiEngineMode } = useUIStore();
+  const { activeLocale, geminiApiKey, hasGlobalGeminiKey, selectedGeminiModel, aiEngineMode } = useUIStore();
+  const isOnline = aiEngineMode === 'online' || hasGlobalGeminiKey || Boolean(geminiApiKey && geminiApiKey.trim());
   const [assessment, setAssessment] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [userQuery, setUserQuery] = useState('');
@@ -245,7 +246,7 @@ export default function CoupleAssessmentPage() {
           if (saved) {
             const parsed = JSON.parse(saved);
             if (parsed && typeof parsed === 'object') {
-              if (!geminiApiKey || parsed.is_llm) {
+              if (!isOnline || parsed.is_llm) {
                 setAssessment(parsed);
                 if (parsed?.partner_a?.name) setPartnerAName(parsed.partner_a.name);
                 if (parsed?.partner_b?.name) setPartnerBName(parsed.partner_b.name);
@@ -268,7 +269,7 @@ export default function CoupleAssessmentPage() {
           family_id: activeFamId,
           api_key: geminiApiKey ? geminiApiKey.trim() : undefined,
           model: selectedGeminiModel || 'gemini-3.8-flash',
-          ai_mode: aiEngineMode,
+          ai_mode: isOnline ? 'online' : 'offline',
           force_refresh: Boolean(shouldForce)
         })
       });
@@ -322,7 +323,7 @@ export default function CoupleAssessmentPage() {
         text: m.text
       }));
 
-      const isOnline = aiEngineMode === 'online' || Boolean(geminiApiKey && geminiApiKey.trim());
+      const isOnline = aiEngineMode === 'online' || hasGlobalGeminiKey || Boolean(geminiApiKey && geminiApiKey.trim());
       const endpoint = isOnline ? '/api/ai/ask-studio' : '/api/ai/ask';
       const res = await fetch(endpoint, {
         method: 'POST',

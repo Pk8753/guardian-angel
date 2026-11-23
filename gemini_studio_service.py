@@ -42,10 +42,27 @@ SUPPORTED_GEMINI_MODELS = [
     }
 ]
 
+def get_effective_api_key(explicit_key: Optional[str] = None) -> str:
+    cleaned = (explicit_key or '').strip()
+    if cleaned:
+        return cleaned
+    try:
+        from database import get_global_gemini_key
+        g_key = get_global_gemini_key()
+        if g_key:
+            return g_key
+    except Exception:
+        pass
+    return (os.environ.get('GEMINI_API_KEY') or getattr(Config, 'GEMINI_API_KEY', '') or '').strip()
+
 class GeminiStudioService:
     def __init__(self):
         self.api_key = os.environ.get('GEMINI_API_KEY') or getattr(Config, 'GEMINI_API_KEY', '')
         self.base_url = "https://generativelanguage.googleapis.com/v1beta/models"
+
+    @property
+    def current_api_key(self) -> str:
+        return get_effective_api_key(self.api_key)
 
     @staticmethod
     def normalize_model_id(model_id: Optional[str]) -> str:
@@ -145,15 +162,15 @@ class GeminiStudioService:
     def get_supported_models(self) -> List[Dict[str, str]]:
         return SUPPORTED_GEMINI_MODELS
 
-    def test_connection(self, api_key: str, model_id: Optional[str] = None) -> Dict[str, Any]:
+    def test_connection(self, api_key: Optional[str] = None, model_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Validates API key by querying Google AI Studio ModelService (GET /v1beta/models?key=...).
         Returns HTTP 200 with list of verified available models that support generateContent
         and are suitable for conversational premarital intelligence and analysis.
         """
-        cleaned_key = (api_key or '').strip()
+        cleaned_key = get_effective_api_key(api_key)
         if not cleaned_key:
-            return {"status": "error", "message": "API key cannot be empty."}
+            return {"status": "error", "message": "API key cannot be empty. Please enter an API key or configure one globally."}
 
         url = f"https://generativelanguage.googleapis.com/v1beta/models?key={cleaned_key}"
         try:
@@ -232,7 +249,7 @@ class GeminiStudioService:
         """
         Sends query to Google AI Studio Gemini API with clinical framing, active page context, and pedigree grounding.
         """
-        api_key = (api_key or self.api_key or os.environ.get('GEMINI_API_KEY') or getattr(Config, 'GEMINI_API_KEY', '') or '').strip()
+        api_key = get_effective_api_key(api_key or self.api_key)
         
         # Validated model check (fallback to gemini-3.8-flash if invalid)
         selected_model = model_id if model_id else "gemini-3.8-flash"
@@ -572,7 +589,7 @@ class GeminiStudioService:
         producing culturally respectful, plain-language, destigmatizing couple guidance
         aligned with UAE Premarital Guidelines and ACMG principles.
         """
-        api_key = (api_key or self.api_key or os.environ.get('GEMINI_API_KEY') or getattr(Config, 'GEMINI_API_KEY', '') or '').strip()
+        api_key = get_effective_api_key(api_key or self.api_key)
         c_names = couple_names or {}
         name_a = c_names.get('partner_a') or 'Partner A'
         name_b = c_names.get('partner_b') or 'Partner B'

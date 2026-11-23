@@ -374,6 +374,15 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_sharing_acls_token ON reproductive_sharing_acls(share_token);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_sharing_acls_status ON reproductive_sharing_acls(status);")
 
+    # 14. System Settings Table (Global system configuration e.g. Gemini API Key, Model)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS system_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+
     conn.commit()
 
     # Additive migration: Ensure file_name column exists in scraped_reports
@@ -2177,6 +2186,153 @@ def redact_sensitive_intake(
     }
 
     return data
+
+
+# ==============================================================================
+# Global System Settings Helpers (Cross-Device Global Gemini Key & Model)
+# ==============================================================================
+
+def get_system_setting(key: str, default: Optional[str] = None) -> Optional[str]:
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT value FROM system_settings WHERE key = ?", (key,))
+        row = cursor.fetchone()
+        conn.close()
+        if row and row["value"]:
+            return row["value"]
+    except Exception:
+        pass
+    return default
+
+def set_system_setting(key: str, value: str) -> bool:
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO system_settings (key, value, updated_at)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+        """, (key, value))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception:
+        return False
+
+def delete_system_setting(key: str) -> bool:
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM system_settings WHERE key = ?", (key,))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception:
+        return False
+
+def get_global_gemini_key() -> str:
+    # 1. Check system_settings table in SQLite
+    key = get_system_setting("gemini_api_key")
+    if key and key.strip():
+        return key.strip()
+    # 2. Check JSON file in data directory
+    try:
+        data_dir = getattr(Config, 'DATA_DIR', os.path.dirname(os.path.abspath(Config.DATABASE_PATH)))
+        cfg_path = os.path.join(data_dir, 'system_config.json')
+        if os.path.exists(cfg_path):
+            with open(cfg_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if data.get('gemini_api_key'):
+                    return str(data['gemini_api_key']).strip()
+    except Exception:
+        pass
+    # 3. Check environment
+    return (os.environ.get('GEMINI_API_KEY') or getattr(Config, 'GEMINI_API_KEY', '') or '').strip()
+
+def save_global_gemini_key(key: str) -> bool:
+    cleaned = (key or '').strip()
+    if not cleaned:
+        return False
+    # 1. Save in system_settings table
+    set_system_setting("gemini_api_key", cleaned)
+    # 2. Save in JSON file in data directory for multi-worker persistence
+    try:
+        data_dir = getattr(Config, 'DATA_DIR', os.path.dirname(os.path.abspath(Config.DATABASE_PATH)))
+        os.makedirs(data_dir, exist_ok=True)
+        cfg_path = os.path.join(data_dir, 'system_config.json')
+        existing = {}
+        if os.path.exists(cfg_path):
+            try:
+                with open(cfg_path, 'r', encoding='utf-8') as f:
+                    existing = json.load(f)
+            except Exception:
+                existing = {}
+        existing['gemini_api_key'] = cleaned
+        with open(cfg_path, 'w', encoding='utf-8') as f:
+            json.dump(existing, f)
+    except Exception:
+        pass
+    # 3. Update environment in current process
+    os.environ['GEMINI_API_KEY'] = cleaned
+    return True
+
+def remove_global_gemini_key() -> bool:
+    delete_system_setting("gemini_api_key")
+    try:
+        data_dir = getattr(Config, 'DATA_DIR', os.path.dirname(os.path.abspath(Config.DATABASE_PATH)))
+        cfg_path = os.path.join(data_dir, 'system_config.json')
+        if os.path.exists(cfg_path):
+            with open(cfg_path, 'r', encoding='utf-8') as f:
+                existing = json.load(f)
+            existing.pop('gemini_api_key', None)
+            with open(cfg_path, 'w', encoding='utf-8') as f:
+                json.dump(existing, f)
+    except Exception:
+        pass
+    os.environ.pop('GEMINI_API_KEY', None)
+    return True
+
+def get_global_gemini_model() -> str:
+    model = get_system_setting("gemini_model")
+    if model and model.strip():
+        return model.strip()
+    try:
+        data_dir = getattr(Config, 'DATA_DIR', os.path.dirname(os.path.abspath(Config.DATABASE_PATH)))
+        cfg_path = os.path.join(data_dir, 'system_config.json')
+        if os.path.exists(cfg_path):
+            with open(cfg_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if data.get('gemini_model'):
+                    return str(data['gemini_model']).strip()
+    except Exception:
+        pass
+    return os.environ.get('GEMINI_MODEL', 'gemini-3.8-flash').strip()
+
+def save_global_gemini_model(model: str) -> bool:
+    cleaned = (model or '').strip()
+    if not cleaned:
+        return False
+    set_system_setting("gemini_model", cleaned)
+    try:
+        data_dir = getattr(Config, 'DATA_DIR', os.path.dirname(os.path.abspath(Config.DATABASE_PATH)))
+        os.makedirs(data_dir, exist_ok=True)
+        cfg_path = os.path.join(data_dir, 'system_config.json')
+        existing = {}
+        if os.path.exists(cfg_path):
+            try:
+                with open(cfg_path, 'r', encoding='utf-8') as f:
+                    existing = json.load(f)
+            except Exception:
+                existing = {}
+        existing['gemini_model'] = cleaned
+        with open(cfg_path, 'w', encoding='utf-8') as f:
+            json.dump(existing, f)
+    except Exception:
+        pass
+    os.environ['GEMINI_MODEL'] = cleaned
+    return True
+
 
 
 

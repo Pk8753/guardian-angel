@@ -33,6 +33,7 @@ export function Navbar() {
         useUIStore.getState().setDarkMode(isDark);
       }
     }
+    useUIStore.getState().fetchGlobalAIConfig();
   }, []);
 
   const realName = user?.fullName || user?.username || 'Patient';

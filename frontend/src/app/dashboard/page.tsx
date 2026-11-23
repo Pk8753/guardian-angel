@@ -46,7 +46,8 @@ import {
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
-  const { activeLocale, viewMode, selectedGeminiModel, setSelectedGeminiModel, geminiApiKey, aiEngineMode } = useUIStore();
+  const { activeLocale, viewMode, selectedGeminiModel, setSelectedGeminiModel, geminiApiKey, hasGlobalGeminiKey, aiEngineMode } = useUIStore();
+  const isOnline = aiEngineMode === 'online' || hasGlobalGeminiKey || Boolean(geminiApiKey && geminiApiKey.trim());
   const firstName = user?.fullName ? user.fullName.split(' ')[0] : (user?.username || 'Patient');
 
   // Multiple Family Pedigrees State & Default Family Tree State
@@ -503,7 +504,7 @@ export default function DashboardPage() {
         family_id: fid,
         api_key: geminiApiKey ? geminiApiKey.trim() : undefined,
         model: selectedGeminiModel || 'gemini-3.8-flash',
-        ai_mode: aiEngineMode
+        ai_mode: isOnline ? 'online' : 'offline'
       })
     })
       .then((res) => (res.ok ? res.json() : null))
@@ -562,7 +563,7 @@ export default function DashboardPage() {
         text: m.text,
       }));
 
-      const isOnline = aiEngineMode === 'online' || Boolean(geminiApiKey && geminiApiKey.trim());
+      const isOnline = aiEngineMode === 'online' || hasGlobalGeminiKey || Boolean(geminiApiKey && geminiApiKey.trim());
       const endpoint = isOnline ? '/api/ai/ask-studio' : '/api/ai/ask';
       const res = await fetch(endpoint, {
         method: 'POST',

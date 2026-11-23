@@ -38,7 +38,9 @@ from database import (
     record_consent, revoke_consent, get_consent_status, has_valid_consent, get_user_consent_history,
     create_sharing_acl, get_user_sharing_acls, get_sharing_acl_by_token, validate_share_token_access,
     revoke_sharing_acl, revoke_sharing_acl_by_token, redact_sensitive_intake,
-    encrypt_payload, decrypt_payload
+    encrypt_payload, decrypt_payload,
+    get_global_gemini_key, save_global_gemini_key, remove_global_gemini_key,
+    get_global_gemini_model, save_global_gemini_model
 )
 from clinical_engine import compute_clinical_state
 from gcp_services import gcp_storage, vertex_ai
@@ -679,36 +681,81 @@ def api_delete_pedigree_member(node_id):
         return jsonify({"status": "success", "message": "Member removed from tree"})
     return jsonify({"status": "error", "message": "Could not delete node"}), 400
 
+@app.route('/api/ai/config', methods=['GET'])
+def api_ai_config():
+    """Returns AI configuration without leaking the raw API key."""
+    global_key = get_global_gemini_key()
+    has_key = bool(global_key and global_key.strip())
+    current_model = get_global_gemini_model() or 'gemini-3.8-flash'
+    ai_mode = 'online' if has_key else 'offline'
+    models = gemini_studio.get_supported_models()
+    return jsonify({
+        "status": "success",
+        "has_key": has_key,
+        "ai_mode": ai_mode,
+        "current_model": current_model,
+        "models": models
+    })
+
 @app.route('/api/ai/models', methods=['GET'])
 def api_ai_models():
     """Returns list of supported Google AI Studio Gemini models."""
-    api_key = (request.args.get('key') or request.args.get('api_key') or session.get('gemini_api_key') or os.environ.get('GEMINI_API_KEY') or getattr(Config, 'GEMINI_API_KEY', '') or '').strip()
+    global_key = get_global_gemini_key()
+    api_key = (request.args.get('key') or request.args.get('api_key') or session.get('gemini_api_key') or global_key or '').strip()
+    has_key = bool(global_key or api_key)
+    current_model = get_global_gemini_model() or session.get('gemini_model') or 'gemini-3.8-flash'
     if api_key:
         check = gemini_studio.test_connection(api_key=api_key)
         if check.get('status') == 'success' and check.get('models'):
             return jsonify({
                 "status": "success",
+                "has_key": has_key,
+                "current_model": current_model,
                 "models": check.get('models')
             })
     return jsonify({
         "status": "success",
+        "has_key": has_key,
+        "current_model": current_model,
         "models": gemini_studio.get_supported_models()
     })
 
 @app.route('/api/ai/test-gemini-connection', methods=['POST'])
 def api_ai_test_gemini_connection():
-    """Tests user provided Google AI Studio Gemini API key and fetches enabled models."""
+    """Tests user provided Google AI Studio Gemini API key and saves globally if valid."""
     data = request.get_json(silent=True) or {}
+    global_key = get_global_gemini_key()
     api_key = (data.get('api_key') if 'api_key' in data else (data.get('gemini_api_key') if 'gemini_api_key' in data else session.get('gemini_api_key', '')) or '').strip()
-    model_id = (data.get('model_id') or data.get('model') or '').strip()
+    if not api_key:
+        api_key = global_key
+
+    model_id = (data.get('model_id') or data.get('model') or get_global_gemini_model() or '').strip()
     result = gemini_studio.test_connection(api_key=api_key, model_id=model_id or None)
     if result.get('status') == 'success' and api_key:
         session['gemini_api_key'] = api_key
         session['ai_mode'] = 'online'
+        save_global_gemini_key(api_key)
         if model_id:
             session['gemini_model'] = model_id
+            save_global_gemini_model(model_id)
+        result['has_key'] = True
+        result['current_model'] = model_id or get_global_gemini_model()
     status_code = 200 if result.get('status') == 'success' else 400
     return jsonify(result), status_code
+
+@app.route('/api/ai/remove-gemini-config', methods=['POST'])
+def api_ai_remove_gemini_config():
+    """Removes global Gemini API key and resets AI mode."""
+    remove_global_gemini_key()
+    session.pop('gemini_api_key', None)
+    session.pop('gemini_model', None)
+    session['ai_mode'] = 'offline'
+    return jsonify({
+        "status": "success",
+        "has_key": False,
+        "ai_mode": "offline",
+        "message": "Gemini API key has been removed globally."
+    })
 
 def _resolve_chat_family_context(user_id, family_id_param, query, user_families):
     """
@@ -790,11 +837,11 @@ def api_ai_ask_studio():
         user_families=user_families
     )
     reports = get_user_scraped_reports(user_id) if user_id else []
-    model_id = data.get('model') or session.get('gemini_model') or 'gemini-3.8-flash'
+    model_id = data.get('model') or session.get('gemini_model') or get_global_gemini_model() or 'gemini-3.8-flash'
     view_mode = data.get('view_mode', 'patient')
     current_page = data.get('current_page', 'Dashboard')
     page_context = data.get('page_context', '')
-    api_key = (data.get('api_key') or data.get('gemini_api_key') or session.get('gemini_api_key') or os.environ.get('GEMINI_API_KEY') or getattr(Config, 'GEMINI_API_KEY', '') or '').strip()
+    api_key = (data.get('api_key') or data.get('gemini_api_key') or session.get('gemini_api_key') or get_global_gemini_key() or '').strip()
     if api_key:
         session['gemini_api_key'] = api_key
         session['ai_mode'] = 'online'
@@ -1394,9 +1441,10 @@ def api_ai_analyze_assessment():
         if not partner_b_name:
             partner_b_name = "Candidate Partner"
 
-    ai_mode = (data.get('ai_mode') or session.get('ai_mode') or ('online' if (data.get('api_key') or session.get('gemini_api_key')) else 'offline')).strip().lower()
-    gemini_api_key = (data.get('api_key') or data.get('gemini_api_key') or session.get('gemini_api_key') or os.environ.get('GEMINI_API_KEY') or getattr(Config, 'GEMINI_API_KEY', '') or '').strip()
-    model_id = data.get('model') or session.get('gemini_model') or 'gemini-3.8-flash'
+    global_k = get_global_gemini_key()
+    gemini_api_key = (data.get('api_key') or data.get('gemini_api_key') or session.get('gemini_api_key') or global_k or '').strip()
+    ai_mode = (data.get('ai_mode') or session.get('ai_mode') or ('online' if gemini_api_key else 'offline')).strip().lower()
+    model_id = data.get('model') or session.get('gemini_model') or get_global_gemini_model() or 'gemini-3.8-flash'
     force_refresh = bool(data.get('force_refresh'))
 
     cache_key = get_assessment_cache_key(user_id, active_family_id, reports)

@@ -27,6 +27,29 @@ const DEFAULT_GEMINI_MODELS = [
   }
 ];
 
+let fallbackGlobalGeminiKey = (process.env.GEMINI_API_KEY || '').trim();
+let fallbackGlobalGeminiModel = (process.env.GEMINI_MODEL || 'gemini-3.8-flash').trim();
+
+function handleConfigFallback(): NextResponse {
+  return NextResponse.json({
+    status: 'success',
+    has_key: Boolean(fallbackGlobalGeminiKey),
+    ai_mode: fallbackGlobalGeminiKey ? 'online' : 'offline',
+    current_model: fallbackGlobalGeminiModel,
+    models: DEFAULT_GEMINI_MODELS
+  });
+}
+
+function handleRemoveConfigFallback(): NextResponse {
+  fallbackGlobalGeminiKey = '';
+  return NextResponse.json({
+    status: 'success',
+    has_key: false,
+    ai_mode: 'offline',
+    message: 'Gemini API key has been removed globally.'
+  });
+}
+
 function getBackendBase(): string {
   const isDev = process.env.NODE_ENV !== 'production';
   const defaultBackend = isDev ? 'http://127.0.0.1:5000' : 'https://guardian-angel-703744831646.us-central1.run.app';
@@ -41,9 +64,13 @@ async function handleGeminiModelsFallback(request: NextRequest): Promise<NextRes
   const apiKey = (
     request.nextUrl.searchParams.get('key') ||
     request.nextUrl.searchParams.get('api_key') ||
+    fallbackGlobalGeminiKey ||
     process.env.GEMINI_API_KEY ||
     ''
   ).trim();
+
+  const hasKey = Boolean(apiKey || fallbackGlobalGeminiKey);
+  const currentModel = fallbackGlobalGeminiModel;
 
   if (apiKey) {
     try {
@@ -82,6 +109,8 @@ async function handleGeminiModelsFallback(request: NextRequest): Promise<NextRes
         supported.sort((a, b) => (b.version || 0) - (a.version || 0));
         return NextResponse.json({
           status: 'success',
+          has_key: hasKey,
+          current_model: currentModel,
           models: supported.length > 0 ? supported : DEFAULT_GEMINI_MODELS
         });
       }
@@ -92,16 +121,19 @@ async function handleGeminiModelsFallback(request: NextRequest): Promise<NextRes
 
   return NextResponse.json({
     status: 'success',
+    has_key: hasKey,
+    current_model: currentModel,
     models: DEFAULT_GEMINI_MODELS
   });
 }
 
 async function handleTestGeminiConnectionFallback(bodyJson: any): Promise<NextResponse> {
-  const apiKey = (bodyJson?.api_key || bodyJson?.gemini_api_key || '').trim();
+  const apiKey = (bodyJson?.api_key || bodyJson?.gemini_api_key || fallbackGlobalGeminiKey || '').trim();
+  const modelId = (bodyJson?.model_id || bodyJson?.model || fallbackGlobalGeminiModel || 'gemini-3.8-flash').trim();
   if (!apiKey) {
     return NextResponse.json({
       status: 'error',
-      message: 'API key cannot be empty.'
+      message: 'API key cannot be empty. Please enter an API key or configure one globally.'
     }, { status: 400 });
   }
 
@@ -142,10 +174,17 @@ async function handleTestGeminiConnectionFallback(bodyJson: any): Promise<NextRe
       supported.sort((a, b) => (b.version || 0) - (a.version || 0));
       const finalModels = supported.length > 0 ? supported : DEFAULT_GEMINI_MODELS;
 
+      fallbackGlobalGeminiKey = apiKey;
+      if (modelId) {
+        fallbackGlobalGeminiModel = modelId;
+      }
+
       return NextResponse.json({
         status: 'success',
         message: `Successfully connected to Google AI Studio (${finalModels.length} models verified for chat & analysis).`,
-        models: finalModels
+        models: finalModels,
+        has_key: true,
+        current_model: fallbackGlobalGeminiModel
       });
     } else {
       let errMsg = `HTTP ${gRes.status}`;
@@ -167,9 +206,9 @@ async function handleTestGeminiConnectionFallback(bodyJson: any): Promise<NextRe
 }
 
 async function handleAskStudioFallback(bodyJson: any): Promise<NextResponse> {
-  const apiKey = (bodyJson?.api_key || bodyJson?.gemini_api_key || process.env.GEMINI_API_KEY || '').trim();
+  const apiKey = (bodyJson?.api_key || bodyJson?.gemini_api_key || fallbackGlobalGeminiKey || process.env.GEMINI_API_KEY || '').trim();
   const query = (bodyJson?.query || '').trim();
-  let model = (bodyJson?.model || 'gemini-3.8-flash').replace('models/', '').trim();
+  let model = (bodyJson?.model || fallbackGlobalGeminiModel || 'gemini-3.8-flash').replace('models/', '').trim();
   if (!model || ['2.5-pro', '2.0', '1.5', '1.0'].some((leg: string) => model.toLowerCase().includes(leg))) {
     model = 'gemini-3.8-flash';
   }
@@ -294,11 +333,26 @@ async function handleProxy(request: NextRequest) {
     }
   }
 
+  if (fallbackGlobalGeminiKey && bodyJson && !bodyJson.api_key && !bodyJson.gemini_api_key) {
+    if (pathname === '/api/ai/ask-studio' || pathname === '/api/ai/analyze-assessment') {
+      bodyJson.api_key = fallbackGlobalGeminiKey;
+      const jsonStr = JSON.stringify(bodyJson);
+      init.body = Buffer.from(jsonStr);
+      headers.set('content-length', String(Buffer.byteLength(jsonStr)));
+    }
+  }
+
   try {
     const backendRes = await fetch(targetUrl, init);
 
     // If backend returns 404 (e.g. older backend deployment missing AI Studio endpoints), provide direct fallback
     if (backendRes.status === 404) {
+      if (pathname === '/api/ai/config') {
+        return handleConfigFallback();
+      }
+      if (pathname === '/api/ai/remove-gemini-config') {
+        return handleRemoveConfigFallback();
+      }
       if (pathname === '/api/ai/models') {
         return await handleGeminiModelsFallback(request);
       }
@@ -308,6 +362,14 @@ async function handleProxy(request: NextRequest) {
       if (pathname === '/api/ai/ask-studio') {
         return await handleAskStudioFallback(bodyJson);
       }
+    }
+
+    if (pathname === '/api/ai/test-gemini-connection' && backendRes.ok && bodyJson?.api_key) {
+      fallbackGlobalGeminiKey = bodyJson.api_key;
+      if (bodyJson.model_id) fallbackGlobalGeminiModel = bodyJson.model_id;
+    }
+    if (pathname === '/api/ai/remove-gemini-config' && backendRes.ok) {
+      fallbackGlobalGeminiKey = '';
     }
 
     const responseHeaders = new Headers();
@@ -322,6 +384,12 @@ async function handleProxy(request: NextRequest) {
     });
   } catch (err: any) {
     // If backend is unreachable or down, provide direct fallback for AI studio endpoints
+    if (pathname === '/api/ai/config') {
+      return handleConfigFallback();
+    }
+    if (pathname === '/api/ai/remove-gemini-config') {
+      return handleRemoveConfigFallback();
+    }
     if (pathname === '/api/ai/models') {
       return await handleGeminiModelsFallback(request);
     }

@@ -50,6 +50,9 @@ interface UIState {
   clearCareAIChatMessages: () => void;
   aiEngineMode: 'offline' | 'online';
   setAIEngineMode: (mode: 'offline' | 'online') => void;
+  hasGlobalGeminiKey: boolean;
+  setHasGlobalGeminiKey: (hasKey: boolean) => void;
+  fetchGlobalAIConfig: () => Promise<void>;
   geminiApiKey: string;
   setGeminiApiKey: (key: string) => void;
   selectedGeminiModel: string;
@@ -338,6 +341,50 @@ export const useUIStore = create<UIState>((set) => ({
       localStorage.setItem('ga_ai_mode', mode);
     }
     set({ aiEngineMode: mode });
+  },
+  hasGlobalGeminiKey: false,
+  setHasGlobalGeminiKey: (hasKey) =>
+    set((state) => ({
+      hasGlobalGeminiKey: hasKey,
+      aiEngineMode: hasKey ? 'online' : state.aiEngineMode,
+    })),
+  fetchGlobalAIConfig: async () => {
+    try {
+      const res = await fetch('/api/ai/config');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === 'success') {
+          const hasKey = Boolean(data.has_key);
+          const updates: Partial<UIState> = {
+            hasGlobalGeminiKey: hasKey,
+          };
+          if (hasKey) {
+            updates.aiEngineMode = 'online';
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('ga_ai_mode', 'online');
+            }
+          }
+          if (data.current_model && isGeminiModelValid(data.current_model)) {
+            updates.selectedGeminiModel = data.current_model;
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('ga_gemini_model', data.current_model);
+            }
+          }
+          if (Array.isArray(data.models) && data.models.length > 0) {
+            const valid = data.models.filter((m: any) => m && m.id && isGeminiModelValid(m.id));
+            if (valid.length > 0) {
+              updates.availableGeminiModels = valid;
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('ga_gemini_available_models', JSON.stringify(valid));
+              }
+            }
+          }
+          set(updates);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch global AI config:', err);
+    }
   },
   geminiApiKey: typeof window !== 'undefined' ? localStorage.getItem('ga_gemini_key') || '' : '',
   setGeminiApiKey: (key) => {

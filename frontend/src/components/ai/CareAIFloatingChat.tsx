@@ -72,6 +72,7 @@ export function CareAIFloatingChat() {
     viewMode,
     activeLocale,
     aiEngineMode,
+    hasGlobalGeminiKey,
     geminiApiKey,
     selectedGeminiModel,
     setSelectedGeminiModel,
@@ -88,6 +89,7 @@ export function CareAIFloatingChat() {
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
 
   const chatScrollRef = useRef<HTMLDivElement>(null);
+  const isOnline = aiEngineMode === 'online' || hasGlobalGeminiKey || Boolean(geminiApiKey && geminiApiKey.trim());
 
   useEffect(() => {
     if (chatScrollRef.current) {
@@ -113,7 +115,7 @@ export function CareAIFloatingChat() {
           </div>
           <span className="text-xs tracking-tight">Ask Care AI</span>
           <span className="hidden sm:inline-block text-[10px] px-2 py-0.5 rounded-full bg-white/20 text-white/90 font-medium">
-            {aiEngineMode === 'online' ? 'Gemini' : 'Qwen'}
+            {isOnline ? 'Gemini' : 'Qwen'}
           </span>
         </button>
       </div>
@@ -340,7 +342,7 @@ export function CareAIFloatingChat() {
           <Sparkles className="w-4 h-4 text-jungle animate-pulse" />
           <span>Ask Care AI</span>
           <span className="text-[10px] px-2 py-0.5 rounded-full bg-mint/20 text-mint font-semibold">
-            {aiEngineMode === 'online' ? 'Gemini' : 'Qwen'}
+            {isOnline ? 'Gemini' : 'Qwen'}
           </span>
         </button>
         <div className="flex items-center gap-1 pl-2 border-l border-white/20">
@@ -387,7 +389,7 @@ export function CareAIFloatingChat() {
                 <h3 className="text-sm font-bold text-white leading-tight">
                   Ask Care AI
                 </h3>
-                {aiEngineMode === 'online' ? (
+                {isOnline ? (
                   <span
                     className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/20 text-white border border-white/30 shrink-0"
                     title={`Active model configured in Settings: ${selectedGeminiModel}`}
@@ -565,7 +567,7 @@ export function CareAIFloatingChat() {
                   </span>
                 </div>
                 <p className="text-[10px] text-slate-500">
-                  {aiEngineMode === 'online' ? 'Synthesizing with Google AI Studio Gemini API...' : 'Synthesizing with local Qdrant vectors and your health pedigree...'}
+                  {isOnline ? 'Synthesizing with Google AI Studio Gemini API...' : 'Synthesizing with local Qdrant vectors and your health pedigree...'}
                 </p>
               </div>
             </div>

@@ -77,7 +77,8 @@ interface QwenAssessment {
 }
 
 export default function RiskAnalysisPage() {
-  const { viewMode, activeLocale, geminiApiKey, selectedGeminiModel, aiEngineMode } = useUIStore();
+  const { viewMode, activeLocale, geminiApiKey, hasGlobalGeminiKey, selectedGeminiModel, aiEngineMode } = useUIStore();
+  const isOnline = aiEngineMode === 'online' || hasGlobalGeminiKey || Boolean(geminiApiKey && geminiApiKey.trim());
   const [families, setFamilies] = useState<FamilyRecord[]>([]);
   const [assessment, setAssessment] = useState<QwenAssessment | null>(null);
   const [isLoadingAssessment, setIsLoadingAssessment] = useState(false);
@@ -287,7 +288,7 @@ export default function RiskAnalysisPage() {
             if (typeof parsed.next_possible_ways === 'string') {
               parsed.next_possible_ways = [parsed.next_possible_ways];
             }
-            if (!geminiApiKey || parsed.is_llm) {
+            if (!isOnline || parsed.is_llm) {
               setAssessment(parsed);
               return;
             }
@@ -307,7 +308,7 @@ export default function RiskAnalysisPage() {
           family_id: fid,
           api_key: geminiApiKey ? geminiApiKey.trim() : undefined,
           model: selectedGeminiModel || 'gemini-3.8-flash',
-          ai_mode: aiEngineMode,
+          ai_mode: isOnline ? 'online' : 'offline',
           force_refresh: Boolean(forceRefresh)
         })
       });

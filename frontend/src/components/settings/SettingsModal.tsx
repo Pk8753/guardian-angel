@@ -64,6 +64,9 @@ export function SettingsModal() {
     setAIEngineMode,
     geminiApiKey,
     setGeminiApiKey,
+    hasGlobalGeminiKey,
+    setHasGlobalGeminiKey,
+    fetchGlobalAIConfig,
     selectedGeminiModel,
     setSelectedGeminiModel,
     availableGeminiModels,
@@ -86,8 +89,11 @@ export function SettingsModal() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const hasStoredKey = Boolean(hasGlobalGeminiKey || (geminiApiKey && geminiApiKey.trim()));
+
   useEffect(() => {
     if (isSettingsModalOpen) {
+      fetchGlobalAIConfig();
       loadSystemStatus();
       loadDocuments();
       loadGeminiModels();
@@ -104,6 +110,9 @@ export function SettingsModal() {
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
+        if (data.has_key !== undefined) {
+          setHasGlobalGeminiKey(Boolean(data.has_key));
+        }
         if (Array.isArray(data.models) && data.models.length > 0) {
           setAvailableGeminiModels(data.models);
         }
@@ -115,7 +124,7 @@ export function SettingsModal() {
 
   const handleTestGeminiConnection = async () => {
     const keyToTest = inputApiKey.trim() || geminiApiKey.trim();
-    if (!keyToTest) {
+    if (!keyToTest && !hasStoredKey) {
       setTestResult({ status: 'error', message: 'Please enter a Gemini API Key to test.' });
       return;
     }
@@ -126,7 +135,7 @@ export function SettingsModal() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          api_key: keyToTest,
+          api_key: keyToTest || undefined,
           model_id: selectedGeminiModel
         })
       });
@@ -149,6 +158,7 @@ export function SettingsModal() {
             setSelectedGeminiModel(fetchedModels[0].id);
           }
         }
+        setHasGlobalGeminiKey(true);
         setAIEngineMode('online');
         if (inputApiKey.trim()) {
           setGeminiApiKey(inputApiKey.trim());
@@ -176,25 +186,28 @@ export function SettingsModal() {
 
   const handleSaveGeminiKey = async () => {
     const keyToSave = inputApiKey.trim() || geminiApiKey.trim();
-    if (!keyToSave) {
+    if (!keyToSave && !hasStoredKey) {
       setTestResult({ status: 'error', message: 'Please enter a Gemini API Key before saving.' });
       return;
     }
-    setGeminiApiKey(keyToSave);
-    setInputApiKey('');
+    if (inputApiKey.trim()) {
+      setGeminiApiKey(inputApiKey.trim());
+      setInputApiKey('');
+    }
     setSelectedGeminiModel(selectedGeminiModel);
+    setHasGlobalGeminiKey(true);
     setAIEngineMode('online');
     setIsSavedGemini(true);
     setTestResult({
       status: 'success',
-      message: 'Gemini API Key and Model configuration saved successfully!'
+      message: 'Gemini API Key and Model configuration saved globally!'
     });
     try {
       await fetch('/api/ai/test-gemini-connection', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          api_key: keyToSave,
+          api_key: keyToSave || undefined,
           model_id: selectedGeminiModel
         })
       });
@@ -202,12 +215,16 @@ export function SettingsModal() {
     setTimeout(() => setIsSavedGemini(false), 2500);
   };
 
-  const handleRemoveGeminiKey = () => {
+  const handleRemoveGeminiKey = async () => {
+    try {
+      await fetch('/api/ai/remove-gemini-config', { method: 'POST' });
+    } catch {}
     setGeminiApiKey('');
     setInputApiKey('');
+    setHasGlobalGeminiKey(false);
     setTestResult({
       status: 'success',
-      message: 'Gemini API Key removed from browser storage.'
+      message: 'Gemini API Key removed globally.'
     });
     setTimeout(() => setTestResult(null), 3000);
   };
@@ -477,10 +494,10 @@ export function SettingsModal() {
                         <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
                           Gemini API Key
                         </label>
-                        {Boolean(geminiApiKey && geminiApiKey.trim()) && (
+                        {hasStoredKey && (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
                             <Lock className="w-2.5 h-2.5" />
-                            Key Saved
+                            Key Saved (Global Cloud)
                           </span>
                         )}
                       </div>
@@ -494,8 +511,8 @@ export function SettingsModal() {
                           autoComplete="new-password"
                           spellCheck={false}
                           placeholder={
-                            Boolean(geminiApiKey && geminiApiKey.trim())
-                              ? "•••••••••••••••••••••••• (Saved • Enter new key to update)"
+                            hasStoredKey
+                              ? "•••••••••••••••••••••••• (Saved Globally • Enter new key to update)"
                               : "Enter your Google AI Studio API Key..."
                           }
                           className="w-full pl-3 pr-9 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono select-none"
@@ -506,11 +523,11 @@ export function SettingsModal() {
                       </div>
                       <div className="flex items-center justify-between text-[10px]">
                         <p className="text-slate-400">
-                          {Boolean(geminiApiKey && geminiApiKey.trim())
-                            ? "Key is saved securely. Viewing and copying are disabled."
-                            : "Your key is stored securely in your browser and verified directly with Google."}
+                          {hasStoredKey
+                            ? "Key is saved globally on cloud backend. Viewing and copying are disabled."
+                            : "Your key is stored globally on cloud backend and verified directly with Google."}
                         </p>
-                        {Boolean(geminiApiKey && geminiApiKey.trim()) && (
+                        {hasStoredKey && (
                           <button
                             type="button"
                             onClick={handleRemoveGeminiKey}
@@ -550,7 +567,7 @@ export function SettingsModal() {
                       <button
                         type="button"
                         onClick={handleTestGeminiConnection}
-                        disabled={isTestingGemini || (!inputApiKey.trim() && !geminiApiKey.trim())}
+                        disabled={isTestingGemini || (!inputApiKey.trim() && !hasStoredKey)}
                         className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
                       >
                         {isTestingGemini ? (
@@ -569,7 +586,7 @@ export function SettingsModal() {
                       <button
                         type="button"
                         onClick={handleSaveGeminiKey}
-                        disabled={!inputApiKey.trim() && !geminiApiKey.trim()}
+                        disabled={!inputApiKey.trim() && !hasStoredKey}
                         className="px-4 py-2 rounded-xl bg-pine hover:bg-pine-light text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
                         title="Save Gemini API Key & Model Configuration"
                       >
